@@ -1,6 +1,6 @@
 'use strict';
-const {apiRoutes} = require('../routes');
-const {CalmError} = require('../classes/CalmError');
+const { apiRoutes } = require('../routes');
+const { CalmError } = require('../classes');
 
 module.exports.setRoutes = (app) => {
 
@@ -9,7 +9,7 @@ module.exports.setRoutes = (app) => {
      * Set the Welcome message or send a static html or use a view engine.
      */
     app.get('/', (req, res) => {
-        res.json({status: true, message: 'Welcome to the APP'});
+        res.json({ status: true, message: 'Welcome to the APP' });
     });
 
     /**
@@ -27,17 +27,18 @@ module.exports.setRoutes = (app) => {
      * If No route matches. Send user a 404 page
      */
     app.use('/*', (req, res, next) => {
-        const error = new Error('PERMISSION_DENIED_ERROR');
+        const error = new Error('NOT_FOUND_ERROR');
         next(error);
     });
-
+    // eslint-disable-next-line no-unused-vars
     app.use((err, req, res, next) => {
         // Check if error is not an instance of CalmError
         if (!(err instanceof CalmError)) {
             // Convert this error into CalmError
+            // eslint-disable-next-line no-param-reassign
             err = new CalmError(err.message);
         }
         res.statusCode = err.statusCode;
         res.json(err);
-    })
+    });
 };
