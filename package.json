@@ -1,0 +1,21 @@
+{
+  "name": "calmapi",
+  "version": "1.0.0",
+  "description": "Production ready REST API framework using NodeJS & MongoDB",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:sunilksamanta/calmapi.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/sunilksamanta/calmapi/issues"
+  },
+  "homepage": "https://calmapi.dev"
+}
