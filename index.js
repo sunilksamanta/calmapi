@@ -13,7 +13,7 @@ console.log(chalk.greenBright.bold.underline('⬤⬤ Welcome to Calm API! v', pa
 
 const PORT = process.env.PORT || config.PORT;
 server.listen(PORT).on('error', (err) => {
-    console.log(chalk.red('✘ Application failed to start'));
+    console.log(chalk.red('✘ Sorry!! We could not keep you calm because something just broke.'));
     console.error(chalk.red('✘', err.message));
     process.exit(0);
 }).on('listening', () => {
