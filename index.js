@@ -9,8 +9,8 @@ console.log(chalk.greenBright('✔ Application Started'));
 require('./system/configs/database');
 
 // Load Server
-const {server} = require('./system/configs/server');
-const {config} = require('./system/configs/config');
+const { server } = require('./system/configs/server');
+const { config } = require('./system/configs/config');
 
 const PORT = process.env.PORT || config.PORT;
 server.listen(PORT).on('error', (err) => {

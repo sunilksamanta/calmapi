@@ -5,4 +5,4 @@ class CalmService {
 
 module.exports = {
     CalmService
-}
+};

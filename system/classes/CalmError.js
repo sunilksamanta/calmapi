@@ -4,14 +4,14 @@
  * Custom Error Definition
  * @author Sunil Kumar Samanta
  */
-class CalmError extends Error{
+class CalmError extends Error {
     /**
      * Calm Error
      * @param {('NOT_FOUND_ERROR'|'PERMISSION_DENIED_ERROR'|'UNAUTHORIZED_ERROR'|'INTERNAL_SERVER_ERROR'|'UNKNOWN_ERROR')} type
      * @param {string | null} [message]
      * @param {number | null} [statusCode]
      */
-    constructor(type = 'INTERNAL_SERVER_ERROR', message = null, statusCode= null) {
+    constructor(type = 'INTERNAL_SERVER_ERROR', message = null, statusCode = null) {
         super();
         this.error = true;
         switch (type) {
@@ -45,4 +45,4 @@ class CalmError extends Error{
 
 module.exports = {
     CalmError
-}
+};

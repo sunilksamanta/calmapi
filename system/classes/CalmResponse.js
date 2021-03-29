@@ -5,4 +5,4 @@ class CalmResponse {
 
 module.exports = {
     CalmResponse
-}
+};

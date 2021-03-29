@@ -5,4 +5,4 @@ class CalmController {
 
 module.exports = {
     CalmController
-}
+};
