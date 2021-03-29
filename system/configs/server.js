@@ -13,4 +13,6 @@ server.use(cors({origin:'*'}))
 server.use(bodyParser.json());
 // Setup Routes
 setRoutes(server);
-exports.server = server;
+module.exports = {
+    server
+};
