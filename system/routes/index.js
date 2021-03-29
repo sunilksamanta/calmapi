@@ -1,8 +1,12 @@
 'use strict';
-const router = require('express').Router;
+const router = require('express').Router();
 const chalk = require('chalk');
 
 // Define API Routes
+router.get('/', (req, res) => {
+    res.json({status: true, message: 'API Running'});
+
+});
 // Load Default Modules here
 console.log(chalk.greenBright('✔ Default Modules Loaded'));
 

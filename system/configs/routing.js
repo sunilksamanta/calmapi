@@ -1,6 +1,6 @@
 'use strict';
 const {apiRoutes} = require('../routes');
-const {CalmError} = require('../classes/CalmError');
+const {CalmError} = require('../classes');
 
 module.exports.setRoutes = (app) => {
 
@@ -27,7 +27,7 @@ module.exports.setRoutes = (app) => {
      * If No route matches. Send user a 404 page
      */
     app.use('/*', (req, res, next) => {
-        const error = new Error('PERMISSION_DENIED_ERROR');
+        const error = new Error('NOT_FOUND_ERROR');
         next(error);
     });
 
