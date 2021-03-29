@@ -1,5 +1,6 @@
 'use strict';
-const apiRoutes = require('../routes');
+const {apiRoutes} = require('../routes');
+const {CalmError} = require('../classes/CalmError');
 
 module.exports.setRoutes = (app) => {
 
@@ -15,7 +16,7 @@ module.exports.setRoutes = (app) => {
      * API Route.
      * All the API will start with "/api/[MODULE_ROUTE]"
      */
-    // app.use('/api', apiRoutes);
+    app.use('/api', apiRoutes);
 
     /**
      * Serving Static files from uploads directory.
@@ -26,13 +27,17 @@ module.exports.setRoutes = (app) => {
      * If No route matches. Send user a 404 page
      */
     app.use('/*', (req, res, next) => {
-        const error = new Error('Requested path does not exist.');
-        error.statusCode = 404;
+        const error = new Error('PERMISSION_DENIED_ERROR');
         next(error);
     });
 
     app.use((err, req, res, next) => {
-        console.log(err.message);
-        next(err);
+        // Check if error is not an instance of CalmError
+        if (!(err instanceof CalmError)) {
+            // Convert this error into CalmError
+            err = new CalmError(err.message);
+        }
+        res.statusCode = err.statusCode;
+        res.json(err);
     })
 };
