@@ -5,6 +5,8 @@
  * @author Sunil Kumar Samanta
  */
 class CalmError extends Error {
+    error = true;
+    responseTimestamp = new Date();
     /**
      * Calm Error
      * @param {('NOT_FOUND_ERROR'|'PERMISSION_DENIED_ERROR'|'UNAUTHORIZED_ERROR'|'INTERNAL_SERVER_ERROR'|'UNKNOWN_ERROR')} type
@@ -13,7 +15,6 @@ class CalmError extends Error {
      */
     constructor(type = 'INTERNAL_SERVER_ERROR', message = null, statusCode = null) {
         super();
-        this.error = true;
         switch (type) {
             case 'NOT_FOUND_ERROR': {
                 this.message = message || 'Resource not found';
