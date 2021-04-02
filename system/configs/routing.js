@@ -1,6 +1,6 @@
 'use strict';
 const { apiRoutes } = require('../routes');
-const { CalmError } = require('../classes');
+const { CalmError } = require('../core');
 
 module.exports.setRoutes = (app) => {
 
