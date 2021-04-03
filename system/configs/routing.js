@@ -32,6 +32,7 @@ module.exports.setRoutes = (app) => {
     });
     // eslint-disable-next-line no-unused-vars
     app.use((err, req, res, next) => {
+        console.log(err);
         // Check if error is not an instance of CalmError
         if (!(err instanceof CalmError)) {
             // Convert this error into CalmError
