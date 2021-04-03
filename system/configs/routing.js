@@ -27,7 +27,7 @@ module.exports.setRoutes = (app) => {
      * If No route matches. Send user a 404 page
      */
     app.use('/*', (req, res, next) => {
-        const error = new Error('NOT_FOUND_ERROR');
+        const error = new CalmError('NOT_FOUND_ERROR');
         next(error);
     });
     // eslint-disable-next-line no-unused-vars
