@@ -1,11 +1,11 @@
 {
   "name": "calmapi",
   "version": "1.0.0",
-  "description": "Production ready REST API framework using NodeJS & MongoDB With CLI",
+  "description": "Production ready REST API framework using NodeJS & MongoDB",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "../node_modules/.bin/eslint .",
+    "lint": "../node_modules/.bin/eslint ..",
     "start": "node index.js"
   },
   "repository": {
@@ -19,6 +19,15 @@
     "url": "https://github.com/sunilksamanta/calmapi/issues"
   },
   "homepage": "https://calmapi.dev",
+  "dependencies": {
+    "auto-bind": "^4.0.0",
+    "body-parser": "^1.19.0",
+    "chalk": "^4.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1",
+    "helmet": "^4.4.1"
+  },
   "devDependencies": {
     "babel-eslint": "^10.1.0",
     "chai": "^4.3.4",
