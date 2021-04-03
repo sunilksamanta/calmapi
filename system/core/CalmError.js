@@ -9,12 +9,13 @@ class CalmError extends Error {
     responseTimestamp = new Date();
     /**
      * Calm Error
-     * @param {('NOT_FOUND_ERROR'|'PERMISSION_DENIED_ERROR'|'UNAUTHORIZED_ERROR'|'INTERNAL_SERVER_ERROR'|'UNKNOWN_ERROR')} type
+     * @param {('NOT_FOUND_ERROR'|'PERMISSION_DENIED_ERROR'|'UNAUTHORIZED_ERROR'|'INTERNAL_SERVER_ERROR'|'UNKNOWN_ERROR') | null} type
      * @param {string | null} [message]
      * @param {number | null} [statusCode]
      */
-    constructor(type = 'INTERNAL_SERVER_ERROR', message = null, statusCode = null) {
+    constructor(type = null, message = null, statusCode = null) {
         super();
+        this.name = type || 'CUSTOM_ERROR';
         switch (type) {
             case 'NOT_FOUND_ERROR': {
                 this.message = message || 'Resource not found';
