@@ -27,5 +27,16 @@
     "eslint-plugin-import": "^2.22.1",
     "husky": "^6.0.0",
     "mocha": "^8.3.2"
-  }
+  },
+  "dependencies": {
+    "change-case": "^4.1.2",
+    "inquirer": "^8.0.0"
+  },
+  "bin": {
+    "calmapi": "./index.js"
+  },
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "engineStrict": true
 }

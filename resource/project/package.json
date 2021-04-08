@@ -1,5 +1,5 @@
 {
-  "name": "calmapi",
+  "name": "{{PROJECT_NAME}}",
   "version": "1.0.0",
   "description": "Production ready REST API framework using NodeJS & MongoDB",
   "main": "index.js",
