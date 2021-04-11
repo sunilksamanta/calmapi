@@ -1,8 +1,10 @@
 {
-  "name": "{{PROJECT_NAME}}",
+  "name": "calmapi",
   "version": "1.0.0",
   "description": "Production ready REST API framework using NodeJS & MongoDB",
   "main": "index.js",
+  "generator": "calmapi",
+  "generatorVersion": "1.0.0",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "../node_modules/.bin/eslint ..",

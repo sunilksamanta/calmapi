@@ -3,8 +3,7 @@
 const inquirer = require('inquirer');
 const CURR_DIR = process.cwd();
 const fs = require('fs');
-const child_process = require('child_process');
-const path = require('path');
+const childProcess = require('childProcess');
 const { paramCase } = require('change-case');
 
 const QUESTIONS = [
@@ -12,11 +11,12 @@ const QUESTIONS = [
         name: 'project-name',
         type: 'input',
         message: 'Project name:',
-        validate: function (input) {
+        validate: function(input) {
             const inputSanitized = input.trim();
             const projectDirectoryName = paramCase(inputSanitized);
             if(!(/^([A-Za-z\-\_ \d])+$/.test(inputSanitized))) {
                 return 'Project name may only include letters, numbers, underscores and space.';
+                // eslint-disable-next-line no-use-before-define
             } else if(directoryExistsCheck(projectDirectoryName)) {
                 return `Directory already exists with name "${projectDirectoryName}"`;
             }
@@ -33,19 +33,22 @@ const QUESTIONS = [
         // }
     }
 ];
+// eslint-disable-next-line func-style
 async function main() {
     console.log('::: WELCOME TO CALM API :::\n');
     const answers = await inquirer.prompt(QUESTIONS);
-    const projectName = answers['project-name'];
-    const mongoUri = answers['mongo-uri'];
+    const projectName = answers[ 'project-name' ];
+    const mongoUri = answers[ 'mongo-uri' ];
     const projectDirectoryName = paramCase(projectName);
     const templatePath = `${__dirname}/resource/project`;
 
     fs.mkdirSync(`${CURR_DIR}/${projectDirectoryName}`);
+    // eslint-disable-next-line no-use-before-define
     createDirectoryContents(templatePath, projectDirectoryName, projectName, mongoUri);
     console.log(`:: Setting up ${projectName}.`);
     console.log(':: Installing Dependencies..');
-    await npm_install(`${CURR_DIR}/${projectDirectoryName}`);
+    // eslint-disable-next-line no-use-before-define
+    await npmInstall(`${CURR_DIR}/${projectDirectoryName}`);
     console.log(':: Project Setup Complete');
     console.log('\nWhat next?');
     // console.log('Edit the .env file located at the root of the project.');
@@ -54,7 +57,8 @@ async function main() {
     console.log(CURR_DIR);
 }
 
-function createDirectoryContents (templatePath, newProjectPath, projectName, mongoUri) {
+// eslint-disable-next-line func-style
+function createDirectoryContents(templatePath, newProjectPath, projectName, mongoUri) {
     const filesToCreate = fs.readdirSync(templatePath);
 
     filesToCreate.forEach(file => {
@@ -66,12 +70,15 @@ function createDirectoryContents (templatePath, newProjectPath, projectName, mon
         if (stats.isFile()) {
             let contents = fs.readFileSync(origFilePath, 'utf8');
             // Rename
-            if (file === '.npmignore') file = '.gitignore';
+            if (file === '.npmignore') {
+                // eslint-disable-next-line no-param-reassign
+                file = '.gitignore';
+            }
             if(file === 'package.json') {
-                contents = contents.replace("{{PROJECT_NAME}}", projectName);
+                contents = contents.replace('"name": "calmapi"', `"name": "${projectName}"`);
             }
             if(file === '.env') {
-                contents = contents.replace("{{MONGO_URL}}", mongoUri);
+                contents = contents.replace('{{MONGO_URL}}', mongoUri);
             }
 
             const writePath = `${CURR_DIR}/${newProjectPath}/${file}`;
@@ -86,15 +93,17 @@ function createDirectoryContents (templatePath, newProjectPath, projectName, mon
 }
 
 // Performs `npm install`
-async function npm_install(where) {
+// eslint-disable-next-line func-style
+async function npmInstall(where) {
     try {
-        let stdout = child_process.execSync('npm install', { cwd: where, env: process.env, stdio: 'pipe' });
+        childProcess.execSync('npm install', { cwd: where, env: process.env, stdio: 'pipe' });
     } catch (e) {
-        console.error("Error Installing Packages " + e.stderr ) ;
+        console.error(`Error Installing Packages ${ e.stderr}` ) ;
     }
 
 }
 
+// eslint-disable-next-line func-style
 function directoryExistsCheck(projectDirectoryName) {
     try {
         return fs.existsSync(`${CURR_DIR}/${projectDirectoryName}`);
