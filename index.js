@@ -3,7 +3,7 @@
 const inquirer = require('inquirer');
 const CURR_DIR = process.cwd();
 const fs = require('fs');
-const childProcess = require('childProcess');
+const childProcess = require('child_process');
 const { paramCase } = require('change-case');
 
 const QUESTIONS = [
@@ -60,6 +60,7 @@ async function main() {
 // eslint-disable-next-line func-style
 function createDirectoryContents(templatePath, newProjectPath, projectName, mongoUri) {
     const filesToCreate = fs.readdirSync(templatePath);
+    const skippedFiles = [ '.env', 'package-lock.json' ];
 
     filesToCreate.forEach(file => {
         const origFilePath = `${templatePath}/${file}`;
@@ -68,6 +69,9 @@ function createDirectoryContents(templatePath, newProjectPath, projectName, mong
         const stats = fs.statSync(origFilePath);
 
         if (stats.isFile()) {
+            if(skippedFiles.includes(file)) {
+                return;
+            }
             let contents = fs.readFileSync(origFilePath, 'utf8');
             // Rename
             if (file === '.npmignore') {
@@ -75,10 +79,12 @@ function createDirectoryContents(templatePath, newProjectPath, projectName, mong
                 file = '.gitignore';
             }
             if(file === 'package.json') {
-                contents = contents.replace('"name": "calmapi"', `"name": "${projectName}"`);
+                contents = contents.replace('"name": "calmapi"', `"name": "${newProjectPath}"`);
             }
-            if(file === '.env') {
-                contents = contents.replace('{{MONGO_URL}}', mongoUri);
+            if(file === '.env.sample') {
+                contents = contents.replace('{{MONGODB_URI}}', mongoUri);
+                // eslint-disable-next-line no-param-reassign
+                file = '.env';
             }
 
             const writePath = `${CURR_DIR}/${newProjectPath}/${file}`;

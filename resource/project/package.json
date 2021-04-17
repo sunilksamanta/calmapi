@@ -28,7 +28,8 @@
     "cors": "^2.8.5",
     "dotenv": "^8.2.0",
     "express": "^4.17.1",
-    "helmet": "^4.4.1"
+    "helmet": "^4.4.1",
+    "mongoose": "^5.12.4"
   },
   "devDependencies": {
     "babel-eslint": "^10.1.0",
