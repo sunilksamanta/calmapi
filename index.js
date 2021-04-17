@@ -58,7 +58,9 @@ async function main() {
     console.log(`\ncd ${projectDirectoryName}\n`);
     console.log('\nStart the app by running');
     console.log('\nnpm start\n');
-
+    console.log('\n\nPre Installed Modules\n\n');
+    console.log('1. Auth: Register, Login, Password Reset, Profile\n');
+    console.log('1. Post: CRUD\n');
     console.log('Edit the .env file located at the root of the project.');
     console.log('...::: Thank you for using CALM API :::...');
 }
@@ -109,6 +111,7 @@ function createDirectoryContents(templatePath, newProjectPath, projectName, mong
 async function npmInstall(where) {
     try {
         childProcess.execSync('npm install', { cwd: where, env: process.env, stdio: 'pipe' });
+        childProcess.execSync('npm ci', { cwd: where, env: process.env, stdio: 'pipe' });
     } catch (e) {
         console.error(`Error Installing Packages ${ e.stderr}` ) ;
     }
