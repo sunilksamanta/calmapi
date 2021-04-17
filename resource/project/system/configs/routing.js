@@ -1,7 +1,7 @@
 'use strict';
 const { apiRoutes } = require('../routes');
 const { CalmError } = require('../core');
-
+const packageJson = require('../../package.json');
 module.exports.setRoutes = (app) => {
 
     /**
@@ -9,7 +9,7 @@ module.exports.setRoutes = (app) => {
      * Set the Welcome message or send a static html or use a view engine.
      */
     app.get('/', (req, res) => {
-        res.json({ status: true, message: 'Welcome to the APP' });
+        res.json({ status: true, message: `Welcome to the ${packageJson.name}` });
     });
 
     /**

@@ -49,12 +49,18 @@ async function main() {
     console.log(':: Installing Dependencies..');
     // eslint-disable-next-line no-use-before-define
     await npmInstall(`${CURR_DIR}/${projectDirectoryName}`);
+    console.log(':: Setting up Git..');
+    // eslint-disable-next-line no-use-before-define
+    await gitSetup(`${CURR_DIR}/${projectDirectoryName}`);
     console.log(':: Project Setup Complete');
     console.log('\nWhat next?');
-    // console.log('Edit the .env file located at the root of the project.');
-    // console.log('...::: Thank you for using MEAN CLOUD CLI :::...');
-    console.log(answers, projectDirectoryName);
-    console.log(CURR_DIR);
+    console.log('\nGo to the project directory by running');
+    console.log(`\ncd ${projectDirectoryName}\n`);
+    console.log('\nStart the app by running');
+    console.log('\nnpm start\n');
+
+    console.log('Edit the .env file located at the root of the project.');
+    console.log('...::: Thank you for using CALM API :::...');
 }
 
 // eslint-disable-next-line func-style
@@ -107,6 +113,17 @@ async function npmInstall(where) {
         console.error(`Error Installing Packages ${ e.stderr}` ) ;
     }
 
+}
+
+// eslint-disable-next-line func-style
+async function gitSetup(where) {
+    try {
+        childProcess.execSync('git init', { cwd: where, env: process.env, stdio: 'pipe' });
+        childProcess.execSync('git add .', { cwd: where, env: process.env, stdio: 'pipe' });
+        childProcess.execSync('git commit -m "Initial Setup"', { cwd: where, env: process.env, stdio: 'pipe' });
+    } catch (e) {
+        console.error(`Error Setting up Git ${ e.stderr}` ) ;
+    }
 }
 
 // eslint-disable-next-line func-style
