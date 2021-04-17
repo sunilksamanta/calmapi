@@ -4,7 +4,7 @@ const { Schema } = require( 'mongoose' );
 const uniqueValidator = require( 'mongoose-unique-validator' );
 const { slugify } = require( '../../utils' );
 
-class Sample {
+class Post {
 
     initSchema() {
         const schema = new Schema( {
@@ -13,6 +13,14 @@ class Sample {
                 'required': true,
             },
             'slug': String,
+            'subtitle': {
+                'type': String,
+                'required': false,
+            },
+            'description': {
+                'type': String,
+                'required': false,
+            },
             'content': {
                 'type': String,
                 'required': true,
@@ -20,18 +28,17 @@ class Sample {
         }, { 'timestamps': true } );
 
         schema.pre( 'save', function( next ) {
-            const sample = this;
+            const post = this;
 
-            if ( !sample.isModified( 'title' ) ) {
+            if ( !post.isModified( 'title' ) ) {
                 return next();
             }
-            sample.slug = slugify( sample.title );
+            post.slug = slugify( post.title );
             return next();
         } );
-
         schema.plugin( uniqueValidator );
         try {
-            mongoose.model( 'sample', schema );
+            mongoose.model( 'post', schema );
         } catch ( e ) {
 
         }
@@ -40,8 +47,8 @@ class Sample {
 
     getInstance() {
         this.initSchema();
-        return mongoose.model( 'sample' );
+        return mongoose.model( 'post' );
     }
 }
 
-module.exports = { Sample };
+module.exports = { Post };

@@ -3,7 +3,8 @@
 require('dotenv').config();
 const chalk = require('chalk');
 const packageInfo = require('./package.json');
-console.log(chalk.greenBright.bold.underline('⬤⬤ Welcome to Calm API! v', packageInfo.version, '⬤⬤'));
+console.log(chalk.greenBright.bold.underline('⬤  Welcome to Calm API! v', packageInfo.version, '⬤'));
+console.log(chalk.greenBright.bold('\n✔ Project: ', packageInfo.name));
 console.log(chalk.greenBright('✔ Application Started'));
 // Load Database
 require('./system/configs/database');
@@ -20,4 +21,5 @@ server.listen(PORT).on('error', (err) => {
 }).on('listening', () => {
     console.log(chalk.greenBright('✔ Listening on port', PORT));
     console.log(chalk.greenBright.bold('✔ Keep Calm and REST'));
+    console.log(chalk.greenBright.bold(`✔ Endpoint Base URL: http://127.0.0.1:${PORT}`));
 });

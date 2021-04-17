@@ -4,7 +4,8 @@ const path = require('path');
 const chalk = require('chalk');
 const config = {
     EXCLUDED_ITEMS_FROM_RESPONSE: [ 'password', '__v' ],
-    PORT: 5001
+    PORT: 5001,
+    MONGODB_URI: process.env.MONGODB_URI
 };
 const loadConfig = () => {
     let finalConfig = { ...config };

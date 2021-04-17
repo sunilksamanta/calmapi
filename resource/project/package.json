@@ -23,12 +23,18 @@
   "homepage": "https://calmapi.dev",
   "dependencies": {
     "auto-bind": "^4.0.0",
+    "bcrypt": "^5.0.1",
     "body-parser": "^1.19.0",
     "chalk": "^4.1.0",
     "cors": "^2.8.5",
     "dotenv": "^8.2.0",
     "express": "^4.17.1",
-    "helmet": "^4.4.1"
+    "helmet": "^4.4.1",
+    "humanize-string": "^2.1.0",
+    "jsonwebtoken": "^8.5.1",
+    "mongoose": "^5.12.4",
+    "mongoose-unique-validator": "^2.0.3",
+    "pluralize": "^8.0.0"
   },
   "devDependencies": {
     "babel-eslint": "^10.1.0",
