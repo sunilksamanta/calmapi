@@ -1,5 +1,8 @@
 'use strict';
 const excludeKeysFromData = (data, excludedKeys = []) => {
+    if(data === null) {
+        return data;
+    }
     if (Array.isArray(data)) {
         data.forEach((item, index) => {
             data[ index ] = excludeKeysFromData(item, excludedKeys);

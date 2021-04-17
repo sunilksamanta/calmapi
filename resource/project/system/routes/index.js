@@ -13,9 +13,8 @@ const modulesPath = path.resolve( `${__dirname}/../../src/modules` );
 const PATHS = fs.readdirSync( modulesPath );
 const moduleMapper = [];
 // eslint-disable-next-line no-console
-console.log( '✔ Mapping routes' );
+console.log( chalk.blueBright('✔ Mapping routes') );
 // eslint-disable-next-line no-console
-console.log( '✔ Base Url: /api' );
 
 
 const loadModules = ( basePath, baseRoute, routerPaths ) => {
@@ -50,7 +49,7 @@ const loadModules = ( basePath, baseRoute, routerPaths ) => {
                     return fs.lstatSync( path.resolve( modulesPath, basePath ? `${basePath }/` : '', module, p ) ).isDirectory();
                 } );
                 if( !subPaths.length ) {
-                    console.log( e );
+                    // console.log( e );
                     moduleMapper.push( {
                         'Module': module,
                         'Route': `/${baseRoute ? `${baseRoute}/` : ''}${urlPath || pluralize.plural( module )}`,

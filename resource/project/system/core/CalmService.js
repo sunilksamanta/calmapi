@@ -46,10 +46,7 @@ class CalmService {
             const item = await this.model.findById( id );
 
             if ( !item ) {
-                const error = new Error( 'Item not found' );
-
-                error.statusCode = 404;
-                throw error;
+                throw new Error('NOT_FOUND_ERROR');
             }
 
             return { 'data': item.toJSON() };
@@ -69,7 +66,7 @@ class CalmService {
             if ( item ) {
                 return { 'data': item.toJSON() };
             }
-            throw new Error( 'Something wrong happened' );
+            throw new Error( 'UNKNOWN_ERROR' );
 
         } catch ( error ) {
             throw error;
@@ -88,7 +85,7 @@ class CalmService {
             if ( item ) {
                 return { 'data': item.toJSON() };
             }
-            throw new Error( 'Something wrong happened' );
+            throw new Error( 'UNKNOWN_ERROR' );
         } catch ( errors ) {
             throw errors;
         }
@@ -103,10 +100,7 @@ class CalmService {
             const item = await this.model.findByIdAndDelete( id );
 
             if ( !item ) {
-                const error = new Error( 'Item not found' );
-
-                error.statusCode = 404;
-                throw error;
+                throw new Error('NOT_FOUND_ERROR');
             } else {
                 return { 'data': item.toJSON(), 'deleted': true };
             }

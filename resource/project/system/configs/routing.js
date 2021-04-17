@@ -2,6 +2,8 @@
 const { apiRoutes } = require('../routes');
 const { CalmError } = require('../core');
 const packageJson = require('../../package.json');
+const humanizeString = require( 'humanize-string' );
+
 module.exports.setRoutes = (app) => {
 
     /**
@@ -32,14 +34,53 @@ module.exports.setRoutes = (app) => {
     });
     // eslint-disable-next-line no-unused-vars
     app.use((err, req, res, next) => {
-        console.log(err);
+        // console.log(err);
         // Check if error is not an instance of CalmError
         if (!(err instanceof CalmError)) {
-            // Convert this error into CalmError
-            // eslint-disable-next-line no-param-reassign
-            err = new CalmError(err.message);
+
+            if ( err.name === 'ValidationError' && err.errors ) {
+                err.statusCode = 422;
+                // eslint-disable-next-line no-use-before-define
+                err.errors = formatMongooseError( err.errors );
+                err.message = humanizeString( err.message.split( ':' )[ 0 ].trim() );
+
+                // eslint-disable-next-line no-param-reassign
+                err = new CalmError('VALIDATION_ERROR', err.message, null, err.errors);
+            } else {
+                // Convert this error into CalmError
+                // eslint-disable-next-line no-param-reassign
+                err = new CalmError(err.message);
+            }
+
+        }
+        if(process.env.NODE_ENV === 'production') {
+            console.error( `[${new Date().toISOString()}]`, req.method, req.url, err.statusCode, err.message);
+        } else {
+            console.error( `[${new Date().toISOString()}]`, req.method, req.url, err.statusCode, err.message, `\n${err.stack}`);
         }
         res.statusCode = err.statusCode;
         res.json(err);
     });
+};
+
+// eslint-disable-next-line func-style
+function formatMongooseError( errorsObj ) {
+    const errors = {};
+    Object.keys( errorsObj ).forEach( key => {
+        switch( errorsObj[ key ].kind ) {
+            case 'required': errors[ key ] = `${humanizeString( errorsObj[ key ].path )} is required`;
+                break;
+
+            case 'unique': errors[ key ] = `${humanizeString( errorsObj[ key ].path )} already exists`;
+                break;
+
+            default:
+                if( errorsObj[ key ].name === 'CastError' ) {
+                    errors[ key ] = `${humanizeString( errorsObj[ key ].path )} is of invalid type`;
+                } else {
+                    errors[ key ] = errorsObj[ key ].message;
+                }
+        }
+    } );
+    return errors;
 };

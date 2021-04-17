@@ -1,5 +1,4 @@
 'use strict';
-
 /**
  * Custom Error Definition
  * @author Sunil Kumar Samanta
@@ -9,13 +8,15 @@ class CalmError extends Error {
     responseTimestamp = new Date();
     /**
      * Calm Error
-     * @param {('NOT_FOUND_ERROR'|'PERMISSION_DENIED_ERROR'|'UNAUTHORIZED_ERROR'|'INTERNAL_SERVER_ERROR'|'UNKNOWN_ERROR') | null} type
+     * @param {('NOT_FOUND_ERROR'|'PERMISSION_DENIED_ERROR'|'UNAUTHORIZED_ERROR'|'INTERNAL_SERVER_ERROR'|'UNKNOWN_ERROR'|'VALIDATION_ERROR') | null} type
      * @param {string | null} [message]
      * @param {number | null} [statusCode]
+     * @param {Object | null} [errors]
      */
-    constructor(type = null, message = null, statusCode = null) {
+    constructor(type = null, message = null, statusCode = null, errors = null) {
         super();
         this.name = type || 'CUSTOM_ERROR';
+
         switch (type) {
             case 'NOT_FOUND_ERROR': {
                 this.message = message || 'Resource not found';
@@ -35,6 +36,14 @@ class CalmError extends Error {
             case 'UNKNOWN_ERROR': {
                 this.message = message || 'Something Wrong has happened';
                 this.statusCode = statusCode || 400;
+                break;
+            }
+            case 'VALIDATION_ERROR': {
+                this.message = message || 'Something Wrong has happened';
+                this.statusCode = statusCode || 422;
+                if( errors) {
+                    this.errors = errors;
+                }
                 break;
             }
             default : {
