@@ -5,7 +5,7 @@ const CURR_DIR = process.cwd();
 const fs = require('fs');
 const childProcess = require('child_process');
 const { paramCase } = require('change-case');
-
+const packageInfo = require('./package.json');
 const QUESTIONS = [
     {
         name: 'project-name',
@@ -88,6 +88,7 @@ function createDirectoryContents(templatePath, newProjectPath, projectName, mong
             }
             if(file === 'package.json') {
                 contents = contents.replace('"name": "calmapi"', `"name": "${newProjectPath}"`);
+                contents = contents.replace('{{CALMAPI_VERSION}}', packageInfo.version);
             }
             if(file === '.env.sample') {
                 contents = contents.replace('{{MONGODB_URI}}', mongoUri);
