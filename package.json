@@ -1,6 +1,6 @@
 {
   "name": "calmapi",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Production ready REST API framework using NodeJS & MongoDB With CLI",
   "main": "index.js",
   "scripts": {
@@ -14,7 +14,15 @@
     "url": "git@github.com:sunilksamanta/calmapi.git"
   },
   "keywords": [
-    "calmapi", "restapi", "nodejs", "mongodb", "mongoose", "boilerplate", "starter", "restapi", "rest"
+    "calmapi",
+    "restapi",
+    "nodejs",
+    "mongodb",
+    "mongoose",
+    "boilerplate",
+    "starter",
+    "restapi",
+    "rest"
   ],
   "author": "Sunil Kumar Samanta",
   "license": "MIT",
