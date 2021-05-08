@@ -78,7 +78,7 @@ class AuthController {
         try{
             const id = req.user._id;
             const response = await this.service.getProfile( id );
-            res.sendCalmResponse( new this.userDTO.GetProfileDTO( response.data ) );
+            res.sendCalmResponse( new this.userDTO.GetDTO( response.data ) );
 
         } catch ( e ) {
             next( e );
@@ -88,7 +88,7 @@ class AuthController {
     async updateProfile( req, res, next ) {
         try{
             const id = req.user._id;
-            await this.service.updateProfile( id, new this.userDTO.UpdateProfileDTO( req.body ) );
+            await this.service.updateProfile( id, new this.userDTO.GetDTO( req.body ) );
             res.sendCalmResponse( null, { 'updated': true } );
 
         } catch ( e ) {
@@ -119,7 +119,7 @@ class AuthController {
     }
 
     /**
-     * Check Login but Forward the Request
+     * Checks if the user is logged in and its optional, If logged in the user object is injected into req.
      * @param req
      * @param res
      * @param next

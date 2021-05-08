@@ -4,10 +4,11 @@ class CalmService {
     /**
      * Calm Service
      * @author Sunil Kumar Samanta
-     * @param model
+     * @param model Current Model Instance
      */
     constructor( model ) {
         this.model = model;
+        this.parseObj = data => JSON.parse(JSON.stringify(data));
         autoBind( this );
     }
 
@@ -16,22 +17,19 @@ class CalmService {
      * @param { Object } query Query Parameters
      */
     async getAll( query ) {
-        let { skip, limit, sortBy } = query;
+        // eslint-disable-next-line prefer-const
+        let { skip, limit, sortBy, ...restQuery } = query;
 
         skip = skip ? Number( skip ) : 0;
         limit = limit ? Number( limit ) : 10;
         sortBy = sortBy ? sortBy : { 'createdAt': -1 };
 
-        delete query.skip;
-        delete query.limit;
-        delete query.sortBy;
-
         try {
-            const items = await this.model.find( query ).sort( sortBy ).skip( skip ).limit( limit );
+            const items = await this.model.find( restQuery ).sort( sortBy ).skip( skip ).limit( limit );
 
             const total = await this.model.countDocuments( query );
 
-            return { 'data': JSON.parse( JSON.stringify( items ) ), total };
+            return { 'data': this.parseObj( items ), total };
         } catch ( errors ) {
             throw errors;
         }
@@ -80,12 +78,12 @@ class CalmService {
      */
     async update( id, data ) {
         try {
-            const item = await this.model.findByIdAndUpdate( id, { ...data }, { 'new': true } );
+            const item = await this.model.findByIdAndUpdate( id, { ...data }, { 'new': true, runValidators: true, context: 'query' } );
 
             if ( item ) {
-                return { 'data': item.toJSON() };
+                return { 'data': this.parseObj( item ) };
             }
-            throw new Error( 'UNKNOWN_ERROR' );
+            throw new Error( 'NOT_FOUND_ERROR' );
         } catch ( errors ) {
             throw errors;
         }
@@ -102,7 +100,7 @@ class CalmService {
             if ( !item ) {
                 throw new Error('NOT_FOUND_ERROR');
             } else {
-                return { 'data': item.toJSON(), 'deleted': true };
+                return { 'data': this.parseObj( item ), 'deleted': true };
             }
         } catch ( errors ) {
             throw errors;
