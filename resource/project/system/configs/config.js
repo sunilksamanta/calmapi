@@ -7,6 +7,10 @@ const config = {
     PORT: 5001,
     MONGODB_URI: process.env.MONGODB_URI
 };
+/**
+ * Load Configuration
+ * @returns {Object} Configuration
+ */
 const loadConfig = () => {
     let finalConfig = { ...config };
     try {

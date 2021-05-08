@@ -1,6 +1,5 @@
 'use strict';
 const express = require('express');
-const bodyParser = require('body-parser');
 const helmet = require( 'helmet' );
 const cors = require('cors');
 const server = express();
@@ -10,7 +9,9 @@ server.use(helmet());
 // CORS Configuration
 server.use(cors({ origin: '*' }));
 // Setup Body Parser
-server.use(bodyParser.json());
+server.use(express.json());
+server.use(express.urlencoded({extended: true}));
+
 // Setup Routes
 setRoutes(server);
 module.exports = {
