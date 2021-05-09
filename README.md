@@ -36,3 +36,6 @@ And follow the easy steps.
 * [Rajdip Mondal](https://github.com/RajdipM)
 
 *We love your input! We want to make contributing to this project as easy and transparent as possible, whether it's: Reporting a bug, Documentation, Discussing the current state of the code, Submitting a fix or Proposing new features.*
+
+### Credits
+[Thiago Pacheco](https://github.com/pachecoio) for the idea of better NodeJS architechture.
