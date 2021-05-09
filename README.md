@@ -1,6 +1,6 @@
 # Calm API
-### Production ready Modular REST API Starter Package using NodeJS & MongoDB
-![Calm API](https://repository-images.githubusercontent.com/352502404/f7fed080-9099-11eb-9bc1-10452bc89ee6)
+### Production ready Modular REST API generator Package using NodeJS & MongoDB
+![Calm API](https://repository-images.githubusercontent.com/352502404/b7857000-b0a5-11eb-9d04-451a0a6fb88f)
 
 ## Installation
 
