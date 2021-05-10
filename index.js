@@ -99,6 +99,11 @@ function createDirectoryContents(templatePath, newProjectPath, projectName, mong
                 file = '.env';
             }
 
+            if(file === '.gitignore.sample') {
+                // eslint-disable-next-line no-param-reassign
+                file = '.gitignore';
+            }
+
             const writePath = `${CURR_DIR}/${newProjectPath}/${file}`;
             fs.writeFileSync(writePath, contents, 'utf8');
         } else if (stats.isDirectory()) {
@@ -108,6 +113,7 @@ function createDirectoryContents(templatePath, newProjectPath, projectName, mong
             createDirectoryContents(`${templatePath}/${file}`, `${newProjectPath}/${file}`, projectName);
         }
     });
+
 }
 
 // Performs `npm install`
