@@ -27,10 +27,13 @@ const QUESTIONS = [
         name: 'mongo-uri',
         type: 'input',
         message: 'MongoDB URI:',
-        // validate: function (input) {
-        //     if (/^([A-Za-z\-\_\b\d])+$/.test(input)) return true;
-        //     else return 'Project name may only include letters, numbers, underscores and space.';
-        // }
+        default: (answers) => `mongodb://localhost:27017/${paramCase(answers[ 'project-name' ])}`,
+        validate: function(input) {
+            if (/^(mongodb?(\+srv):(?:\/{2})?)((\w+?):(\w+?)@|:?@?)(\w+?):(\d+)\/(\w+?)$/.test(input)) {
+                return true;
+            }
+            return 'Invalid MongoDB URI';
+        }
     }
 ];
 // eslint-disable-next-line func-style
