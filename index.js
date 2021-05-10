@@ -28,12 +28,12 @@ const QUESTIONS = [
         type: 'input',
         message: 'MongoDB URI:',
         default: (answers) => `mongodb://localhost:27017/${paramCase(answers[ 'project-name' ])}`,
-        validate: function(input) {
-            if (/^(mongodb(\+srv)?:(?:\/{2})?)((\w+?):(\w+?)@|:?@?)(\w+?):(\d+)\/(\w+?)$/.test(input)) {
-                return true;
-            }
-            return 'Invalid MongoDB URI';
-        }
+        // validate: function(input) {
+        //     if (/^(mongodb(\+srv)?:(?:\/{2})?)((\w+?):(\w+?)@|:?@?)(\w+?):(\d+)\/(\w+?)$/.test(input)) {
+        //         return true;
+        //     }
+        //     return 'Invalid MongoDB URI';
+        // }
     }
 ];
 // eslint-disable-next-line func-style
