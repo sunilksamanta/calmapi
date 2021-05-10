@@ -29,7 +29,7 @@ const QUESTIONS = [
         message: 'MongoDB URI:',
         default: (answers) => `mongodb://localhost:27017/${paramCase(answers[ 'project-name' ])}`,
         validate: function(input) {
-            if (/^(mongodb?(\+srv):(?:\/{2})?)((\w+?):(\w+?)@|:?@?)(\w+?):(\d+)\/(\w+?)$/.test(input)) {
+            if (/^(mongodb(\+srv)?:(?:\/{2})?)((\w+?):(\w+?)@|:?@?)(\w+?):(\d+)\/(\w+?)$/.test(input)) {
                 return true;
             }
             return 'Invalid MongoDB URI';
