@@ -40,8 +40,11 @@
     "mocha": "^8.3.2"
   },
   "dependencies": {
+    "axios": "^0.21.1",
+    "chalk": "^4.1.1",
     "change-case": "^4.1.2",
-    "inquirer": "^8.0.0"
+    "inquirer": "^8.0.0",
+    "ora": "^5.4.0"
   },
   "bin": {
     "calmapi": "./index.js"

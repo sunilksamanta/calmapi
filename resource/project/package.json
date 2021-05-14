@@ -7,19 +7,12 @@
   "generatorVersion": "{{CALMAPI_VERSION}}",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "./node_modules/.bin/eslint ..",
+    "lint": "./node_modules/.bin/eslint .",
     "start": "node index.js"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git@github.com:sunilksamanta/calmapi.git"
   },
   "keywords": [],
   "author": "Sunil Kumar Samanta",
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/sunilksamanta/calmapi/issues"
-  },
   "homepage": "https://calmapi.dev",
   "dependencies": {
     "auto-bind": "^4.0.0",

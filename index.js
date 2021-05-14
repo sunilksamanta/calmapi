@@ -6,6 +6,18 @@ const fs = require('fs');
 const childProcess = require('child_process');
 const { paramCase } = require('change-case');
 const packageInfo = require('./package.json');
+const axios = require('axios');
+const ora = require('ora');
+const chalk = require('chalk');
+
+const text = `
+░█████╗░░█████╗░██╗░░░░░███╗░░░███╗  ░█████╗░██████╗░██╗
+██╔══██╗██╔══██╗██║░░░░░████╗░████║  ██╔══██╗██╔══██╗██║
+██║░░╚═╝███████║██║░░░░░██╔████╔██║  ███████║██████╔╝██║
+██║░░██╗██╔══██║██║░░░░░██║╚██╔╝██║  ██╔══██║██╔═══╝░██║
+╚█████╔╝██║░░██║███████╗██║░╚═╝░██║  ██║░░██║██║░░░░░██║
+░╚════╝░╚═╝░░╚═╝╚══════╝╚═╝░░░░░╚═╝  ╚═╝░░╚═╝╚═╝░░░░░╚═╝`;
+
 const QUESTIONS = [
     {
         name: 'project-name',
@@ -38,7 +50,23 @@ const QUESTIONS = [
 ];
 // eslint-disable-next-line func-style
 async function main() {
-    console.log('::: WELCOME TO CALM API :::\n');
+    console.log(chalk.blueBright(text));
+    console.log('::: WELCOME TO CALM API :::');
+    console.log(`CLI Version: ${packageInfo.version}\n`);
+    let spinner;
+    try {
+        spinner = ora('Checking for new version').start();
+        const { data: npmInfo } = await axios.get('https://registry.npmjs.org/calmapi');
+        if( npmInfo && npmInfo[ 'dist-tags' ] ) {
+            spinner.stop();
+            if(npmInfo[ 'dist-tags' ][ 'latest' ] !== packageInfo.version) {
+                console.log(`A newer version ${npmInfo[ 'dist-tags' ][ 'latest' ]} is available. Please update by running "npm i -g calmapi"`);
+            }
+        }
+    } catch (e) {
+        spinner.stop();
+    }
+
     const answers = await inquirer.prompt(QUESTIONS);
     const projectName = answers[ 'project-name' ];
     const mongoUri = answers[ 'mongo-uri' ];
@@ -48,24 +76,24 @@ async function main() {
     fs.mkdirSync(`${CURR_DIR}/${projectDirectoryName}`);
     // eslint-disable-next-line no-use-before-define
     createDirectoryContents(templatePath, projectDirectoryName, projectName, mongoUri);
-    console.log(`:: Setting up ${projectName}.`);
-    console.log(':: Installing Dependencies..');
+    console.log(`:: Setting up : ${projectName}.`);
+    console.log(':: Installing dependencies...');
     // eslint-disable-next-line no-use-before-define
     await npmInstall(`${CURR_DIR}/${projectDirectoryName}`);
-    console.log(':: Setting up Git..');
+    console.log(':: Setting up git...');
     // eslint-disable-next-line no-use-before-define
     await gitSetup(`${CURR_DIR}/${projectDirectoryName}`);
-    console.log(':: Project Setup Complete');
+    console.log(chalk.blueBright(':: Project Setup Complete'));
     console.log('\nWhat next?');
     console.log('\nGo to the project directory by running');
-    console.log(`\ncd ${projectDirectoryName}\n`);
+    console.log(chalk.greenBright(`\ncd ${projectDirectoryName}\n`));
     console.log('\nStart the app by running');
-    console.log('\nnpm start\n');
+    console.log(chalk.greenBright('\nnpm start\n'));
     console.log('\n\nPre Installed Modules\n\n');
     console.log('1. Auth: Register, Login, Password Reset, Profile\n');
     console.log('1. Post: CRUD\n');
     console.log('Edit the .env file located at the root of the project.');
-    console.log('...::: Thank you for using CALM API :::...');
+    console.log(chalk.blueBright('...::: Thank you for using CALM API :::...'));
 }
 
 // eslint-disable-next-line func-style
@@ -104,6 +132,11 @@ function createDirectoryContents(templatePath, newProjectPath, projectName, mong
                 file = '.gitignore';
             }
 
+            if(file === '.eslintrc.json.sample') {
+                // eslint-disable-next-line no-param-reassign
+                file = '.eslintrc.json';
+            }
+
             const writePath = `${CURR_DIR}/${newProjectPath}/${file}`;
             fs.writeFileSync(writePath, contents, 'utf8');
         } else if (stats.isDirectory()) {
@@ -120,12 +153,12 @@ function createDirectoryContents(templatePath, newProjectPath, projectName, mong
 // eslint-disable-next-line func-style
 async function npmInstall(where) {
     try {
-        childProcess.execSync('npm install', { cwd: where, env: process.env, stdio: 'pipe' });
-        childProcess.execSync('npm ci', { cwd: where, env: process.env, stdio: 'pipe' });
+        childProcess.execSync('npm install --quiet', { cwd: where, env: process.env, stdio: 'pipe' });
+        childProcess.execSync('npm ci --quiet', { cwd: where, env: process.env, stdio: 'pipe' });
+
     } catch (e) {
         console.error(`Error Installing Packages ${ e.stderr}` ) ;
     }
-
 }
 
 // eslint-disable-next-line func-style
