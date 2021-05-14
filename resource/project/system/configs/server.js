@@ -10,7 +10,7 @@ server.use(helmet());
 server.use(cors({ origin: '*' }));
 // Setup Body Parser
 server.use(express.json());
-server.use(express.urlencoded({extended: true}));
+server.use(express.urlencoded({ extended: true }));
 
 // Setup Routes
 setRoutes(server);
