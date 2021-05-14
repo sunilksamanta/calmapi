@@ -60,7 +60,9 @@ async function main() {
         if( npmInfo && npmInfo[ 'dist-tags' ] ) {
             spinner.stop();
             if(npmInfo[ 'dist-tags' ][ 'latest' ] !== packageInfo.version) {
-                console.log(`A newer version ${npmInfo[ 'dist-tags' ][ 'latest' ]} is available. Please update by running "npm i -g calmapi"`);
+                console.log(chalk.blueBright(`A newer version ${npmInfo[ 'dist-tags' ][ 'latest' ]} is available. Please update by running "npm i -g calmapi"`));
+            } else {
+                console.log(chalk.blueBright('You are using the latest version of calmapi'));
             }
         }
     } catch (e) {
