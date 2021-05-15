@@ -9,7 +9,7 @@ const packageInfo = require('./package.json');
 const axios = require('axios');
 const ora = require('ora');
 const chalk = require('chalk');
-
+const moduleGenerator = require('./src/module-generator');
 const text = `
 ░█████╗░░█████╗░██╗░░░░░███╗░░░███╗  ░█████╗░██████╗░██╗
 ██╔══██╗██╔══██╗██║░░░░░████╗░████║  ██╔══██╗██╔══██╗██║
@@ -49,7 +49,7 @@ const QUESTIONS = [
     }
 ];
 // eslint-disable-next-line func-style
-async function main() {
+async function projectGenerator() {
     console.log(chalk.blueBright(text));
     console.log('::: WELCOME TO CALM API :::');
     console.log(`CLI Version: ${packageInfo.version}\n`);
@@ -192,4 +192,24 @@ function getCalmApiJson() {
         "version": packageInfo.version
     }
 }
-main();
+
+// eslint-disable-next-line func-style
+async function main() {
+    try {
+        const arrgumentsArr = process.argv.slice(2);
+        if(!arrgumentsArr.length) {
+            projectGenerator()
+        }else {
+            if(arrgumentsArr.length === 3 && arrgumentsArr[0] === 'generate' && arrgumentsArr[1] === 'module'){
+                moduleGenerator(arrgumentsArr[2]);
+            }else {
+                throw new Error('Invalid Command')
+            }
+        }
+        
+    } catch (error) {
+        console.log(error.message);
+    }
+};
+
+main()
