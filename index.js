@@ -148,6 +148,8 @@ function createDirectoryContents(templatePath, newProjectPath, projectName, mong
             createDirectoryContents(`${templatePath}/${file}`, `${newProjectPath}/${file}`, projectName);
         }
     });
+    fs.writeFileSync(`${CURR_DIR}/${newProjectPath}/calmapi.json`, JSON.stringify(getCalmApiJson(), null, 3), 'utf8');
+
 
 }
 
@@ -180,6 +182,14 @@ function directoryExistsCheck(projectDirectoryName) {
         return fs.existsSync(`${CURR_DIR}/${projectDirectoryName}`);
     } catch (e) {
         console.log(e);
+    }
+}
+
+// eslint-disable-next-line func-style
+function getCalmApiJson() {
+    return{
+        "name": "CALMAPI",
+        "version": packageInfo.version
     }
 }
 main();
