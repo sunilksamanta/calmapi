@@ -78,6 +78,8 @@ async function projectGenerator() {
     fs.mkdirSync(`${CURR_DIR}/${projectDirectoryName}`);
     // eslint-disable-next-line no-use-before-define
     createDirectoryContents(templatePath, projectDirectoryName, projectName, mongoUri);
+    fs.writeFileSync(`${CURR_DIR}/${projectDirectoryName}/calmapi.json`, JSON.stringify(getCalmApiJson(), null, 3), 'utf8');
+
     console.log(`:: Setting up : ${projectName}.`);
     console.log(':: Installing dependencies...');
     // eslint-disable-next-line no-use-before-define
@@ -148,7 +150,6 @@ function createDirectoryContents(templatePath, newProjectPath, projectName, mong
             createDirectoryContents(`${templatePath}/${file}`, `${newProjectPath}/${file}`, projectName);
         }
     });
-    fs.writeFileSync(`${CURR_DIR}/${newProjectPath}/calmapi.json`, JSON.stringify(getCalmApiJson(), null, 3), 'utf8');
 
 
 }
