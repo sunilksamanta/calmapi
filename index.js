@@ -10,6 +10,7 @@ const axios = require('axios');
 const ora = require('ora');
 const chalk = require('chalk');
 const moduleGenerator = require('./src/module-generator');
+const path = require('path')
 const text = `
 ░█████╗░░█████╗░██╗░░░░░███╗░░░███╗  ░█████╗░██████╗░██╗
 ██╔══██╗██╔══██╗██║░░░░░████╗░████║  ██╔══██╗██╔══██╗██║
@@ -202,7 +203,12 @@ async function main() {
             projectGenerator()
         }else {
             if(arrgumentsArr.length === 3 && arrgumentsArr[0] === 'generate' && arrgumentsArr[1] === 'module'){
-                moduleGenerator(arrgumentsArr[2]);
+                const isRootFile = fs.readdirSync(CURR_DIR).find(file=> file === 'calmapi.json');
+                if(!isRootFile) {
+                    throw new Error('Please Run From Root Folder');
+                }else {
+                    moduleGenerator(arrgumentsArr[2]);
+                }
             }else {
                 throw new Error('Invalid Command')
             }
