@@ -2,9 +2,11 @@
 const CURR_DIR = process.cwd();
 const fs = require("fs");
 const pluralize = require( 'pluralize' );
-const {capitalCase} = require('change-case')
+const {capitalCase} = require('change-case');
+const chalk = require('chalk');
 
-module.exports = function (modulePath) {
+
+module.exports = async function (modulePath) {
   try {
     const modulePathArr = modulePath.split('/');
     let finalModulePath = `${CURR_DIR}/src/modules`;
@@ -15,13 +17,16 @@ module.exports = function (modulePath) {
     // })
     const moduleDirPath = `${finalModulePath}/${finalModuleName}`
     const templatePath = `${__dirname}/../resource/modules/sample`;
-    createDirectoryContents(templatePath, finalModuleName, moduleDirPath);
+    console.log(chalk.blueBright(`${finalModuleName} folder creating... \n`));
+    fs.mkdirSync(`${moduleDirPath}`);
+    console.log(chalk.greenBright('module setup...'));
+    await createDirectoryContents(templatePath, finalModuleName, moduleDirPath);
   } catch (error) {
     console.log(error);
   }
 };
 
-function createDirectoryContents(templatePath, moduleName, moduleWritePath) {
+async function createDirectoryContents(templatePath, moduleName, moduleWritePath) {
   try {
     const filesToCreate = fs.readdirSync(templatePath);
     filesToCreate.forEach((file) => {

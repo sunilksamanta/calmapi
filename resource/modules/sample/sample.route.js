@@ -1,6 +1,6 @@
 'use strict';
 const SampleController = require( './sample.controller' );
-const AuthController = require( '../auuth/auth.controller' );
+const AuthController = require( '../auth/auth.controller' );
 const express = require( 'express' );
 const router = express.Router();
 
