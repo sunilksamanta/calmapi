@@ -30,7 +30,6 @@ const loadModules = ( basePath, baseRoute, routerPaths ) => {
                     urlPath = settings[ 'moduleRoute' ];
                 }
             } catch( e ) {
-
             }
 
             try {
@@ -40,20 +39,31 @@ const loadModules = ( basePath, baseRoute, routerPaths ) => {
                 moduleMapper.push( {
                     'Module': module,
                     'Route': `/${baseRoute ? `${baseRoute}/` : ''}${urlPath || pluralize.plural( module )}`,
-                    'Mapped': '✔'
+                    'Mapped': '✔',
+                    'API Exposed': '✔'
                 } );
 
             } catch ( e ) {
+                if(e.message.includes('Router.use() requires')) {
+                    moduleMapper.push( {
+                        'Module': module,
+                        'Route': '-',
+                        'Mapped': '-',
+                        'API Exposed': '✘'
+                    } );
+                    return;
+                }
                 // console.error( e );
                 const subPaths = fs.readdirSync( `${modulesPath}/${basePath ? `${basePath}/` : ''}${module}` ).filter( p => {
                     return fs.lstatSync( path.resolve( modulesPath, basePath ? `${basePath }/` : '', module, p ) ).isDirectory();
                 } );
                 if( !subPaths.length ) {
-                    // console.log( e );
+                    console.log( e );
                     moduleMapper.push( {
                         'Module': module,
                         'Route': `/${baseRoute ? `${baseRoute}/` : ''}${urlPath || pluralize.plural( module )}`,
                         'Mapped': '✘',
+                        'API Exposed': '✔',
                         'Error': `${e.message.substr( 0, 25 )}..`
                     } );
                 } else {
