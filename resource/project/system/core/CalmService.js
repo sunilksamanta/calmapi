@@ -27,7 +27,7 @@ class CalmService {
         try {
             const items = await this.model.find( restQuery ).sort( sortBy ).skip( skip ).limit( limit );
 
-            const total = await this.model.countDocuments( query );
+            const total = await this.model.countDocuments( restQuery );
 
             return { 'data': this.parseObj( items ), total };
         } catch ( errors ) {
