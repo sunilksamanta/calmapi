@@ -16,7 +16,12 @@ module.exports = {
     }) {
         const deepCopyData = JSON.parse(JSON.stringify(data));
         const filteredData = excludeKeysFromData(deepCopyData, config.EXCLUDED_ITEMS_FROM_RESPONSE);
-        const responseObj = {};
+        const responseObj = {
+            error: false,
+            status: true,
+            statusCode: 200,
+            responseTimestamp: new Date()
+        };
         if(options.deleted !== null) {
             responseObj.deleted = options.deleted;
         }
