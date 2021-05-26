@@ -78,6 +78,7 @@ async function projectGenerator() {
     fs.mkdirSync(`${CURR_DIR}/${projectDirectoryName}`);
     // eslint-disable-next-line no-use-before-define
     createDirectoryContents(templatePath, projectDirectoryName, projectName, mongoUri);
+    // eslint-disable-next-line no-use-before-define
     fs.writeFileSync(`${CURR_DIR}/${projectDirectoryName}/calmapi.json`, JSON.stringify(getCalmApiJson(), null, 3), 'utf8');
 
     console.log(`:: Setting up : ${projectName}.`);
@@ -189,7 +190,7 @@ function directoryExistsCheck(projectDirectoryName) {
 // eslint-disable-next-line func-style
 function getCalmApiJson() {
     return{
-        'name': 'CALMAPI',
+        'name': 'calmapi',
         'version': packageInfo.version
     };
 }
