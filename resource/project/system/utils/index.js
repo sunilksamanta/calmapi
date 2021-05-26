@@ -11,7 +11,7 @@ const excludeKeysFromData = (data, excludedKeys = []) => {
         Object.keys(data).forEach(key => {
             if (excludedKeys.includes(key)) {
                 delete data[ key ];
-            } else if (typeof (data[ key ]) === 'object' && Object.keys(data[ key ]).length) {
+            } else if (data[ key ] && typeof (data[ key ]) === 'object' && Object.keys(data[ key ]).length) {
                 // eslint-disable-next-line no-unused-vars
                 data[ key ] = excludeKeysFromData(data[ key ], excludedKeys);
             }
