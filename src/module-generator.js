@@ -4,26 +4,31 @@ const fs = require('fs');
 const pluralize = require('pluralize');
 const { capitalCase } = require('change-case');
 const chalk = require('chalk');
-
+const caseChanger = require('case');
 
 module.exports = async function(modulePath) {
     try {
         const modulePathArr = modulePath.split('/');
         const finalModulePath = `${CURR_DIR}/src/modules`;
         const finalModuleName = pluralize.singular(modulePathArr.pop());
-        // modulePathArr.splice(-1,1).forEach(filePath=>{
-        //   fs.mkdirSync(filePath.toLowerCase())
-        //   finalModulePath += filePath.toLowerCase();
-        // })
-        const moduleDirPath = `${finalModulePath}/${finalModuleName}`;
+
+        const kebabCase = caseChanger.kebab(finalModuleName);
+        const moduleDirPath = `${finalModulePath}/${kebabCase}`;
         const templatePath = `${__dirname}/../resource/modules/sample`;
-        console.log(chalk.blueBright(`Creating directory ${finalModuleName} ...`));
+
+        console.log(chalk.blueBright(`Creating Module: ${finalModuleName}`));
+        console.log(chalk.blueBright(`Creating Directory: ${kebabCase}`));
         fs.mkdirSync(`${moduleDirPath}`);
-        console.log(chalk.greenBright('Module setup complete.'));
+        console.log(chalk.blueBright('Generating Files'));
         // eslint-disable-next-line no-use-before-define
         await createDirectoryContents(templatePath, finalModuleName, moduleDirPath);
+        console.log(chalk.blueBright('Module Generation Complete'));
     } catch (error) {
-        console.log(error);
+        if(error.code === 'EEXIST') {
+            console.error(chalk.redBright('Module already exists.'));
+        } else {
+            console.error(chalk.redBright(error.message));
+        }
     }
 };
 
@@ -39,46 +44,52 @@ async function createDirectoryContents(templatePath, moduleName, moduleWritePath
 
             if (stats.isFile()) {
                 let contents = fs.readFileSync(origFilePath, 'utf8');
-                const smallCaseModuleName = moduleName.toLowerCase();
-                const capitalCaseModuleName = capitalCase(moduleName);
+                const PascalCase = caseChanger.pascal(moduleName);
+                const camelCase = caseChanger.camel(moduleName);
+                const kebabCase = caseChanger.kebab(moduleName);
                 switch (file) {
                     case 'sample.controller.js':
                         // eslint-disable-next-line no-param-reassign
-                        file = `${moduleName}.controller.js`;
-                        contents = contents.replace(/sample/g, smallCaseModuleName);
-                        contents = contents.replace(/Sample/g, capitalCaseModuleName);
+                        file = `${kebabCase}.controller.js`;
+                        contents = contents.replace(/MODULE_SINGULAR_PASCAL/g, PascalCase);
+                        contents = contents.replace(/MODULE_SINGULAR_CAMEL/g, camelCase);
+                        contents = contents.replace(/MODULE_SINGULAR_KEBAB/g, kebabCase);
                         break;
                     case 'sample.dto.js':
                         // eslint-disable-next-line no-param-reassign
-                        file = `${moduleName}.dto.js`;
+                        file = `${kebabCase}.dto.js`;
                         break;
                     case 'sample.model.js':
-                        contents = contents.replace(/sample/g, smallCaseModuleName);
-                        contents = contents.replace(/Sample/g, capitalCaseModuleName);
+                        contents = contents.replace(/MODULE_SINGULAR_PASCAL/g, PascalCase);
+                        contents = contents.replace(/MODULE_SINGULAR_CAMEL/g, camelCase);
+                        contents = contents.replace(/MODULE_SINGULAR_KEBAB/g, kebabCase);
                         // eslint-disable-next-line no-param-reassign
-                        file = `${moduleName}.model.js`;
+                        file = `${kebabCase}.model.js`;
                         break;
                     case 'sample.route.js':
-                        contents = contents.replace(/sample/g, smallCaseModuleName);
-                        contents = contents.replace(/Sample/g, capitalCaseModuleName);
+                        contents = contents.replace(/MODULE_SINGULAR_PASCAL/g, PascalCase);
+                        contents = contents.replace(/MODULE_SINGULAR_CAMEL/g, camelCase);
+                        contents = contents.replace(/MODULE_SINGULAR_KEBAB/g, kebabCase);
                         // eslint-disable-next-line no-param-reassign
-                        file = `${moduleName}.route.js`;
+                        file = `${kebabCase}.route.js`;
                         break;
                     case 'sample.service.js':
-                        contents = contents.replace(/sample/g, smallCaseModuleName);
-                        contents = contents.replace(/Sample/g, capitalCaseModuleName);
+                        contents = contents.replace(/MODULE_SINGULAR_PASCAL/g, PascalCase);
+                        contents = contents.replace(/MODULE_SINGULAR_CAMEL/g, camelCase);
+                        contents = contents.replace(/MODULE_SINGULAR_KEBAB/g, kebabCase);
                         // eslint-disable-next-line no-param-reassign
-                        file = `${moduleName}.service.js`;
+                        file = `${kebabCase}.service.js`;
                         break;
                     case 'sample.settings.js':
                         // eslint-disable-next-line no-param-reassign
-                        file = `${moduleName}.settings.js`;
+                        file = `${kebabCase}.settings.js`;
                         break;
                     default:
                         break;
                 }
                 const writePath = `${moduleWritePath}/${file}`;
                 fs.writeFileSync(writePath, contents, 'utf8');
+                console.log(chalk.greenBright(writePath));
             }
 
         });

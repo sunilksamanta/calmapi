@@ -1,10 +1,10 @@
 'use strict';
 const { CalmService } = require( '../../../system/core/CalmService' );
 
-class SampleService extends CalmService {
+class MODULE_SINGULAR_PASCALService extends CalmService {
     constructor( model ) {
         super( model );
     }
 }
 
-module.exports = { SampleService };
+module.exports = { MODULE_SINGULAR_PASCALService };

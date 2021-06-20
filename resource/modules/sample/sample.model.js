@@ -4,7 +4,7 @@ const { Schema } = require( 'mongoose' );
 const uniqueValidator = require( 'mongoose-unique-validator' );
 const { slugify } = require( '../../utils' );
 
-class Sample {
+class MODULE_SINGULAR_PASCAL {
 
     initSchema() {
         const schema = new Schema( {
@@ -31,7 +31,7 @@ class Sample {
 
         schema.plugin( uniqueValidator );
         try {
-            mongoose.model( 'sample', schema );
+            mongoose.model( 'MODULE_SINGULAR_CAMEL', schema );
         } catch ( e ) {
 
         }
@@ -40,8 +40,8 @@ class Sample {
 
     getInstance() {
         this.initSchema();
-        return mongoose.model( 'sample' );
+        return mongoose.model( 'MODULE_SINGULAR_CAMEL' );
     }
 }
 
-module.exports = { Sample };
+module.exports = { MODULE_SINGULAR_PASCAL };

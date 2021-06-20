@@ -1,21 +1,21 @@
 'use strict';
 const { CalmController } = require( '../../../system/core/CalmController' );
-const { SampleService } = require( './sample.service' );
-const { Sample } = require( './sample.model' );
-const sampleDTO = require( './sample.dto' );
+const { MODULE_SINGULAR_PASCALService } = require( './MODULE_SINGULAR_KEBAB.service' );
+const { MODULE_SINGULAR_PASCAL } = require( './MODULE_SINGULAR_KEBAB.model' );
+const MODULE_SINGULAR_CAMELDTO = require( './MODULE_SINGULAR_KEBAB.dto' );
 const autoBind = require( 'auto-bind' ),
-    sampleService = new SampleService(
-        new Sample().getInstance()
+    MODULE_SINGULAR_CAMELService = new MODULE_SINGULAR_PASCALService(
+        new MODULE_SINGULAR_PASCAL().getInstance()
     );
 
-class SampleController extends CalmController {
+class MODULE_SINGULAR_PASCALController extends CalmController {
 
     constructor( service ) {
         super( service );
-        this.dto = { ...this.dto, ...sampleDTO };
+        this.dto = { ...this.dto, ...MODULE_SINGULAR_CAMELDTO };
         autoBind( this );
     }
 
 }
 
-module.exports = new SampleController( sampleService );
+module.exports = new MODULE_SINGULAR_PASCALController( MODULE_SINGULAR_CAMELService );

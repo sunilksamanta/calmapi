@@ -1,14 +1,16 @@
 'use strict';
-const SampleController = require( './sample.controller' );
+const MODULE_SINGULAR_PASCALController = require( './MODULE_SINGULAR_KEBAB.controller' );
 const AuthController = require( '../auth/auth.controller' );
 const express = require( 'express' );
 const router = express.Router();
 
-router.get( '/', AuthController.checkLogin, SampleController.getAll );
-router.get( '/:id', AuthController.checkLogin, SampleController.get );
-router.post( '/', AuthController.checkLogin, SampleController.insert );
-router.put( '/:id', AuthController.checkLogin, SampleController.update );
-router.delete( '/:id', AuthController.checkLogin, SampleController.delete );
+router.use(AuthController.checkLogin);
+
+router.get( '/', MODULE_SINGULAR_PASCALController.getAll );
+router.get( '/:id', MODULE_SINGULAR_PASCALController.get );
+router.post( '/', MODULE_SINGULAR_PASCALController.insert );
+router.put( '/:id', MODULE_SINGULAR_PASCALController.update );
+router.delete( '/:id', MODULE_SINGULAR_PASCALController.delete );
 
 
 module.exports = router;
