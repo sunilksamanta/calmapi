@@ -204,7 +204,7 @@ async function main() {
         }else if(arrgumentsArr.length === 3 && arrgumentsArr[ 0 ] === 'generate' && arrgumentsArr[ 1 ] === 'module') {
             const isRootFile = fs.readdirSync(CURR_DIR).find(file => file === 'calmapi.json');
             if(!isRootFile) {
-                throw new Error('Please Run From Root Folder');
+                throw new Error('Please Run inside a calmapi Project.');
             }else {
                 await moduleGenerator(arrgumentsArr[ 2 ]);
             }

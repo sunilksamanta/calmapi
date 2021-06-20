@@ -2,7 +2,6 @@
 const CURR_DIR = process.cwd();
 const fs = require('fs');
 const pluralize = require('pluralize');
-const { capitalCase } = require('change-case');
 const chalk = require('chalk');
 const caseChanger = require('case');
 

@@ -7,23 +7,48 @@
 
 ### INSTALLATION
 Install by running 
-```
+```shell
 npm i -g calmapi
 ```
 Then run inside your workspace directory 
-```
+```shell
 calmapi
 ```
 And follow the easy steps.
+
+### MODULE GENERATION
+Generate CalmAPI CRUD Module just by running the following inside project's root.
+```shell
+calmapi generate module product
+```
+
+Valid Module generation commands.
+
+```shell
+calmapi generate module product
+```
+```shell
+calmapi generate module products
+```
+```shell
+calmapi generate module productMeta
+```
+```shell
+calmapi generate module ProductMeta
+```
+```shell
+calmapi generate module product-meta
+```
 
 ### FEATURES
 * Production ready - Controller, Model & Service oriented architecture
 * Modules with automated Routing (Nested Route support)
 * Built-in Authentication Module with JWT & DB Store authentication
 * Built-in User Module
+* Built-in Media Module for file upload [AWS S3 Support]
 * Build-in CRUD operations for modules with pagination, filters, sorters
 * Sample Post Module (CRUD Operation Example)
-* CRUD Module generation command line support.[Alpha]
+* **CRUD Module generation command line support.**
 * No Hidden sh*ts in your node_modules. Completely free to customize
 * Prebuilt CRUD operation classes for Controller & Service
 * DTO Support( Data transfer Object)
