@@ -4,11 +4,13 @@ const AuthController = require('../auth/auth.controller');
 const express = require( 'express' );
 const router = express.Router();
 
-router.get( '/', AuthController.checkLogin, PostController.getAll );
-router.get( '/:id', AuthController.checkLogin, PostController.get );
-router.post( '/', AuthController.checkLogin, PostController.insert );
-router.put( '/:id', AuthController.checkLogin, PostController.update );
-router.delete( '/:id', AuthController.checkLogin, PostController.delete );
+router.use(AuthController.checkLogin);
+
+router.get( '/', PostController.getAll );
+router.get( '/:id', PostController.get );
+router.post( '/', PostController.insert );
+router.put( '/:id', PostController.update );
+router.delete( '/:id', PostController.delete );
 
 
 module.exports = router;
