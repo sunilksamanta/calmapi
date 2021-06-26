@@ -120,3 +120,4 @@ dist
 # IDE specifig config
 .vscode
 .idea
+.DS_Store
