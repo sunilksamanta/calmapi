@@ -3,6 +3,7 @@ const { apiRoutes } = require('../routes');
 const { CalmError } = require('../core');
 const packageJson = require('../../package.json');
 const humanizeString = require( 'humanize-string' );
+const { sanitizerMiddleware } = require('../helpers/sanitizer-middleware');
 
 module.exports.setRoutes = (app) => {
 
@@ -13,6 +14,11 @@ module.exports.setRoutes = (app) => {
     app.get('/', (req, res) => {
         res.json({ status: true, message: `Welcome to the ${packageJson.name}` });
     });
+
+    /**
+     * Sanitize Data before passing to the Routes
+     */
+    app.use(sanitizerMiddleware);
 
     /**
      * API Route.
