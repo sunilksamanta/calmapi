@@ -1,6 +1,6 @@
 # Calm API
 ### Production ready Modular REST API generator using NodeJS & MongoDB
-![Calm API](https://repository-images.githubusercontent.com/352502404/b7857000-b0a5-11eb-9d04-451a0a6fb88f)
+![Calm API](https://repository-images.githubusercontent.com/352502404/d0e11c00-dce4-11eb-80de-9959e403a244)
 
 [![npm version](https://badge.fury.io/js/calmapi.svg)](https://badge.fury.io/js/calmapi)
 ![David](https://img.shields.io/david/sunilksamanta/calmapi)
