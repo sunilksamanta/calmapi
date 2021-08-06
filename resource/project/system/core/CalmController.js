@@ -36,6 +36,10 @@ class CalmController {
 
     async insert( req, res, next ) {
         try {
+            // if Authorized, Set Created By
+            if(req.user) {
+                req.body.createdBy = req.user._id;
+            }
             const response = await this.service.insert( new this.dto.InsertDTO( req.body ) );
 
             res.sendCalmResponse( new this.dto.GetDTO( response.data ) );
@@ -48,6 +52,10 @@ class CalmController {
         const { id } = req.params;
 
         try {
+            // if Authorized, Set Created By
+            if(req.user) {
+                req.body.updatedBy = req.user._id;
+            }
             const response = await this.service.update( id, new this.dto.UpdateDTO( req.body ) );
 
             res.sendCalmResponse( new this.dto.GetDTO( response.data ) );

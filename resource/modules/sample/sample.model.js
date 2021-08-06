@@ -2,7 +2,6 @@
 const mongoose = require( 'mongoose' );
 const { Schema } = require( 'mongoose' );
 const uniqueValidator = require( 'mongoose-unique-validator' );
-const { slugify } = require( '../../utils' );
 
 class MODULE_SINGULAR_PASCAL {
 
@@ -12,22 +11,15 @@ class MODULE_SINGULAR_PASCAL {
                 'type': String,
                 'required': true,
             },
-            'slug': String,
             'content': {
                 'type': String,
                 'required': true,
+            },
+            'createdBy': {
+                'type': Schema.Types.ObjectId,
+                'ref': 'user'
             }
         }, { 'timestamps': true } );
-
-        schema.pre( 'save', function( next ) {
-            const sample = this;
-
-            if ( !sample.isModified( 'title' ) ) {
-                return next();
-            }
-            sample.slug = slugify( sample.title );
-            return next();
-        } );
 
         schema.plugin( uniqueValidator );
         try {
