@@ -18,6 +18,10 @@ class MODULE_SINGULAR_PASCAL {
             'createdBy': {
                 'type': Schema.Types.ObjectId,
                 'ref': 'user'
+            },
+            'updatedBy': {
+                'type': Schema.Types.ObjectId,
+                'ref': 'user'
             }
         }, { 'timestamps': true } );
 
