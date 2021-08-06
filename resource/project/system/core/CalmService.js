@@ -1,6 +1,7 @@
 'use strict';
 const autoBind = require( 'auto-bind' );
 class CalmService {
+    populateFields = [];
     /**
      * Calm Service
      * @author Sunil Kumar Samanta
@@ -15,8 +16,14 @@ class CalmService {
     /**
      * Get All Items
      * @param { Object } query Query Parameters
+     * @param {Object} [ops] Options
+     * @param {Array} [ops.populateFields] Populate Fields
      */
-    async getAll( query ) {
+    async getAll( query, ops = {} ) {
+        let populateFields = this.populateFields;
+        if(Array.isArray(ops.populateFields) && ops.populateFields.length) {
+            populateFields = ops.populateFields;
+        }
         // eslint-disable-next-line prefer-const
         let { skip, limit, sortBy, ...restQuery } = query;
 
@@ -25,7 +32,7 @@ class CalmService {
         sortBy = sortBy ? sortBy : { 'createdAt': -1 };
 
         try {
-            const items = await this.model.find( restQuery ).sort( sortBy ).skip( skip ).limit( limit );
+            const items = await this.model.find( restQuery ).sort( sortBy ).skip( skip ).limit( limit ).populate(populateFields);
 
             const total = await this.model.countDocuments( restQuery );
 
@@ -38,10 +45,16 @@ class CalmService {
     /**
      * Get Single Item
      * @param { string } id Instance ID
+     * @param {Object} [ops] Options
+     * @param {Array} [ops.populateFields] Populate Fields [{path: 'fieldName', select: 'prop1 prop2 ...', populate: 'childFieldName'}]
      */
-    async get( id ) {
+    async get( id, ops = {} ) {
+        let populateFields = this.populateFields;
+        if(Array.isArray(ops.populateFields) && ops.populateFields.length) {
+            populateFields = ops.populateFields;
+        }
         try {
-            const item = await this.model.findById( id );
+            const item = await this.model.findById( id ).populate(populateFields);
 
             if ( !item ) {
                 throw new Error('NOT_FOUND_ERROR');
@@ -60,7 +73,6 @@ class CalmService {
     async insert( data ) {
         try {
             const item = await this.model.create( data );
-
             if ( item ) {
                 return { 'data': item.toJSON() };
             }
