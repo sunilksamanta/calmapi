@@ -4,6 +4,7 @@
 
 [![npm version](https://badge.fury.io/js/calmapi.svg)](https://badge.fury.io/js/calmapi)
 ![David](https://img.shields.io/david/sunilksamanta/calmapi)
+[![DeepScan grade](https://deepscan.io/api/teams/12352/projects/18169/branches/439384/badge/grade.svg)](https://deepscan.io/dashboard#view=project&tid=12352&pid=18169&bid=439384)
 
 ### INSTALLATION
 Install by running 
