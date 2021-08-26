@@ -17,6 +17,8 @@ class User {
                 'type': String,
                 'unique': true,
                 'required': true,
+                'lowercase': true,
+                'trim': true
             },
             'password': {
                 'type': String,
