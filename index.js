@@ -26,7 +26,7 @@ const QUESTIONS = [
         validate: function(input) {
             const inputSanitized = input.trim();
             const projectDirectoryName = paramCase(inputSanitized);
-            if(!(/^([A-Za-z\-\_ \d])+$/.test(inputSanitized))) {
+            if(!(/^([A-Za-z\-_ \d])+$/.test(inputSanitized))) {
                 return 'Project name may only include letters, numbers, underscores and space.';
                 // eslint-disable-next-line no-use-before-define
             } else if(directoryExistsCheck(projectDirectoryName)) {
@@ -198,15 +198,15 @@ function getCalmApiJson() {
 // eslint-disable-next-line func-style
 async function main() {
     try {
-        const arrgumentsArr = process.argv.slice(2);
-        if(!arrgumentsArr.length) {
+        const argumentsArr = process.argv.slice(2);
+        if(!argumentsArr.length) {
             await projectGenerator();
-        }else if(arrgumentsArr.length === 3 && arrgumentsArr[ 0 ] === 'generate' && arrgumentsArr[ 1 ] === 'module') {
+        }else if(argumentsArr.length === 3 && argumentsArr[ 0 ] === 'generate' && argumentsArr[ 1 ] === 'module') {
             const isRootFile = fs.readdirSync(CURR_DIR).find(file => file === 'calmapi.json');
             if(!isRootFile) {
                 throw new Error('Please Run inside a calmapi Project.');
             }else {
-                await moduleGenerator(arrgumentsArr[ 2 ]);
+                await moduleGenerator(argumentsArr[ 2 ]);
             }
         }else {
             throw new Error('Invalid Command');
@@ -215,6 +215,6 @@ async function main() {
     } catch (error) {
         console.log(error.message);
     }
-};
+}
 
 main();
