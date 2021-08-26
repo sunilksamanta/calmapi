@@ -21,7 +21,7 @@ class CalmService {
      */
     async getAll( query, ops = {} ) {
         let populateFields = this.populateFields;
-        if(Array.isArray(ops.populateFields) && ops.populateFields.length) {
+        if(Array.isArray(ops.populateFields)) {
             populateFields = ops.populateFields;
         }
         // eslint-disable-next-line prefer-const
@@ -50,7 +50,7 @@ class CalmService {
      */
     async get( id, ops = {} ) {
         let populateFields = this.populateFields;
-        if(Array.isArray(ops.populateFields) && ops.populateFields.length) {
+        if(Array.isArray(ops.populateFields)) {
             populateFields = ops.populateFields;
         }
         try {
