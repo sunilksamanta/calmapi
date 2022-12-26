@@ -12,11 +12,11 @@ const fs = require( 'fs' );
 const modulesPath = path.resolve( `${__dirname}/../../src/modules` );
 const PATHS = fs.readdirSync( modulesPath );
 const moduleMapper = [];
+const Swagger = require('../helpers/swagger');
+const mainSwagger = new Swagger().getTemplate();
+
 // eslint-disable-next-line no-console
 console.log( chalk.blueBright('✔ Mapping routes') );
-// eslint-disable-next-line no-console
-
-
 const loadModules = ( basePath, baseRoute, routerPaths ) => {
     routerPaths.forEach( ( module ) => {
         if( module !== 'index.js' ) {
@@ -29,19 +29,42 @@ const loadModules = ( basePath, baseRoute, routerPaths ) => {
                 if( settings[ 'moduleRoute' ] ) {
                     urlPath = settings[ 'moduleRoute' ];
                 }
-            } catch( e ) {
-            }
-
-            try {
                 // eslint-disable-next-line global-require
-                router.use( `/${baseRoute ? `${baseRoute}/` : ''}${urlPath || pluralize.plural( module )}`, require( path.resolve( modulesPath, basePath ? `${basePath }/` : '', module, moduleRoute ) ) );
-                // console.log( `/${baseRoute ? `${baseRoute}/` : ''}${urlPath || pluralize.plural( module )}` );
+                const moduleRouter = require( path.resolve( modulesPath, basePath ? `${basePath }/` : '', module, moduleRoute ) );
+                const moduleUrlPath = `/${baseRoute ? `${baseRoute}/` : ''}${urlPath || pluralize.plural( module )}`;
+                const swaggerTemplate = new Swagger().getTemplate();
+
+                if(Array.isArray(moduleRouter.stack)) {
+                    moduleRouter.stack.forEach((r) => {
+                        if (r.route && r.route.path) {
+                            const routePath = `/${pluralize.plural(module)}${r.route.path = r.route.path.indexOf(':') !== -1 ? `${r.route.path.replace(':', '{')}}` : r.route.path}`;
+                            const param = routePath.indexOf('{') != -1 ? routePath.slice(routePath.indexOf('{') + 1, routePath.length - 1) : undefined;
+                            swaggerTemplate.paths[ routePath ] = { ...swaggerTemplate.paths[ routePath ], ...new Swagger().create(param, r.route.stack[ 0 ].method, pluralize.plural(module)) };
+                            if(swaggerTemplate.tags.findIndex(e => e.name == pluralize.plural(module)) === -1) {
+                                swaggerTemplate.tags.push(
+                                    new Swagger().createTag(pluralize.plural(module))
+                                );
+                            }
+                        }
+                    });
+                }
+
+                router.use( moduleUrlPath, moduleRouter );
+
                 moduleMapper.push( {
                     'Module': module,
                     'Route': `/${baseRoute ? `${baseRoute}/` : ''}${urlPath || pluralize.plural( module )}`,
                     'Mapped': '✔',
                     'API Exposed': '✔'
                 } );
+                // save module swagger JSON
+                if(!fs.existsSync(path.resolve( modulesPath, basePath ? `${basePath }/` : '', module, `${module}.swagger.json`))) {
+                    fs.writeFileSync(path.resolve( modulesPath, basePath ? `${basePath }/` : '', module, `${module}.swagger.json` ), JSON.stringify(swaggerTemplate, null, 2));
+                }
+                
+                const moduleSwagger = JSON.parse(fs.readFileSync(path.resolve( modulesPath, basePath ? `${basePath }/` : '', module, `${module}.swagger.json` )));
+                mainSwagger.tags.push(...moduleSwagger.tags);
+                mainSwagger.paths = { ...mainSwagger.paths, ...moduleSwagger.paths };
 
             } catch ( e ) {
                 if(e.message.includes('Router.use() requires')) {
@@ -53,7 +76,6 @@ const loadModules = ( basePath, baseRoute, routerPaths ) => {
                     } );
                     return;
                 }
-                // console.error( e );
                 const subPaths = fs.readdirSync( `${modulesPath}/${basePath ? `${basePath}/` : ''}${module}` ).filter( p => {
                     return fs.lstatSync( path.resolve( modulesPath, basePath ? `${basePath }/` : '', module, p ) ).isDirectory();
                 } );
@@ -71,10 +93,15 @@ const loadModules = ( basePath, baseRoute, routerPaths ) => {
                     const newBaseRoute = `${baseRoute ? `${baseRoute}/` : ''}${urlPath || pluralize.plural( module )}`;
                     loadModules( newBasePath, newBaseRoute, subPaths );
                 }
-
             }
         }
     } );
+    // save global swagger JSON
+    if(!fs.existsSync(path.resolve( `${__dirname}/../../`, 'swagger.json'))) {
+        console.log( chalk.blueBright('✔ Generating swagger') );
+        fs.writeFileSync('swagger.json', JSON.stringify(mainSwagger, null, 2));
+    }
+    
 };
 
 router.use((req, res, next) => {

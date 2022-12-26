@@ -4,6 +4,8 @@ const { CalmError } = require('../core');
 const packageJson = require('../../package.json');
 const humanizeString = require( 'humanize-string' );
 const { sanitizerMiddleware } = require('../helpers/sanitizer-middleware');
+const swaggerUi = require('swagger-ui-express');
+const swaggerDocument = require('../../swagger.json');
 
 module.exports.setRoutes = (app) => {
 
@@ -25,6 +27,12 @@ module.exports.setRoutes = (app) => {
      * All the API will start with "/api/[MODULE_ROUTE]"
      */
     app.use('/api', apiRoutes);
+
+    /**
+     * Swagger Documentation Route.
+     * available at "/api-docs"
+     */
+    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
     /**
      * Serving Static files from uploads directory.
