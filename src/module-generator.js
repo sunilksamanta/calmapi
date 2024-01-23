@@ -5,12 +5,14 @@ const pluralize = require('pluralize');
 const chalk = require('chalk');
 const caseChanger = require('case');
 
-module.exports = async function(modulePath) {
+module.exports = async function(modulePath, isForce = false) {
     try {
         const modulePathArr = modulePath.split('/');
         const finalModulePath = `${CURR_DIR}/src/modules`;
-        const finalModuleName = pluralize.singular(modulePathArr.pop());
-
+        let finalModuleName = modulePathArr;
+        if(!isForce) {
+            finalModuleName = pluralize.singular(modulePathArr.pop());
+        }
         const kebabCase = caseChanger.kebab(finalModuleName);
         const moduleDirPath = `${finalModulePath}/${kebabCase}`;
         const templatePath = `${__dirname}/../resource/modules/sample`;
