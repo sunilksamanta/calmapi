@@ -35,13 +35,22 @@ const loadModules = ( basePath, baseRoute, routerPaths ) => {
             try {
                 // eslint-disable-next-line global-require
                 router.use( `/${baseRoute ? `${baseRoute}/` : ''}${urlPath || pluralize.plural( module )}`, require( path.resolve( modulesPath, basePath ? `${basePath }/` : '', module, moduleRoute ) ) );
-                // console.log( `/${baseRoute ? `${baseRoute}/` : ''}${urlPath || pluralize.plural( module )}` );
+             
                 moduleMapper.push( {
                     'Module': module,
                     'Route': `/${baseRoute ? `${baseRoute}/` : ''}${urlPath || pluralize.plural( module )}`,
                     'Mapped': '✔',
                     'API Exposed': '✔'
                 } );
+
+                const subPaths = fs.readdirSync( `${modulesPath}/${basePath ? `${basePath}/` : ''}${module}` ).filter( p => {
+                    return fs.lstatSync( path.resolve( modulesPath, basePath ? `${basePath }/` : '', module, p ) ).isDirectory();
+                } );
+                if( subPaths.length ) {
+                    const newBasePath = `${basePath ? `${basePath}/` : ''}${module}`;
+                    const newBaseRoute = `${baseRoute ? `${baseRoute}/` : ''}${urlPath || pluralize.plural( module )}`;
+                    loadModules( newBasePath, newBaseRoute, subPaths );
+                }
 
             } catch ( e ) {
                 if(e.message.includes('Router.use() requires')) {
@@ -53,7 +62,6 @@ const loadModules = ( basePath, baseRoute, routerPaths ) => {
                     } );
                     return;
                 }
-                // console.error( e );
                 const subPaths = fs.readdirSync( `${modulesPath}/${basePath ? `${basePath}/` : ''}${module}` ).filter( p => {
                     return fs.lstatSync( path.resolve( modulesPath, basePath ? `${basePath }/` : '', module, p ) ).isDirectory();
                 } );
@@ -76,6 +84,7 @@ const loadModules = ( basePath, baseRoute, routerPaths ) => {
         }
     } );
 };
+
 
 router.use((req, res, next) => {
     res.sendCalmResponse = CalmResponse;

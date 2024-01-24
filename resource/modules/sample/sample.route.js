@@ -1,6 +1,6 @@
 'use strict';
 const MODULE_SINGULAR_PASCALController = require( './MODULE_SINGULAR_KEBAB.controller' );
-const AuthController = require( '../auth/auth.controller' );
+const AuthController = require( 'PATH_LINKauth/auth.controller' );
 const express = require( 'express' );
 const router = express.Router();
 
@@ -14,3 +14,4 @@ router.delete( '/:id', MODULE_SINGULAR_PASCALController.delete );
 
 
 module.exports = router;
+

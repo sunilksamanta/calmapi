@@ -5,14 +5,25 @@ const pluralize = require('pluralize');
 const chalk = require('chalk');
 const caseChanger = require('case');
 
-module.exports = async function(modulePath) {
+module.exports = async function(modulePath, isForce = false) {
     try {
         const modulePathArr = modulePath.split('/');
-        const finalModulePath = `${CURR_DIR}/src/modules`;
-        const finalModuleName = pluralize.singular(modulePathArr.pop());
+        let finalModulePath = `${CURR_DIR}`;
+        
+        let finalModuleName = modulePathArr;
+
+        if(!isForce) {
+            finalModuleName = pluralize.singular(modulePathArr.pop());
+        }
 
         const kebabCase = caseChanger.kebab(finalModuleName);
-        const moduleDirPath = `${finalModulePath}/${kebabCase}`;
+        let moduleDirPath;
+        if(!finalModulePath.split('/').find(file => file === 'modules')) {
+            finalModulePath = `${CURR_DIR}/src/modules`;
+            moduleDirPath = `${finalModulePath}/${kebabCase}`;
+        }else{
+            moduleDirPath = `${finalModulePath}/${finalModuleName}`;
+        }
         const templatePath = `${__dirname}/../resource/modules/sample`;
 
         console.log(chalk.blueBright(`Creating Module: ${finalModuleName}`));
@@ -40,6 +51,21 @@ async function createDirectoryContents(templatePath, moduleName, moduleWritePath
 
             // get stats about the current file
             const stats = fs.statSync(origFilePath);
+            const destinationPath = moduleWritePath.split('/');
+            const pathCount = destinationPath.slice(destinationPath.indexOf('src'));
+            const pathLink = '../';
+            let finalPathLink = '';
+            let routeFilePathLink = '';
+            let counter = pathCount.length;
+            let routeFilePathCounter = pathCount.length - 2;
+            while(counter > 0) {
+                finalPathLink += pathLink;
+                counter--;
+            }
+            while(routeFilePathCounter > 0) {
+                routeFilePathLink += pathLink;
+                routeFilePathCounter--;
+            }
 
             if (stats.isFile()) {
                 let contents = fs.readFileSync(origFilePath, 'utf8');
@@ -50,6 +76,7 @@ async function createDirectoryContents(templatePath, moduleName, moduleWritePath
                     case 'sample.controller.js':
                         // eslint-disable-next-line no-param-reassign
                         file = `${kebabCase}.controller.js`;
+                        contents = contents.replace(/PATH_LINK/g, finalPathLink);
                         contents = contents.replace(/MODULE_SINGULAR_PASCAL/g, PascalCase);
                         contents = contents.replace(/MODULE_SINGULAR_CAMEL/g, camelCase);
                         contents = contents.replace(/MODULE_SINGULAR_KEBAB/g, kebabCase);
@@ -66,6 +93,7 @@ async function createDirectoryContents(templatePath, moduleName, moduleWritePath
                         file = `${kebabCase}.model.js`;
                         break;
                     case 'sample.route.js':
+                        contents = contents.replace(/PATH_LINK/g, routeFilePathLink);
                         contents = contents.replace(/MODULE_SINGULAR_PASCAL/g, PascalCase);
                         contents = contents.replace(/MODULE_SINGULAR_CAMEL/g, camelCase);
                         contents = contents.replace(/MODULE_SINGULAR_KEBAB/g, kebabCase);
@@ -73,6 +101,7 @@ async function createDirectoryContents(templatePath, moduleName, moduleWritePath
                         file = `${kebabCase}.route.js`;
                         break;
                     case 'sample.service.js':
+                        contents = contents.replace(/PATH_LINK/g, finalPathLink);
                         contents = contents.replace(/MODULE_SINGULAR_PASCAL/g, PascalCase);
                         contents = contents.replace(/MODULE_SINGULAR_CAMEL/g, camelCase);
                         contents = contents.replace(/MODULE_SINGULAR_KEBAB/g, kebabCase);

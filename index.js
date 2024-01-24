@@ -204,11 +204,30 @@ async function main() {
         }else if(argumentsArr.length === 3 && argumentsArr[ 0 ] === 'generate' && argumentsArr[ 1 ] === 'module') {
             const isRootFile = fs.readdirSync(CURR_DIR).find(file => file === 'calmapi.json');
             if(!isRootFile) {
-                throw new Error('Please Run inside a calmapi Project.');
+                const modulePath = CURR_DIR.split('/').find(file => file === 'modules');
+                if(modulePath) {
+                    await moduleGenerator(argumentsArr[ 2 ]);
+                }else{
+                    throw new Error('Please Run inside a module folder.');
+
+                }
             }else {
                 await moduleGenerator(argumentsArr[ 2 ]);
             }
-        }else {
+        }else if(argumentsArr.length === 4 && argumentsArr[ 0 ] === 'generate' && argumentsArr[ 1 ] === 'module' && argumentsArr[ 3 ] === '--force') {
+            const isRootFile = fs.readdirSync(CURR_DIR).find(file => file === 'calmapi.json');
+            if(!isRootFile) {
+                const modulePath = CURR_DIR.split('/').find(file => file === 'modules');
+                if(modulePath) {
+                    await moduleGenerator(argumentsArr[ 2 ]);
+                }else{
+                    throw new Error('Please Run inside a module folder.');
+
+                }
+            }else {
+                await moduleGenerator(argumentsArr[ 2 ]);
+            }
+        } else {
             throw new Error('Invalid Command');
         }
 

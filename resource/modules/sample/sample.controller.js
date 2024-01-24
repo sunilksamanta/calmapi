@@ -1,5 +1,5 @@
 'use strict';
-const { CalmController } = require( '../../../system/core/CalmController' );
+const { CalmController } = require( 'PATH_LINKsystem/core/CalmController' );
 const { MODULE_SINGULAR_PASCALService } = require( './MODULE_SINGULAR_KEBAB.service' );
 const { MODULE_SINGULAR_PASCAL } = require( './MODULE_SINGULAR_KEBAB.model' );
 const MODULE_SINGULAR_CAMELDTO = require( './MODULE_SINGULAR_KEBAB.dto' );
