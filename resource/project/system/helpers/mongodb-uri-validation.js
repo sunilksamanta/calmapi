@@ -1,13 +1,7 @@
 'use strict';
-const { parse } = require('mongodb-uri');
-
-const validateMongoDBUri = ( uri ) => {
-    try {
-        parse( uri );
-        return true;
-    } catch ( error ) {
-        return false;
-    }
+const validateMongoDBUri = (uri) => {
+    const uriRegex = /^mongodb(?:\+srv)?:\/\/(?:[^:@/]+:[^:@/]+@)?(?:[^:@/]+\.)+[^:@/]+(?:\:\d+)?\/(?:[^?]+)(?:\?[^?]+)?$/;
+    return uriRegex.test(uri);
 };
 
 module.exports = { validateMongoDBUri };
