@@ -2,11 +2,17 @@
 const mongoose = require( 'mongoose' );
 const { config } = require( './config' );
 const chalk = require('chalk');
+const { validateMongoDBUri } = require('../helpers/mongodb-uri-validation');
 
 // Mongo Connection Class
 class Connection {
     constructor() {
         const url = config.MONGODB_URI;
+
+        if ( !validateMongoDBUri( url ) ) {
+            console.error(chalk.redBright( '✘ Invalid MongoDB URI' ));
+            return;
+        }
 
         mongoose.Promise = global.Promise;
         mongoose.set( 'useNewUrlParser', true );
