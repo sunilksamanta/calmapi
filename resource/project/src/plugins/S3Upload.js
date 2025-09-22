@@ -1,18 +1,21 @@
 'use strict';
-const AWS = require( 'aws-sdk' );
+const { S3Client, PutObjectCommand, DeleteObjectCommand } = require( "@aws-sdk/client-s3" );
 const { 'v4': uuid } = require( 'uuid' );
+
 class S3Upload {
     constructor() {
-        this.S3 = new AWS.S3( {
-            'accessKeyId': process.env.ACCESS_KEY_ID,
-            'secretAccessKey': process.env.SECRET_ACCESS_KEY,
-            'region': 'ap-south-1'
+        this.S3 = new S3Client( {
+            credentials: {
+                accessKeyId: process.env.ACCESS_KEY_ID,
+                secretAccessKey: process.env.SECRET_ACCESS_KEY,
+            },
+            region: process.env.REGION || 'ap-south-1'
         } );
     }
 
     /**
      * Upload By Params
-     * @returns {Promise<unknown>}
+     * @returns {Promise<import("@aws-sdk/client-s3").PutObjectCommandOutput>}
      * @param buffer
      * @param fileName
      * @param [ops] Options
@@ -32,32 +35,32 @@ class S3Upload {
                 Key,
                 Body: buffer
             };
-            return new Promise( ( resolve, reject ) => {
-                this.S3.upload( params, ( error, data ) => {
-                    if ( error ) {
-                        return reject( error );
-                    }
-                    return resolve( data );
-                } );
-            } );
+            // The .promise() is not needed with v3 send, as it returns a promise already
+            return this.S3.send(new PutObjectCommand(params));
         } catch (e) {
+            // Log the error for debugging purposes
+            console.error("Error uploading file to S3:", e);
             throw e;
         }
-
     }
 
+    /**
+     * @param {string} Key The key of the object to delete.
+     * @returns {Promise<import("@aws-sdk/client-s3").DeleteObjectCommandOutput>}
+     */
     async deleteFile( Key ) {
-        return new Promise( ( resolve, reject ) => {
-            this.S3.deleteObject( {
-                'Bucket': process.env.BUCKET_NAME,
-                'Key': Key
-            }, ( error, data ) => {
-                if ( error ) {
-                    return reject( error );
-                }
-                return resolve( data );
-            } );
-        } );
+        try {
+            const params = {
+                Bucket: process.env.BUCKET_NAME,
+                Key: Key
+            };
+            // The .promise() is not needed with v3 send, as it returns a promise already
+            return this.S3.send(new DeleteObjectCommand(params));
+        } catch (e) {
+            // Log the error for debugging purposes
+            console.error("Error deleting file from S3:", e);
+            throw e;
+        }
     }
 }
 module.exports = { S3Upload };
