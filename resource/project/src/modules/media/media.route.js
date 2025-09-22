@@ -7,6 +7,8 @@ const AuthController = require( '../auth/auth.controller' );
 router.use(AuthController.checkLogin);
 
 router.get( '/:id', MediaController.get );
+router.post('/presigned-url', MediaController.getPresignedUrl);
+router.post('/save-file', MediaController.saveFileDetails);
 router.post( '/', MediaController.upload.single( 'file' ), MediaController.insert );
 router.delete( '/:id', MediaController.delete );
 
