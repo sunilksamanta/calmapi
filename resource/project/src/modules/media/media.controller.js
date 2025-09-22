@@ -46,6 +46,48 @@ class MediaController extends CalmController {
         }
     }
 
+    /**
+     * Get S3 pre-signed URL for upload
+     */
+    async getPresignedUrl(req, res, next) {
+        try {
+            const { fileName, contentType } = req.body;
+            if (!fileName) {
+                throw new CalmError('VALIDATION_ERROR', 'fileName is required');
+            }
+            const { url, key } = await this.S3Upload.getPresignedUploadUrl(fileName, {
+                ACL: 'public-read',
+                pathPrefix: 'uploads',
+                ContentType: contentType
+            });
+            res.sendCalmResponse({ url, key });
+        } catch (e) {
+            next(e);
+        }
+    }
+
+    /**
+     * Save file details after client uploads to S3
+     */
+    async saveFileDetails(req, res, next) {
+        try {
+            const { originalname, mimetype, size, key } = req.body;
+            if (!key) {
+                throw new CalmError('VALIDATION_ERROR', 'key is required');
+            }
+            // Save file details in DB
+            const response = await this.service.insert({
+                originalname,
+                mimetype,
+                size,
+                path: key
+            });
+            res.sendCalmResponse(response.data);
+        } catch (e) {
+            next(e);
+        }
+    }
+
 
     /**
      * Media Uploading Middleware
