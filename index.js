@@ -159,8 +159,8 @@ function createDirectoryContents(templatePath, newProjectPath, projectName, mong
 // eslint-disable-next-line func-style
 async function npmInstall(where) {
     try {
-        childProcess.execSync('npm install --quiet', { cwd: where, env: process.env, stdio: 'pipe' });
-        childProcess.execSync('npm ci --quiet', { cwd: where, env: process.env, stdio: 'pipe' });
+        childProcess.execSync('npm install --quiet --force', { cwd: where, env: process.env, stdio: 'pipe' });
+        childProcess.execSync('npm ci --quiet --force', { cwd: where, env: process.env, stdio: 'pipe' });
 
     } catch (e) {
         console.error(`Error Installing Packages ${ e.stderr}` ) ;
