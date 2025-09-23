@@ -1,7 +1,7 @@
 'use strict';
 const mongoose = require( 'mongoose' );
 const { Schema } = require( 'mongoose' );
-const uniqueValidator = require( 'mongoose-unique-validator' );
+const uniqueValidator = require( '../../project/src/plugins/unique-validator' );
 
 class MODULE_SINGULAR_PASCAL {
 
