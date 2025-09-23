@@ -1,7 +1,7 @@
 'use strict';
 const mongoose = require( 'mongoose' );
 const { Schema } = require( 'mongoose' );
-const uniqueValidator = require( 'mongoose-unique-validator' );
+const uniqueValidator = require( '../../plugins/unique-validator' );
 const bcrypt = require( 'bcrypt' );
 const SALT_WORK_FACTOR = 10;
 
