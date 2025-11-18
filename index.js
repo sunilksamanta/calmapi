@@ -159,8 +159,8 @@ function createDirectoryContents(templatePath, newProjectPath, projectName, mong
 // eslint-disable-next-line func-style
 async function npmInstall(where) {
     try {
-        childProcess.execSync('npm install --quiet', { cwd: where, env: process.env, stdio: 'pipe' });
-        childProcess.execSync('npm ci --quiet', { cwd: where, env: process.env, stdio: 'pipe' });
+        childProcess.execSync('npm install --quiet --force', { cwd: where, env: process.env, stdio: 'pipe' });
+        childProcess.execSync('npm ci --quiet --force', { cwd: where, env: process.env, stdio: 'pipe' });
 
     } catch (e) {
         console.error(`Error Installing Packages ${ e.stderr}` ) ;
@@ -199,6 +199,7 @@ function getCalmApiJson() {
 async function main() {
     try {
         const argumentsArr = process.argv.slice(2);
+        console.log('argumentsArr-----', argumentsArr);
         if(!argumentsArr.length) {
             await projectGenerator();
         }else if(argumentsArr.length === 3 && argumentsArr[ 0 ] === 'generate' && argumentsArr[ 1 ] === 'module') {
@@ -210,8 +211,21 @@ async function main() {
             }
         }else if(argumentsArr.length === 1 && argumentsArr[ 0 ] === '--version' || argumentsArr[ 0 ] === '-v') {
             console.log(`Calmapi version: ${packageInfo.version}`);
-        }else {
-            console.log('Invalid Command');
+        }else if(argumentsArr.length === 4 && argumentsArr[ 0 ] === 'generate' && argumentsArr[ 1 ] === 'module' && argumentsArr[ 3 ] === '--force') {
+            const isRootFile = fs.readdirSync(CURR_DIR).find(file => file === 'calmapi.json');
+            if(!isRootFile) {
+                const modulePath = CURR_DIR.split('/').find(file => file === 'modules');
+                if(modulePath) {
+                    await moduleGenerator(argumentsArr[ 2 ]);
+                }else{
+                    throw new Error('Please Run inside a module folder.');
+
+                }
+            }else {
+                await moduleGenerator(argumentsArr[ 2 ]);
+            }
+        } else {
+            throw new Error('Invalid Command');
         }
 
     } catch (error) {

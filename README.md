@@ -41,6 +41,11 @@ calmapi generate module ProductMeta
 calmapi generate module product-meta
 ```
 
+Generate Module name without pluralize
+```shell
+calmapi generate module test-series --force
+```
+
 ### FEATURES
 * Production ready - Controller, Model & Service oriented architecture
 * Modules with automated Routing (Nested Route support)
