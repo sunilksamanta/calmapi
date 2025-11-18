@@ -208,8 +208,10 @@ async function main() {
             }else {
                 await moduleGenerator(argumentsArr[ 2 ]);
             }
+        }else if(argumentsArr.length === 1 && argumentsArr[ 0 ] === '--version' || argumentsArr[ 0 ] === '-v') {
+            console.log(`Calmapi version: ${packageInfo.version}`);
         }else {
-            throw new Error('Invalid Command');
+            console.log('Invalid Command');
         }
 
     } catch (error) {
