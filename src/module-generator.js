@@ -14,14 +14,17 @@ module.exports = async function(modulePath) {
         const kebabCase = caseChanger.kebab(finalModuleName);
         const moduleDirPath = `${finalModulePath}/${kebabCase}`;
         const templatePath = `${__dirname}/../resource/modules/sample`;
+        const answer = await askQuestion(chalk.yellowBright('Do you want to generate an AI tool file for this module? (y/N): '));
+        const generateToolFile = answer === 'y' || answer === 'yes';
 
         console.log(chalk.blueBright(`Creating Module: ${finalModuleName}`));
         console.log(chalk.blueBright(`Creating Directory: ${kebabCase}`));
         fs.mkdirSync(`${moduleDirPath}`);
         console.log(chalk.blueBright('Generating Files'));
         // eslint-disable-next-line no-use-before-define
-        await createDirectoryContents(templatePath, finalModuleName, moduleDirPath);
-        console.log(chalk.blueBright('Module Generation Complete'));
+        await createDirectoryContents(templatePath, finalModuleName, moduleDirPath, generateToolFile);
+
+        console.log(chalk.greenBright('✔ Module Created'));
     } catch (error) {
         if(error.code === 'EEXIST') {
             console.error(chalk.redBright('Module already exists.'));
@@ -32,10 +35,13 @@ module.exports = async function(modulePath) {
 };
 
 // eslint-disable-next-line func-style
-async function createDirectoryContents(templatePath, moduleName, moduleWritePath) {
+async function createDirectoryContents(templatePath, moduleName, moduleWritePath, generateToolFile) {
     try {
         const filesToCreate = fs.readdirSync(templatePath);
         filesToCreate.forEach((file) => {
+            if (file === 'sample.tools.js' && !generateToolFile) {
+                return;
+            }
             const origFilePath = `${templatePath}/${file}`;
 
             // get stats about the current file
@@ -50,32 +56,20 @@ async function createDirectoryContents(templatePath, moduleName, moduleWritePath
                     case 'sample.controller.js':
                         // eslint-disable-next-line no-param-reassign
                         file = `${kebabCase}.controller.js`;
-                        contents = contents.replace(/MODULE_SINGULAR_PASCAL/g, PascalCase);
-                        contents = contents.replace(/MODULE_SINGULAR_CAMEL/g, camelCase);
-                        contents = contents.replace(/MODULE_SINGULAR_KEBAB/g, kebabCase);
                         break;
                     case 'sample.dto.js':
                         // eslint-disable-next-line no-param-reassign
                         file = `${kebabCase}.dto.js`;
                         break;
                     case 'sample.model.js':
-                        contents = contents.replace(/MODULE_SINGULAR_PASCAL/g, PascalCase);
-                        contents = contents.replace(/MODULE_SINGULAR_CAMEL/g, camelCase);
-                        contents = contents.replace(/MODULE_SINGULAR_KEBAB/g, kebabCase);
                         // eslint-disable-next-line no-param-reassign
                         file = `${kebabCase}.model.js`;
                         break;
                     case 'sample.route.js':
-                        contents = contents.replace(/MODULE_SINGULAR_PASCAL/g, PascalCase);
-                        contents = contents.replace(/MODULE_SINGULAR_CAMEL/g, camelCase);
-                        contents = contents.replace(/MODULE_SINGULAR_KEBAB/g, kebabCase);
                         // eslint-disable-next-line no-param-reassign
                         file = `${kebabCase}.route.js`;
                         break;
                     case 'sample.service.js':
-                        contents = contents.replace(/MODULE_SINGULAR_PASCAL/g, PascalCase);
-                        contents = contents.replace(/MODULE_SINGULAR_CAMEL/g, camelCase);
-                        contents = contents.replace(/MODULE_SINGULAR_KEBAB/g, kebabCase);
                         // eslint-disable-next-line no-param-reassign
                         file = `${kebabCase}.service.js`;
                         break;
@@ -83,14 +77,24 @@ async function createDirectoryContents(templatePath, moduleName, moduleWritePath
                         // eslint-disable-next-line no-param-reassign
                         file = `${kebabCase}.settings.js`;
                         break;
+                    case 'sample.tools.js':
+                        // eslint-disable-next-line no-param-reassign
+                        file = `${kebabCase}.tool.js`;
+                        break;
                     default:
                         break;
                 }
+                contents = contents.replace(/MODULE_SINGULAR_PASCAL/g, PascalCase);
+                contents = contents.replace(/MODULE_SINGULAR_CAMEL/g, camelCase);
+                contents = contents.replace(/MODULE_SINGULAR_KEBAB/g, kebabCase);
+
                 const writePath = `${moduleWritePath}/${file}`;
                 fs.writeFileSync(writePath, contents, 'utf8');
                 console.log(chalk.greenBright(writePath));
             }
 
         });
-    } catch (error) {}
+    } catch (error) {
+        console.error(chalk.redBright(error.message));
+    }
 }
