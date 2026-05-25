@@ -21,6 +21,7 @@ Generate CalmAPI CRUD Module just by running the following inside project's root
 ```shell
 calmapi generate module product
 ```
+*Note: The CLI will ask you interactively if you want to attach an optional standalone AI tool bridge file (`*.tool.js`) to expose your CRUD methods to AI Agent frameworks (like LangChain, LangGraph, or Vercel AI SDK).*
 
 Valid Module generation commands.
 
@@ -49,6 +50,7 @@ calmapi generate module product-meta
 * Build-in CRUD operations for modules with pagination, filters, sorters
 * Sample Post Module (CRUD Operation Example)
 * **CRUD Module generation command line support.**
+* **AI Tool Integration:** Generates optional standalone framework-agnostic LLM tools (`*.tool.js`) mapping schema parameters, secure guardrails, and mock runtime authentication bridges right to your existing `CalmController` handlers.
 * No Hidden sh*ts in your node_modules. Completely free to customize
 * Prebuilt CRUD operation classes for Controller & Service
 * DTO Support( Data transfer Object)
@@ -59,6 +61,7 @@ calmapi generate module product-meta
 ### Contributors
 * [Sunil Kr. Samanta](https://github.com/sunilksamanta)
 * [Rajdip Mondal](https://github.com/RajdipM)
+* [Vivek Gupta](https://github.com/vivekgupta4git)
 
 *We love your input! We want to make contributing to this project as easy and transparent as possible, whether it's: Reporting a bug, Documentation, Discussing the current state of the code, Submitting a fix or Proposing new features.*
 

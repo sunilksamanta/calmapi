@@ -2,9 +2,20 @@
 const CURR_DIR = process.cwd();
 const fs = require('fs');
 const pluralize = require('pluralize');
+const readline = require('readline');
 const chalk = require('chalk');
 const caseChanger = require('case');
-
+// eslint-disable-next-line func-style
+function askQuestion(query) {
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+    });
+    return new Promise(resolve => rl.question(query, ans => {
+        rl.close();
+        resolve(ans.trim().toLowerCase());
+    }));
+}
 module.exports = async function(modulePath) {
     try {
         const modulePathArr = modulePath.split('/');
@@ -79,7 +90,7 @@ async function createDirectoryContents(templatePath, moduleName, moduleWritePath
                         break;
                     case 'sample.tools.js':
                         // eslint-disable-next-line no-param-reassign
-                        file = `${kebabCase}.tool.js`;
+                        file = `${kebabCase}.tools.js`;
                         break;
                     default:
                         break;
@@ -98,3 +109,4 @@ async function createDirectoryContents(templatePath, moduleName, moduleWritePath
         console.error(chalk.redBright(error.message));
     }
 }
+

@@ -1,7 +1,7 @@
 {
   "name": "calmapi",
-  "version": "0.2.3",
-  "description": "Production ready REST API framework using NodeJS & MongoDB With CLI",
+  "version": "0.2.6",
+  "description": "Production ready REST API framework using NodeJS & MongoDB With CLI having AI Agent integration capabilities.",
   "main": "index.js",
   "scripts": {
     "test": "mocha tests",
@@ -22,7 +22,9 @@
     "boilerplate",
     "starter",
     "restapi",
-    "rest"
+    "rest",
+    "scaffolding",
+    "ai-agents"
   ],
   "author": "Sunil Kumar Samanta",
   "license": "MIT",
