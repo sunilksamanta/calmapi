@@ -111,6 +111,40 @@ describe('make, routes, openapi, doctor', () => {
   });
 });
 
+describe('add checks', () => {
+  test('refuses blocks that need a newer calm/', () => {
+    const item = join(work, 'future-block.json');
+    writeFileSync(item, JSON.stringify({ name: 'future', type: 'registry:item', files: [{ path: 'x', target: 'app/blocks/future/index.js', content: '' }], meta: { calmapi: { minVersion: '99.0.0' } } }));
+    assert.match(calmStatus(app, 'add', item, '--yes', '--no-install').out, /needs CalmAPI 99\.0\.0 or newer/);
+  });
+});
+
+describe('admin', () => {
+  test('grants and revokes the admin role', () => {
+    const dbName = `calm_admin_${Date.now()}`;
+    const envFile = join(app, '.env');
+    const original = readFileSync(envFile, 'utf8');
+    const base = process.env.MONGODB_TEST_URI ?? 'mongodb://127.0.0.1:27017';
+    writeFileSync(envFile, original.replace(/^MONGODB_URI=.*$/m, `MONGODB_URI=${base.replace(/\/$/, '')}/${dbName}`));
+    try {
+      execFileSync(process.execPath, ['--input-type=module', '-e', `
+        const { createApp } = await import('./calm/index.js');
+        const app = await createApp({ root: process.cwd(), config: { mode: 'development', log: { level: 'silent' }, devtools: { enabled: false }, auth: { password: { logN: 10, r: 8, p: 1 } } } });
+        await app.start();
+        await app.service('user').create({ name: 'Root', email: 'root@example.com', password: 'long-password-1' }, { system: true });
+        await app.stop();`], { cwd: app, env });
+      assert.match(calm(app, 'admin', 'ROOT@example.com'), /roles: user, admin/);
+      assert.match(calm(app, 'admin', 'root@example.com', '--revoke'), /roles: user$/m);
+      assert.match(calmStatus(app, 'admin', 'nobody@example.com').out, /No user with email/);
+    } finally {
+      execFileSync(process.execPath, ['--input-type=module', '-e', `
+        const { default: mongoose } = await import('mongoose');
+        await mongoose.connect(process.env.URI); await mongoose.connection.dropDatabase(); await mongoose.disconnect();`], { cwd: app, env: { ...env, URI: `${base.replace(/\/$/, '')}/${dbName}` } });
+      writeFileSync(envFile, original);
+    }
+  });
+});
+
 describe('upgrade', () => {
   test('three-way merges edited files, updates untouched ones, reports conflicts', () => {
     // Fake an older release: same core with a few differences.

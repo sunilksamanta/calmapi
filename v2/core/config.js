@@ -15,9 +15,11 @@ export async function loadConfig(root, overrides = {}) {
   if (existsSync(envFile) && process.env.CALM_SKIP_ENV_FILE !== '1') process.loadEnvFile(envFile);
 
   const env = process.env;
-  // Secure by default: anything not explicitly development/test runs as production.
-  // `calm dev` sets NODE_ENV=development; tests pass { mode: 'test' }.
-  const mode = overrides.mode ?? (env.NODE_ENV || 'production');
+  // Secure by default: anything that is not explicitly development or test (staging,
+  // preview, unset...) runs with production rules. `calm dev` sets NODE_ENV=development;
+  // tests pass { mode: 'test' }. The raw value stays available as config.nodeEnv.
+  const nodeEnv = overrides.mode ?? env.NODE_ENV ?? '';
+  const mode = nodeEnv === 'development' || nodeEnv === 'test' ? nodeEnv : 'production';
   const pkg = readJson(join(root, 'package.json')) ?? {};
 
   let user = {};
@@ -31,6 +33,7 @@ export async function loadConfig(root, overrides = {}) {
   const defaults = {
     root,
     mode,
+    nodeEnv,
     app: { name: pkg.name ?? 'calm-app', version: pkg.version ?? '0.0.0', url: env.APP_URL || `http://localhost:${port}` },
     port,
     host: env.HOST || undefined,
@@ -52,16 +55,16 @@ export async function loadConfig(root, overrides = {}) {
       sessionTtlDays: 30,
       resetTokenTtlMinutes: 30,
       resetUrl: null,
-      password: { logN: 15, r: 8, p: 3, minLength: 8 },
+      password: { logN: 15, r: 8, p: 3 }, // scrypt cost; length rules live on f.password()
     },
     openapi: { enabled: true, path: '/openapi.json' },
     devtools: { enabled: mode === 'development' },
     log: { level: env.LOG_LEVEL || (mode === 'test' ? 'silent' : 'info'), format: mode === 'production' ? 'json' : 'pretty' },
     shutdownTimeoutMs: 10_000,
-    registries: {},
   };
 
-  const config = deepMerge(deepMerge(defaults, user), overrides);
+  const { mode: _mode, ...rest } = overrides; // mode was normalized above
+  const config = deepMerge(deepMerge(defaults, user), rest);
   config.auth.resetUrl ??= `${config.app.url.replace(/\/$/, '')}/reset-password`;
   if (mode === 'production') config.devtools.enabled = false; // never, whatever the config says
 

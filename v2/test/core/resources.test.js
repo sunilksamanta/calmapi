@@ -225,6 +225,19 @@ describe('custom routes', () => {
   });
 });
 
+describe('services', () => {
+  test('return whole records and skip scope() for system calls', async () => {
+    await newProduct({ name: 'Svc' });
+    const { items } = await t.app.service('product').list({ filter: { name: 'Svc' } }, { system: true });
+    assert.equal(items[0].cost, 10, 'hidden fields are available server-side');
+    const draft = (await t.post('/posts', { title: 'Hidden draft', body: 'x' }, alice)).body.data;
+    const anon = await t.app.service('post').find({ _id: draft.id }, {});
+    const system = await t.app.service('post').find({ _id: draft.id }, { system: true });
+    assert.equal(anon.length, 0, 'scope() applies to anonymous calls');
+    assert.equal(system.length, 1, 'system calls bypass scope()');
+  });
+});
+
 describe('platform', () => {
   test('events fire after writes', async () => {
     const seen = [];

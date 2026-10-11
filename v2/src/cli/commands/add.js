@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { requireProject, readLock, writeLock, detectPackageManager, run as runCmd } from '../lib/project.js';
 import { resolveAll, splitDep } from '../lib/registry.js';
+import { compareVersions } from '../lib/semver.js';
 import { PKG_ROOT, readJson, writeJson, writeFile, readText, sha256 } from '../lib/files.js';
 import { c, out, ok, warn, info, confirm } from '../lib/ui.js';
 
@@ -45,7 +46,14 @@ export async function run(argv) {
 
   const root = requireProject();
   const items = await resolveAll(positionals, { root, remote: values.remote });
-  const installed = Object.keys(readLock(root).blocks ?? {}).map((k) => k.split('/').pop());
+  const lock0 = readLock(root);
+  for (const { key, item } of items) {
+    const min = item.meta?.calmapi?.minVersion;
+    if (min && lock0.calmapi && compareVersions(lock0.calmapi, min) < 0) {
+      throw new Error(`${key} needs CalmAPI ${min} or newer in calm/ (yours is ${lock0.calmapi}). Run \`calm upgrade\` first.`);
+    }
+  }
+  const installed = Object.keys(lock0.blocks ?? {}).map((k) => k.split('/').pop());
   for (const { key, item } of items) {
     const clash = (item.meta?.calmapi?.conflicts ?? []).find((n) => installed.includes(n) || items.some((i) => i.item.name === n));
     if (clash) throw new Error(`${key} cannot be installed together with ${clash} (they provide the same resource).`);

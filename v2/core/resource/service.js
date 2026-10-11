@@ -9,7 +9,9 @@ import { hashPassword } from '../auth/password.js';
  *     async beforeCreate(data, ctx) { return { ...data, slug: slugify(data.title) }; }
  *   }
  *
- * `ctx` is the request context ({ user, scope, ... }) or {} when called from jobs/scripts.
+ * `ctx` is the request context ({ user, scope, ... }). From jobs and scripts pass
+ * { system: true } to skip scope(). Methods return whole records (hidden fields included,
+ * password hashes excluded); routes serialize them before anything leaves the server.
  */
 export class ResourceService {
   constructor({ def, model, app }) {
@@ -51,7 +53,8 @@ export class ResourceService {
   // ---- reads ---------------------------------------------------------------------
   /** Build the full Mongo filter for this request: your scope(), owner scoping, then `extra`. */
   filterFor(ctx = {}, extra = {}) {
-    const parts = [this.scope(ctx), extra];
+    // { system: true } marks trusted internal calls (jobs, scripts): no scope() applied.
+    const parts = [ctx.system ? {} : this.scope(ctx), extra];
     if (ctx.scope === 'owner') {
       if (!ctx.user) return { _id: null }; // matches nothing
       parts.push({ [this.def.ownerField]: ctx.user.id });
@@ -64,24 +67,24 @@ export class ResourceService {
   async list({ filter = {}, sort = { _id: -1 }, skip = 0, limit = 20, populate = [] } = {}, ctx = {}) {
     const where = this.filterFor(ctx, filter);
     const [items, total] = await Promise.all([
-      this.model.find(where).sort(sort).skip(skip).limit(limit).populate(populate).lean(),
+      this.model.find(where).sort(sort).skip(skip).limit(limit).populate(populate).select(this.internalSelect).lean(),
       this.model.countDocuments(where),
     ]);
     return { items, total };
   }
 
   async get(id, { populate = [] } = {}, ctx = {}) {
-    const doc = await this.model.findOne(this.filterFor(ctx, { _id: id })).populate(populate).lean();
+    const doc = await this.model.findOne(this.filterFor(ctx, { _id: id })).populate(populate).select(this.internalSelect).lean();
     if (!doc) throw notFound(`${this.def.name} not found`);
     return doc;
   }
 
   async find(filter = {}, ctx = {}) {
-    return this.model.find(this.filterFor(ctx, filter)).lean();
+    return this.model.find(this.filterFor(ctx, filter)).select(this.internalSelect).lean();
   }
 
   async findOne(filter = {}, ctx = {}) {
-    return this.model.findOne(this.filterFor(ctx, filter)).lean();
+    return this.model.findOne(this.filterFor(ctx, filter)).select(this.internalSelect).lean();
   }
 
   // ---- writes --------------------------------------------------------------------

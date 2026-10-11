@@ -45,6 +45,8 @@ describe('fields', () => {
     assert.match((await validateValue(f.ref('user'), { $ne: 1 })).error, /valid id/, 'operator objects rejected');
     assert.deepEqual((await validateValue(f.array(f.string()).max(2), ['x', ' y '])).value, ['x', 'y']);
     assert.match((await validateValue(f.array(f.string()).max(2), ['a', 'b', 'c'])).error, /at most 2/);
+    const ro = f.object({ city: f.string(), verified: f.boolean().readOnly() });
+    assert.match((await validateValue(ro, { verified: true })).error, /verified: Is read-only/);
     const obj = f.object({ city: f.string().required(), zip: f.string() });
     assert.deepEqual((await validateValue(obj, { city: 'Pune' })).value, { city: 'Pune' });
     assert.match((await validateValue(obj, { city: 'Pune', evil: 1 })).error, /Unknown field "evil"/);
@@ -179,6 +181,27 @@ describe('errors', () => {
     assert.equal(hidden.status, 500);
     assert.equal(hidden.message, 'Something went wrong');
     assert.ok(toHttpError(new CalmError(418, 'TEAPOT', 'short and stout')) instanceof CalmError);
+  });
+});
+
+describe('config', () => {
+  test('anything that is not development or test runs as production', async () => {
+    const { loadConfig } = await import('../../core/config.js');
+    const root = new URL('../fixtures-none', import.meta.url).pathname;
+    const base = { db: { uri: 'mongodb://127.0.0.1/x' } };
+    process.env.APP_URL = 'https://api.example.com';
+    try {
+      for (const nodeEnv of ['staging', 'preview', 'prod', '']) {
+        const cfg = await loadConfig(root, { ...base, mode: nodeEnv });
+        assert.equal(cfg.mode, 'production', nodeEnv);
+        assert.equal(cfg.nodeEnv, nodeEnv);
+        assert.deepEqual(cfg.cors.origins, []);
+        assert.equal(cfg.devtools.enabled, false);
+      }
+      assert.equal((await loadConfig(root, { ...base, mode: 'development' })).mode, 'development');
+    } finally {
+      delete process.env.APP_URL;
+    }
   });
 });
 

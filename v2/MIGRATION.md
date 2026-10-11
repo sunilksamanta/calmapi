@@ -55,7 +55,7 @@ Existing sessions do not carry over: users sign in again after the switch.
 2. For each 1.x module, run `calm make resource <name> ...fields` and adjust fields: copy types from
    the model, then mark visibility (what was missing from your GetDTO is `.hidden()` or `.writeOnly()`;
    what was missing from InsertDTO/UpdateDTO is `.readOnly()`).
-3. Write policies. 1.x modules let any signed-in user change any record; decide who really may.
+3. Write policies: decide who may list, read, create, update and delete each resource.
    If records have `createdBy`, keep the field and mark it `f.ref('user').owner()`.
 4. Move custom controller methods into `<name>.routes.js` (return values, no `res`), and business
    logic into the service.

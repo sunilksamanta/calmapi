@@ -11,6 +11,7 @@ const COMMANDS = {
   openapi: () => import('./commands/openapi.js'),
   doctor: () => import('./commands/doctor.js'),
   upgrade: () => import('./commands/upgrade.js'),
+  admin: () => import('./commands/admin.js'),
   mcp: () => import('./commands/mcp.js'),
 };
 const ALIASES = { new: 'create', init: 'create', generate: 'make', g: 'make', m: 'make' };
@@ -32,6 +33,7 @@ const HELP = `
     routes                       every route with its access policy
     openapi                      write openapi.json
     doctor                       security and correctness checks (--ci for pipelines)
+    admin <email>                give a user the admin role (--revoke to remove)
 
   ${c.bold('Maintain')}
     upgrade                      merge framework updates into calm/, keeping your edits

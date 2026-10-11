@@ -190,6 +190,7 @@ export async function validateValue(field, value, path = '') {
       const out = {};
       for (const key of Object.keys(v)) {
         if (!o.shape[key]) return { error: `Unknown field "${key}"` };
+        if (!o.shape[key].isInput) return { error: `${key}: Is read-only` };
       }
       for (const [key, sub] of Object.entries(o.shape)) {
         const raw = v[key];
