@@ -1,7 +1,7 @@
 name: Release CalmAPI 2
 
 # Releasing: publish a GitHub release whose tag is v<version> (for example v2.0.0-alpha.1), or push
-# that tag. The run tests everything, then publishes calmapi, @calmapi/devtools and create-calmapi
+# that tag. Either way the tag push starts this workflow. The run tests everything, then publishes calmapi, @calmapi/devtools and create-calmapi
 # to npm and fills in the release notes from CHANGELOG.md.
 #
 # Pushes to master or claude/** that touch v2/ run the same pipeline as a dry run
@@ -11,8 +11,6 @@ name: Release CalmAPI 2
 # npmjs.com, otherwise the NPM_TOKEN repository secret. See v2/RELEASING.md.
 
 on:
-  release:
-    types: [published]
   push:
     tags: ['v2.*']
     branches: ['master', 'claude/**']
@@ -42,8 +40,8 @@ jobs:
       run:
         working-directory: v2
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: npm
@@ -85,8 +83,8 @@ jobs:
       run:
         working-directory: v2
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
