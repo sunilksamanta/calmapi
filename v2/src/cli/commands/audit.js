@@ -83,6 +83,11 @@ function print(report) {
       ]);
     }
     out(table(rows, { indent: 4 }));
+    for (const res of results.filter((x) => x.resource === r.name && x.ok === false)) {
+      const who = personas.find((p) => p.key === res.persona)?.label ?? res.persona;
+      const why = res.note ?? `expected ${res.expected}, got ${res.status}`;
+      out(`    ${c.red('✖')} ${res.action} as ${who}: ${why}`);
+    }
   }
   if (leaks.length) {
     out('', `  ${c.red(c.bold('Field leaks'))}`);

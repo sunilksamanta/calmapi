@@ -59,7 +59,10 @@ export async function run(argv) {
   const fields = specs.map(parseFieldSpec);
   if (new Set(fields.map((f) => f.name)).size !== fields.length) throw new Error('Duplicate field names');
 
-  const owner = hasUsers && !values['no-owner'] && !fields.some((f) => f.modifiers.includes('owner'));
+  // `owner:ref:user` is the owner field the user meant to write: mark it instead of adding a second one.
+  for (const f of fields) if (f.name === 'owner' && f.type === 'ref' && f.arg === 'user' && !f.array && !f.modifiers.includes('owner')) f.modifiers.push('owner');
+  const addOwner = hasUsers && !values['no-owner'] && !fields.some((f) => f.modifiers.includes('owner') || f.name === 'owner');
+  const owner = addOwner || (hasUsers && fields.some((f) => f.modifiers.includes('owner')));
   const written = [];
   const put = (rel, content) => {
     const file = join(root, rel);
@@ -68,7 +71,7 @@ export async function run(argv) {
     written.push(rel);
   };
 
-  put(`app/resources/${name}/${name}.resource.js`, resourceFile(name, fields, { owner, hasUsers }));
+  put(`app/resources/${name}/${name}.resource.js`, resourceFile(name, fields, { owner, addOwner, hasUsers }));
   if (values.service) put(`app/resources/${name}/${name}.service.js`, serviceFile(name));
   if (values.routes) put(`app/resources/${name}/${name}.routes.js`, routesFile(name));
   if (hasUsers && !values['no-test']) {
@@ -85,9 +88,9 @@ export async function run(argv) {
   if (missing.length) out(c.yellow(`  Heads up: referenced resources do not exist yet: ${missing.join(', ')}`));
 }
 
-function resourceFile(name, fields, { owner, hasUsers }) {
+function resourceFile(name, fields, { owner, addOwner, hasUsers }) {
   const lines = fields.map((f) => `    ${f.name}: ${fieldCode(f)},`);
-  if (owner) lines.push("    owner: f.ref('user').owner(), // set from the session, powers 'owner' policies");
+  if (addOwner) lines.push("    owner: f.ref('user').owner(), // set from the session, powers 'owner' policies");
   if (!lines.length) lines.push("    name: f.string().required().max(200).searchable(),");
   const policy = hasUsers
     ? `  policy: {

@@ -75,6 +75,14 @@ describe('make, routes, openapi, doctor', () => {
     assert.match(calmStatus(app, 'make', 'resource', 'x', 'bad:wat').out, /Unknown type "wat"/);
   });
 
+  test('make resource uses a given owner:ref:user as the owner field', () => {
+    calm(app, 'make', 'resource', 'memo', 'title:string!', 'owner:ref:user');
+    const src = readFileSync(join(app, 'app/resources/memo/memo.resource.js'), 'utf8');
+    assert.equal(src.match(/^\s+owner:/gm).length, 1);
+    assert.match(src, /owner: f\.ref\('user'\)\.filterable\(\)\.owner\(\)/);
+    assert.match(src, /update: 'owner \| admin'/);
+  });
+
   test('routes --json lists policies and sources', () => {
     const routes = JSON.parse(calm(app, 'routes', '--json'));
     const find = (m, p) => routes.find((r) => r.method === m && r.path === p);
