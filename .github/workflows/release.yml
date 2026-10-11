@@ -1,15 +1,26 @@
 name: Release CalmAPI 2
 
-# Push a tag to release:
-#   v2.0.0-alpha.1    tests, then publishes calmapi, @calmapi/devtools and create-calmapi to npm
-#   release-check-*   the same run as a dry run: tests, then `npm publish --dry-run` (nothing is published)
+# Releasing: publish a GitHub release whose tag is v<version> (for example v2.0.0-alpha.1), or push
+# that tag. The run tests everything, then publishes calmapi, @calmapi/devtools and create-calmapi
+# to npm and fills in the release notes from CHANGELOG.md.
+#
+# Pushes that change the release setup run the same pipeline as a dry run (`npm publish --dry-run`,
+# nothing is published).
 #
 # Authentication: npm trusted publishing (OIDC) when it is configured for the packages on
 # npmjs.com, otherwise the NPM_TOKEN repository secret. See v2/RELEASING.md.
 
 on:
+  release:
+    types: [published]
   push:
-    tags: ['v2.*', 'release-check-*']
+    tags: ['v2.*']
+    branches: ['master', 'claude/**']
+    paths:
+      - '.github/workflows/release.yml'
+      - 'v2/scripts/check-release.js'
+      - 'v2/package.json'
+      - 'v2/packages/*/package.json'
 
 permissions:
   contents: read
@@ -133,5 +144,11 @@ jobs:
           awk -v v="## $VERSION" '$0==v{on=1;next} /^## /{on=0} on' CHANGELOG.md > /tmp/notes.md
           printf '\nInstall: `npm create calmapi@latest my-api`\n' >> /tmp/notes.md
           flags=(); if [[ "$PRERELEASE" == "true" ]]; then flags+=(--prerelease); fi
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then echo "Release exists"; exit 0; fi
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            # Created on github.com: fill in the notes if they were left empty.
+            if [[ -z "$(gh release view "$GITHUB_REF_NAME" --json body -q .body)" ]]; then
+              gh release edit "$GITHUB_REF_NAME" --notes-file /tmp/notes.md
+            fi
+            exit 0
+          fi
           gh release create "$GITHUB_REF_NAME" --verify-tag --title "CalmAPI $VERSION" --notes-file /tmp/notes.md "${flags[@]}"

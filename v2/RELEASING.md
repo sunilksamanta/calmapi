@@ -19,7 +19,11 @@ it when 2.0.0 ships.
    Run `npm install --package-lock-only`.
 2. Add a `## <version>` section to `CHANGELOG.md`.
 3. Check it: `node scripts/check-release.js v<version>`.
-4. Commit, then tag and push the tag:
+4. Commit and push, then publish a GitHub release: **Releases**, **Draft a new release**, **Choose a
+   tag**, type `v<version>` (for example `v2.0.0-alpha.1`) and pick **Create new tag on publish**,
+   target the branch you are releasing from, tick **Set as a pre-release** for alpha, beta and rc
+   versions, and **Publish release**. The notes can stay empty: the workflow fills them in from the
+   changelog. Pushing the tag from the command line works too:
 
    ```bash
    git tag v2.0.0-alpha.1
@@ -29,10 +33,10 @@ it when 2.0.0 ships.
 The [release workflow](../.github/workflows/release.yml) then runs lint and the full test suite against
 MongoDB, creates a project from the packed tarballs and runs its tests and `calm audit`, publishes the
 three packages with provenance (devtools, then calmapi, then create-calmapi; versions already on npm
-are skipped, so a failed run can simply be re-run), and creates a GitHub release from the changelog.
+are skipped, so a failed run can simply be re-run), and writes the release notes from the changelog.
 
-To rehearse without publishing, push a tag named `release-check-<anything>`: the same run ends with
-`npm publish --dry-run`. Delete the tag afterwards.
+Any push that changes the release setup (the workflow, `scripts/check-release.js` or a
+`package.json`) runs the same pipeline as a dry run that ends with `npm publish --dry-run`.
 
 ## npm authentication
 
@@ -52,7 +56,7 @@ release uses a short-lived token:
    - Tick **Bypass two-factor authentication** so CI can publish.
 2. On GitHub: `sunilksamanta/calmapi`, **Settings**, **Secrets and variables**, **Actions**,
    **New repository secret**, name `NPM_TOKEN`, paste the token.
-3. Push the release tag.
+3. Publish the GitHub release (or push the tag).
 
 ### After the first release: switch to trusted publishing
 
