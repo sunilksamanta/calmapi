@@ -192,6 +192,7 @@ export function navigate(hash) {
 }
 
 function route() {
+  if (!store.overview) return;
   closePopover();
   const { id, params } = parseHash();
   const panel = allPanels().find((p) => p.id === id) ?? (store.overview ? requests : null);
@@ -280,18 +281,23 @@ async function boot() {
   on('actas', renderActAs);
   on('live', renderLive);
 
+  window.addEventListener('hashchange', route);
+  document.addEventListener('keydown', onKey);
   connect();
   try {
     await loadOverview();
   } catch (err) {
-    mount(el.main, h('div', { class: 'boot-error' }, h('h1', null, 'Devtools cannot reach the app'), h('p', null, err.message), h('p', { class: 'muted' }, 'Is the server still running in development mode? This page retries when the event stream reconnects.')));
-    on('overview', () => route());
-    return;
+    mount(el.main, h('div', { class: 'boot-error' }, h('h1', null, 'Devtools cannot reach the app'), h('p', null, err.message), h('p', { class: 'muted' }, 'Is the server still running in development mode? This page reconnects on its own as soon as it is back.')));
+    // The event stream reconnects and resyncs; mount the first panel when the overview arrives.
+    const off = on('overview', () => {
+      off();
+      route();
+    });
   }
-  await Promise.allSettled([loadRequests(), loadLogs(), loadMails(), loadDoctor()]);
-  window.addEventListener('hashchange', route);
-  document.addEventListener('keydown', onKey);
-  route();
+  if (store.overview) {
+    await Promise.allSettled([loadRequests(), loadLogs(), loadMails(), loadDoctor()]);
+    route();
+  }
 
   setInterval(() => el.tickUptime?.(), 1000);
   setInterval(() => {

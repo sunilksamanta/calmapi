@@ -16,8 +16,8 @@
   --border-soft: #eeede9;
   --border-strong: #d3d2cc;
   --text: #1a1b1e;
-  --text-2: #53565c;
-  --text-3: #85888e;
+  --text-2: #4d5056;
+  --text-3: #6f7278;
   --scroll: rgba(28, 28, 22, 0.18);
 
   --accent: #0e8775;
@@ -68,7 +68,7 @@
     --border-strong: #33373c;
     --text: #e7e9ec;
     --text-2: #a5aab1;
-    --text-3: #6d737b;
+    --text-3: #80868e;
     --scroll: rgba(255, 255, 255, 0.14);
     --accent: #3cc4ac;
     --accent-hover: #5cd3be;
@@ -115,7 +115,7 @@
   --border-strong: #33373c;
   --text: #e7e9ec;
   --text-2: #a5aab1;
-  --text-3: #6d737b;
+  --text-3: #80868e;
   --scroll: rgba(255, 255, 255, 0.14);
   --accent: #3cc4ac;
   --accent-hover: #5cd3be;
@@ -710,8 +710,11 @@ a.st-file:hover { text-decoration: underline; }
 
 .log-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; padding-bottom: 12px; }
 .log-list { font: 12px/1.6 var(--mono); }
-.log-row { display: grid; grid-template-columns: 92px 46px minmax(0, 1fr) 84px; gap: 14px; align-items: start; padding: 4px 24px; border-bottom: 1px solid var(--border-soft); }
+.log-row { display: grid; grid-template-columns: 92px 46px minmax(0, 1fr) 84px; gap: 14px; align-items: baseline; padding: 4px 24px; border-bottom: 1px solid var(--border-soft); }
 .log-row > * { line-height: 19px; }
+.log-row > .log-req { align-self: start; }
+.log-req.gone { color: var(--text-3); cursor: default; }
+.log-req.gone:hover { background: none; }
 .log-row:hover { background: var(--hover); }
 .log-row.lv-error { background: color-mix(in srgb, var(--red) 5%, transparent); }
 .log-row.lv-warn { background: color-mix(in srgb, var(--amber) 5%, transparent); }

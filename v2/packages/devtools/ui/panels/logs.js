@@ -26,6 +26,8 @@ function fieldValue(v) {
 }
 
 /** One log line. Also used inside the request detail. */
+const reqLink = (requestId) => h('a', { class: 'log-req mono', href: `#/requests/${requestId}`, title: `Open request ${requestId}` }, icon('activity', 12), requestId.slice(0, 8));
+
 export function logRow(entry, { linkRequest = true } = {}) {
   const { time, level, msg, requestId, ...fields } = entry;
   const errField = Object.entries(fields).find(([, v]) => v && typeof v === 'object' && v.stack);
@@ -42,7 +44,11 @@ export function logRow(entry, { linkRequest = true } = {}) {
       extras.map(([k, v]) => h('span', { class: 'log-field' }, h('span', { class: 'log-k' }, k), '=', h('span', { class: 'log-v' }, fieldValue(v)))),
       errField ? h('details', { class: 'log-stack' }, h('summary', null, `${errField[1].name ?? 'Error'}: ${errField[1].message ?? ''}`), h('pre', null, errField[1].stack)) : null,
     ),
-    linkRequest && requestId ? h('a', { class: 'log-req mono', href: `#/requests/${requestId}`, title: `Open request ${requestId}` }, icon('activity', 12), requestId.slice(0, 8)) : h('span'),
+    linkRequest && requestId
+      ? store.requests.some((r) => r.id === requestId)
+        ? reqLink(requestId)
+        : h('span', { class: 'log-req gone mono', dataset: { rid: requestId }, title: `Request ${requestId} is not recorded (a devtools call, still running, or rotated out)` }, requestId.slice(0, 8))
+      : h('span'),
   );
 }
 
@@ -129,6 +135,10 @@ function mountLogs(root) {
       if (state.follow) scroller.scrollTop = scroller.scrollHeight;
     }),
     on('logs:reset', render),
+    // Lines logged during a request arrive before the request itself finishes.
+    on('request', (r) => {
+      for (const el of list.querySelectorAll(`.log-req.gone[data-rid="${CSS.escape(r.id)}"]`)) el.replaceWith(reqLink(r.id));
+    }),
   ];
   return {
     destroy: () => offs.forEach((off) => off()),

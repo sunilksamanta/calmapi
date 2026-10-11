@@ -33,7 +33,7 @@ function matches(r) {
   if (!q) return true;
   return q.split(/\s+/).every((term) => {
     if (/^[1-5]xx$/.test(term)) return String(r.status ?? '').startsWith(term[0]);
-    const hay = `${r.method} ${r.path} ${r.route ?? ''} ${r.status ?? ''} ${r.user?.name ?? 'anonymous'} ${r.error ?? ''}`.toLowerCase();
+    const hay = `${r.method} ${r.path} ${routeOf(r) ?? ''} ${r.status ?? ''} ${r.user?.name ?? 'anonymous'} ${r.error ?? ''}`.toLowerCase();
     return hay.includes(term);
   });
 }
@@ -42,6 +42,13 @@ function percentile(values, p) {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))];
+}
+
+/** Error responses are recorded without the API prefix (req.baseUrl is reset by then). */
+function routeOf(r) {
+  const prefix = store.overview?.app.apiPrefix ?? '';
+  if (!r.route || !prefix || r.route.startsWith(prefix) || !r.path.startsWith(prefix)) return r.route ?? null;
+  return `${prefix}${r.route}`;
 }
 
 function pathEl(path) {
@@ -147,7 +154,7 @@ function mountRequests(root, params) {
         onclick: () => open(r.id),
       },
       methodChip(r.method),
-      h('span', { class: 'rq-path', title: r.route ? `Route ${r.route}` : r.path }, pathEl(r.path), r.error ? h('span', { class: `rq-err t-${statusTone(r.status)}` }, r.error) : null),
+      h('span', { class: 'rq-path', title: routeOf(r) ? `Route ${routeOf(r)}` : r.path }, pathEl(r.path), r.error ? h('span', { class: `rq-err t-${statusTone(r.status)}` }, r.error) : null),
       statusChip(r.status),
       h('span', { class: ['rq-dur', 'num', r.durationMs >= SLOW_MS && 'slow'], title: `${r.durationMs} ms total, ${r.queryMs} ms in MongoDB` }, h('span', { class: 'rq-dur-bar', style: { '--w': `${w}%` } }), h('span', { class: 'rq-dur-text' }, fmtMs(r.durationMs))),
       h('span', { class: ['rq-q', 'num', r.queries > MANY_QUERIES && 'warn'], title: r.queries > MANY_QUERIES ? `${r.queries} queries: likely an N+1 pattern` : `${plural(r.queries, 'query', 'queries')}, ${r.queryMs} ms` }, icon('database', 12), r.queries),
@@ -316,7 +323,7 @@ function mountRequests(root, params) {
         h(
           'div',
           { class: 'dt-actions' },
-          rec.route ? h('span', { class: 'dt-route', title: 'Matched route' }, icon('route', 13), rec.route) : null,
+          routeOf(rec) ? h('span', { class: 'dt-route', title: 'Matched route' }, icon('route', 13), routeOf(rec)) : null,
           h('button', { class: 'chip-btn mono', title: 'Copy request id', onclick: () => copy(rec.id, 'Request id copied') }, `id ${rec.id.slice(0, 8)}`, icon('copy', 12)),
           h('span', { class: 'spacer' }),
           h('button', { class: 'btn', onclick: () => copy(toCurl(rec), 'curl command copied'), title: 'Copy as curl' }, icon('terminal', 14), 'Copy as curl'),
@@ -429,7 +436,7 @@ function niceStep(raw) {
 const kindOf = (cmd) => (READS.has(cmd) ? 'read' : ['insert', 'update', 'delete', 'findAndModify'].includes(cmd) ? 'write' : 'other');
 
 function timelineView(rec, { goTo }) {
-  const t0 = Date.parse(rec.startedAt);
+  const t0 = rec.startedAtMs ?? Date.parse(rec.startedAt);
   const qs = rec.queries.map((q, i) => ({ ...q, i, off: Math.max(0, q.startedAt - t0), dur: q.durationMs ?? 0 }));
   const logs = (rec.logs ?? []).map((l) => ({ ...l, off: Math.max(0, Date.parse(l.time) - t0) }));
   const total = Math.max(rec.durationMs ?? 0, ...qs.map((q) => q.off + q.dur), ...logs.map((l) => l.off), 0.5);
@@ -518,7 +525,7 @@ function timelineView(rec, { goTo }) {
 
 function queriesView(rec) {
   if (!rec.queries.length) return empty({ icon: 'database', title: 'No queries', hint: 'This request did not touch MongoDB.' });
-  const t0 = Date.parse(rec.startedAt);
+  const t0 = rec.startedAtMs ?? Date.parse(rec.startedAt);
   const n1 = repeated(rec.queries);
   const flagged = new Set(n1.flat().map((q) => q.id));
   return h('div', { class: 'dt-pad q-list' }, rec.queries.map((q, i) => queryCard(q, { index: i + 1, offset: q.startedAt - t0, repeated: flagged.has(q.id) })));
@@ -549,7 +556,7 @@ export function queryCard(q, { index, offset, absolute, repeated: rep } = {}) {
       rep ? h('span', { class: 'badge t-amber', title: 'Same command and filter shape repeated in this request' }, 'repeated') : null,
       h('span', { class: 'spacer' }),
       q.docs != null ? h('span', { class: 'q-meta num' }, plural(q.docs, 'doc')) : null,
-      absolute ? h('span', { class: 'q-meta num', title: fullDate(q.startedAt) }, clock(q.startedAt)) : offset != null ? h('span', { class: 'q-meta num', title: 'Offset from request start' }, `+${offset} ms`) : null,
+      absolute ? h('span', { class: 'q-meta num', title: fullDate(q.startedAt) }, clock(q.startedAt)) : offset != null ? h('span', { class: 'q-meta num', title: 'Offset from request start' }, `+${Math.round(offset * 10) / 10} ms`) : null,
       h('span', { class: ['q-dur', 'num', q.durationMs > 50 && 't-amber'] }, fmtMs(q.durationMs)),
       q.ok === false ? h('span', { class: 'badge t-red' }, 'failed') : null,
     ),
@@ -619,7 +626,7 @@ function requestView(rec) {
         'dl',
         { class: 'kv' },
         h('dt', null, 'URL'), h('dd', { class: 'mono' }, url),
-        h('dt', null, 'Route'), h('dd', { class: 'mono' }, rec.route ?? h('span', { class: 'muted' }, 'no route matched')),
+        h('dt', null, 'Route'), h('dd', { class: 'mono' }, routeOf(rec) ?? h('span', { class: 'muted' }, 'no route matched')),
         h('dt', null, 'Status'), h('dd', null, statusChip(rec.status), ' ', STATUS_TEXT[rec.status] ?? ''),
         h('dt', null, 'Client IP'), h('dd', { class: 'mono' }, rec.ip ?? ''),
         h('dt', null, 'Request id'), h('dd', { class: 'mono' }, rec.id),

@@ -45,7 +45,7 @@ export function runtimeChecks(app) {
   for (const route of routes) {
     if (route.source === 'crud' || route.source === 'auth') continue;
     if (!route.policyExplicit) {
-      add('warn', 'route-policy', `${route.method} ${route.path} has no explicit policy`, "Defaulted to 'authenticated'. Add { policy: '...' } to say who may call it.", route.file);
+      add('warn', 'route-policy', `${route.method} ${config.apiPrefix}${route.path} has no explicit policy`, "Defaulted to 'authenticated'. Add { policy: '...' } to say who may call it.", route.file);
     }
   }
 

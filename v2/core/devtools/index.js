@@ -67,6 +67,7 @@ export function setupDevtools(app, ex) {
     client.on('commandStarted', (ev) => {
       if (SKIP_COMMANDS.has(ev.commandName)) return;
       const store = currentRequest();
+      if (store?.devtoolsInternal) return; // queries made by devtools itself
       const record = store?.devtools;
       const query = {
         id: ++seq,
@@ -75,7 +76,7 @@ export function setupDevtools(app, ex) {
         summary: summarize(ev.commandName, ev.command),
         raw: cleanCommand(ev.command),
         database: ev.databaseName,
-        startedAt: Date.now(),
+        startedAt: performance.timeOrigin + performance.now(), // sub-millisecond epoch time
         durationMs: null,
         ok: null,
       };
@@ -97,13 +98,17 @@ export function setupDevtools(app, ex) {
   };
 
   ex.use((req, res, next) => {
-    if (req.path.startsWith('/_calm')) return next();
     const store = currentRequest();
+    if (req.path.startsWith('/_calm')) {
+      if (store) store.devtoolsInternal = true;
+      return next();
+    }
     const record = {
       id: req.id,
       method: req.method,
       path: req.originalUrl,
       startedAt: new Date().toISOString(),
+      startedAtMs: performance.timeOrigin + performance.now(),
       status: null,
       durationMs: null,
       ip: req.ip,
@@ -127,14 +132,17 @@ export function setupDevtools(app, ex) {
       record.durationMs = Math.round((performance.now() - started) * 10) / 10;
       record.requestBody = req.body === undefined ? null : truncate(redact(req.body));
       if (req.user) record.user = { id: req.user.id, name: req.user.name, email: req.user.email, roles: req.user.roles };
-      if (req.route) record.route = `${req.baseUrl}${req.route.path}`;
+      if (req.calmRoute) record.route = `${app.config.apiPrefix}${req.calmRoute.path}`;
       if (req.calmError) {
         const { original, http } = req.calmError;
         record.error = { status: http.status, code: http.code, message: http.message, internal: original?.message, stack: original?.stack, details: http.details };
       }
-      record.logs = logs.list().filter((l) => l.requestId === record.id).slice(-50);
-      requests.push(record);
-      broadcast('request', summary(record));
+      // Wait a tick so the access log line (written on the same 'finish' event) is included.
+      setImmediate(() => {
+        record.logs = logs.list().filter((l) => l.requestId === record.id).slice(-50);
+        requests.push(record);
+        broadcast('request', summary(record));
+      });
     });
     next();
   });
@@ -236,6 +244,12 @@ export function setupDevtools(app, ex) {
   });
 
   api.use((_req, res) => res.status(404).json({ error: 'Unknown devtools endpoint' }));
+
+  // End live streams on shutdown so they do not hold the server open.
+  app.hooks.shutdown.push(() => {
+    for (const res of clients) res.end();
+    clients.clear();
+  });
 
   const router = express.Router();
   router.use((req, res, next) => (isLocal(req) ? next() : res.status(404).end()));

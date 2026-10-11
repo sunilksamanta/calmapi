@@ -64,6 +64,7 @@ export function crudRoutes(app, entry) {
   for (const route of r.routes) {
     route.inputSchema = route.input;
     route.input = null;
+    route.policyExplicit = !def.defaultedPolicies.includes(route.action);
   }
   return r.routes;
 }

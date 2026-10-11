@@ -105,13 +105,14 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
     },
 
     async stop() {
+      // 1. stop accepting connections, 2. shutdown hooks (they also end SSE streams and
+      // workers, which would otherwise keep the server open), 3. wait for in-flight requests.
+      let closed = Promise.resolve();
+      let timer;
       if (app.server) {
-        const closed = new Promise((resolve) => app.server.close(resolve));
+        closed = new Promise((resolve) => app.server.close(resolve));
         app.server.closeIdleConnections?.();
-        const timer = setTimeout(() => app.server?.closeAllConnections?.(), config.shutdownTimeoutMs);
-        await closed;
-        clearTimeout(timer);
-        app.server = null;
+        timer = setTimeout(() => app.server?.closeAllConnections?.(), config.shutdownTimeoutMs);
       }
       for (const fn of [...hooks.shutdown].reverse()) {
         try {
@@ -120,6 +121,9 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
           log.error('Shutdown hook failed', { err });
         }
       }
+      await closed;
+      clearTimeout(timer);
+      app.server = null;
       await app.idle();
       await db.disconnect();
       app.started = false;

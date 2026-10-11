@@ -122,6 +122,7 @@ export function policyPreCheck(route) {
 /** Express handler for one route record. */
 export function toExpressHandler(app, route) {
   return async (req, res) => {
+    req.calmRoute = route;
     const entry = route.resource ? app.registry.get(route.resource) : null;
     const ctx = createContext(app, req, res, {
       route,

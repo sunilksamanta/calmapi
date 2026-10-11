@@ -380,6 +380,10 @@ function treeNode(key, value, depth, open, last) {
     const entries = isArr ? value.map((v, i) => [i, v]) : Object.entries(value);
     const [o, c] = isArr ? ['[', ']'] : ['{', '}'];
     if (!entries.length) return h('div', { class: 'jt-line' }, keyEl, h('span', { class: 'j-punc' }, o + c + comma));
+    if (depth > 0) {
+      const one = prettyJson(value, 2, Infinity);
+      if (one.length <= 44) return h('div', { class: 'jt-line' }, keyEl, h('span', { html: highlightJson(one) }), comma ? h('span', { class: 'j-punc' }, comma) : null);
+    }
     const details = h('details', { class: 'jt-node' });
     const summary = h(
       'summary',

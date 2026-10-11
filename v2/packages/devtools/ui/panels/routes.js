@@ -110,7 +110,7 @@ function mountRoutes(root) {
                 'div',
                 { class: ['rt-row', r.hidden && 'is-hidden'], role: 'row' },
                 h('span', { role: 'cell' }, methodChip(r.method)),
-                h('span', { class: 'rt-path', role: 'cell' }, pathParts(r.path, ov.app.apiPrefix), r.hidden ? h('span', { class: 'badge t-gray', title: 'Hidden from OpenAPI (an alias)' }, 'hidden') : null),
+                h('span', { class: 'rt-path', role: 'cell', title: `${r.method} ${r.path}` }, pathParts(r.path, ov.app.apiPrefix), r.hidden ? h('span', { class: 'badge t-gray', title: 'Hidden from OpenAPI (an alias)' }, 'hidden') : null),
                 h('span', { class: 'rt-policy', role: 'cell' }, policyBadges(r.policy, { explicit })),
                 h('span', { class: 'rt-summary', role: 'cell' }, r.summary ?? h('span', { class: 'muted' }, r.action)),
                 h('span', { class: 'rt-file', role: 'cell' }, r.file ? fileLink(root, r.file, { label: r.file.split('/').pop() }) : null),
