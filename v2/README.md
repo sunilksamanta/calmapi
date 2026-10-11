@@ -28,13 +28,16 @@ npm run dev
   `calm upgrade` three-way merges upstream fixes into your edited copy instead of overwriting it.
 - **Declare a field once.** One `f.*()` line drives the Mongoose schema, input validation, what the API
   returns, which filters and sorts are allowed, and the OpenAPI schema.
-- **Secure by default.** Hidden fields cannot leak (even through populated references), every route has
-  an access policy, list queries are allowlisted, sessions and reset tokens are hashed, auth is rate
-  limited, and `NODE_ENV` defaults to production.
+- **Secure by default, and provably so.** Hidden fields cannot leak (even through populated references),
+  every route has an access policy, list queries are allowlisted, sessions and reset tokens are hashed,
+  logins lock per account, common passwords are refused, and anything but `development`/`test` runs as
+  production. `.encrypted()` fields are AES-256-GCM at rest. `calm audit` attacks your own API as every
+  role on a throwaway database and proves the policies hold.
 - **Devtools.** A local dashboard at `/_calm`: every request with its MongoDB queries and timings,
   explain plans, a privacy lens on your data, a mail catcher, "act as" any user, and doctor findings.
-- **Agent native.** Projects ship with `AGENTS.md`, and `calm mcp` gives coding agents tools to inspect
-  routes, scaffold resources, run doctor and read live requests from the dev server.
+- **Agent native, human visible.** Projects ship with `AGENTS.md`; `calm mcp` gives coding agents tools to
+  scaffold, call the API as any user, run tests, doctor and the security audit. Everything an agent does
+  (tool calls, file diffs, restarts, crashes, requests) streams live into devtools, so you watch it work.
 - **Blocks, shadcn style.** `calm add jobs` copies production code (a MongoDB job queue, file storage,
   realtime, audit log, an MCP server for your API...) into your project. You own that code too.
 
@@ -122,7 +125,10 @@ calm make resource <name> [fields...]   e.g. product name:string! price:number s
 calm add <block...>                     copy blocks into your project (calm add --list)
 calm routes                             every route with its policy and source file
 calm openapi                            write openapi.json
-calm doctor [--prod] [--ci]             security and correctness checks
+calm doctor [--prod] [--ci] [--audit]   security and correctness checks
+calm audit [--ci]                       test every route as every role on a throwaway database
+calm admin <email> [--revoke]           grant the admin role
+calm keygen [--write]                   encryption key for .encrypted() fields (rotates)
 calm upgrade                            merge framework updates into calm/
 calm mcp                                MCP server for coding agents (claude mcp add calm -- npx calm mcp)
 ```
@@ -137,6 +143,7 @@ calm mcp                                MCP server for coding agents (claude mcp
 | `mcp-server` | your resources as MCP tools for AI agents, enforced by your API's own rules |
 | `audit-log` | who changed what, with field diffs (private values never logged) |
 | `soft-delete` | `softDelete: true` per resource, trash and restore |
+| `totp` | two-factor authentication with authenticator apps |
 | `api-docs` | interactive reference at `/docs` |
 | `mail-resend` / `mail-smtp` | email delivery |
 | `rate-limit-mongo` | shared rate limits across instances |
@@ -144,6 +151,18 @@ calm mcp                                MCP server for coding agents (claude mcp
 Blocks use the [shadcn registry item format](https://ui.shadcn.com/docs/registry), so anyone can
 publish them: add `"calm": { "registries": { "@acme": "https://acme.dev/r/{name}.json" } }` to
 `package.json` and run `calm add @acme/thing`.
+
+## Security toolkit
+
+| | |
+|---|---|
+| Exposure matrix | per resource and role (anonymous, user, owner, admin, custom roles): allowed actions and visible/writable fields, computed from your code |
+| `calm audit` | calls every route as every role on a throwaway database; checks statuses, owner-only lists, field leaks, mass assignment, query injection, token handling |
+| `.encrypted()` | AES-256-GCM at rest, transparent on read/write/populate, key rotation with `calm keygen --write` |
+| Auth hardening | hashed opaque sessions, scrypt, per-account lockout without account enumeration, common/personal password rules, single-use reset tokens |
+| `calm add totp` | authenticator-app 2FA with hashed recovery codes and replay protection |
+| `calm doctor` | config, policies, personal data exposure, hardcoded secrets, `.env` in git, `npm audit`, advisories |
+| `security.*` events | failed logins, lockouts, rejected writes, forbidden access, rate limits, bad tokens: live in devtools, hook them for alerts |
 
 ## Auth
 

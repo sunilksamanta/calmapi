@@ -4,6 +4,19 @@
 
 A rewrite. The framework is still copied into your project, and now it can be upgraded.
 
+### Security
+- `.encrypted()` fields (AES-256-GCM, key rotation), per-account login lockout, common and personal
+  password rules, JSON depth/size guard, `security.*` events.
+- Exposure matrix and `calm audit` (dynamic authorization testing on a throwaway database).
+- `calm doctor`: personal data exposure, hardcoded secrets, `.env` in git, `--audit` (npm audit).
+- `totp` block (two-factor authentication), `calm keygen`, `calm admin`.
+
+### AI and humans, side by side
+- `calm dev` records file changes (with diffs, attributed to agents), restarts and crashes; devtools
+  streams them live with agent tool calls and agent-tagged requests.
+- `calm mcp` tools: calm_http (call the API as any user), calm_test, calm_audit, calm_security,
+  calm_activity, plus project/routes/resources/scaffolding/doctor/blocks/requests/logs/mails.
+
 ### Framework (`calm/`)
 - Resources declared once with `f.*()` fields drive the Mongoose schema, validation, output visibility,
   query allowlists and OpenAPI. Unknown, read-only and hidden fields are rejected (no mass assignment).
