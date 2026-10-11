@@ -11,6 +11,9 @@ import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { requireProject, capture } from '../lib/project.js';
 import { PKG, PKG_ROOT, readJson, readText } from '../lib/files.js';
+import { appendActivity, readActivity } from '../lib/activity.js';
+import { runAuditInProject } from './audit.js';
+import { introspect } from '../lib/introspect.js';
 
 const PROTOCOLS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const BIN = join(PKG_ROOT, 'bin', 'calm.js');
@@ -102,6 +105,40 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { limit: { type: 'integer' }, level: { type: 'string', enum: ['debug', 'info', 'warn', 'error'] } } },
   },
   {
+    name: 'calm_http',
+    description: 'Call the running dev API like a real client and get status + body. `as` picks the caller: "anonymous" (default), "admin" (first admin user), or a user email. The request shows up in devtools tagged as yours; pass its requestId to calm_request for queries, logs and errors.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] },
+        path: str('e.g. "/api/posts?status=published"'),
+        body: { type: 'object', description: 'JSON body for POST/PUT/PATCH' },
+        as: str('"anonymous", "admin" or a user email'),
+      },
+      required: ['method', 'path'],
+    },
+  },
+  {
+    name: 'calm_test',
+    description: 'Run the project tests (node --test) and get pass/fail counts with each failing test and its error.',
+    inputSchema: { type: 'object', properties: { pattern: str('Optional file or glob, e.g. "test/posts.test.js"') } },
+  },
+  {
+    name: 'calm_audit',
+    description: 'Security audit: calls every route as anonymous, owner, another user, admin and custom roles on a throwaway database, and reports policy mismatches, field leaks, mass assignment and injection problems. Run after changing policies or fields.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'calm_security',
+    description: 'Security picture: the exposure matrix (who can do what and see which fields, per resource and role), security-related doctor findings, and recent security events (failed logins, lockouts, rejected writes) from the dev server.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'calm_activity',
+    description: 'Recent project activity: file changes with diffs (and who made them: you or a human), server restarts and crashes with their error output. Check this after editing code to see if the dev server came back up.',
+    inputSchema: { type: 'object', properties: { limit: { type: 'integer', description: 'Default 30' } } },
+  },
+  {
     name: 'calm_mails',
     description: 'Emails the dev server would have sent (e.g. password reset links), newest first.',
     inputSchema: { type: 'object', properties: { limit: { type: 'integer' } } },
@@ -131,6 +168,9 @@ export async function run(argv) {
   await new Promise((resolve) => rl.on('close', resolve));
 }
 
+let clientName = 'agent';
+const tokens = new Map();
+
 async function handle(root, msg) {
   const { id, method, params } = msg;
   const result = (r) => ({ jsonrpc: '2.0', id, result: r });
@@ -140,12 +180,14 @@ async function handle(root, msg) {
   switch (method) {
     case 'initialize': {
       const requested = params?.protocolVersion;
+      clientName = String(params?.clientInfo?.name ?? 'agent').slice(0, 60);
+      appendActivity(root, { type: 'agent', client: clientName, tool: 'connect', ok: true, ms: 0, summary: `${clientName} connected over MCP` });
       return result({
         protocolVersion: PROTOCOLS.includes(requested) ? requested : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'calmapi', title: 'CalmAPI', version: PKG.version },
         instructions:
-          'Tools for a CalmAPI project (Node.js + MongoDB REST framework whose code lives in calm/). Start with calm_project. Conventions are in AGENTS.md. Resources live in app/resources/<name>/. Run calm_doctor after changes.',
+          'Tools for a CalmAPI project (Node.js + MongoDB REST framework whose code lives in calm/). Start with calm_project; conventions are in AGENTS.md; resources live in app/resources/<name>/. After editing code: calm_activity (did the dev server restart or crash?), calm_http to try endpoints as anonymous/admin/a user, calm_test, then calm_doctor and calm_audit for security. A human may be watching your work live in devtools (/_calm).',
       });
     }
     case 'ping':
@@ -155,10 +197,17 @@ async function handle(root, msg) {
     case 'tools/call': {
       const tool = TOOLS.find((t) => t.name === params?.name);
       if (!tool) return error(-32602, `Unknown tool ${params?.name}`);
+      const started = Date.now();
+      const args = params.arguments ?? {};
+      const log = (ok, text) =>
+        appendActivity(root, { type: 'agent', client: clientName, tool: tool.name, args: clip(JSON.stringify(args), 400), ok, ms: Date.now() - started, summary: clip(text, 300) });
       try {
-        const out = await callTool(root, tool.name, params.arguments ?? {});
-        return result({ content: [{ type: 'text', text: typeof out === 'string' ? out : JSON.stringify(out, null, 2) }], isError: false });
+        const out = await callTool(root, tool.name, args);
+        const text = typeof out === 'string' ? out : JSON.stringify(out, null, 2);
+        log(true, text);
+        return result({ content: [{ type: 'text', text }], isError: false });
       } catch (err) {
+        log(false, err.message);
         return result({ content: [{ type: 'text', text: err.message }], isError: true });
       }
     }
@@ -180,6 +229,47 @@ function devServerUrl(root) {
   const env = existsSync(join(root, '.env')) ? readText(join(root, '.env')) : '';
   const port = process.env.PORT ?? /^PORT=(\d+)/m.exec(env)?.[1] ?? '5001';
   return `http://localhost:${port}`;
+}
+
+const clip = (s, n) => (typeof s === 'string' && s.length > n ? `${s.slice(0, n)}…` : s);
+
+async function devtoolsPost(root, path, body) {
+  const res = await fetch(`${devServerUrl(root)}/_calm/api${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-calm-devtools': '1' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`${path}: ${res.status} ${await res.text()}`);
+  return res.json();
+}
+
+async function tokenFor(root, as) {
+  if (!as || as === 'anonymous') return null;
+  if (tokens.has(as)) return tokens.get(as);
+  const users = await devtools(root, `/users${as === 'admin' ? '' : `?q=${encodeURIComponent(as)}`}`);
+  const user = as === 'admin' ? users.find((u) => u.roles.includes('admin')) : users.find((u) => u.email === String(as).toLowerCase());
+  if (!user) throw new Error(as === 'admin' ? 'No admin user yet. Sign one up, then run `npx calm admin <email>`.' : `No user with email ${as}. Register one with POST /api/auth/register.`);
+  const { token } = await devtoolsPost(root, '/act-as', { userId: user.id });
+  tokens.set(as, token);
+  return token;
+}
+
+function parseTap(text) {
+  const num = (k) => Number(new RegExp(`^# ${k} (\\d+)`, 'm').exec(text)?.[1] ?? 0);
+  const failures = [];
+  const lines = text.split('\n');
+  lines.forEach((line, i) => {
+    const m = /^\s*not ok \d+ - (.+)$/.exec(line);
+    if (!m) return;
+    const block = lines.slice(i + 1, i + 40);
+    const end = block.findIndex((l) => /^\s*\.\.\.\s*$/.test(l));
+    const detail = (end === -1 ? block : block.slice(0, end)).join('\n');
+    if (/failureType: 'subtestsFailed'/.test(detail)) return;
+    const error = /error: \|?-?\s*\n?([\s\S]*?)\n\s+(code|name|expected|stack):/.exec(detail)?.[1]?.trim() ?? /error: '([^']*)'/.exec(detail)?.[1] ?? '';
+    const where = /location: '([^']+)'/.exec(detail)?.[1] ?? null;
+    failures.push({ name: m[1], error: clip(error.replace(/\s+/g, ' '), 500), where });
+  });
+  return { tests: num('tests'), pass: num('pass'), fail: num('fail'), failures };
 }
 
 async function devtools(root, path) {
@@ -260,6 +350,65 @@ async function callTool(root, name, args) {
     }
     case 'calm_mails':
       return (await devtools(root, '/mails')).slice(0, args.limit ?? 10);
+    case 'calm_http': {
+      const token = await tokenFor(root, args.as);
+      const path = args.path.startsWith('/') ? args.path : `/${args.path}`;
+      let res;
+      try {
+        res = await fetch(`${devServerUrl(root)}${path}`, {
+          method: args.method,
+          headers: {
+            'x-calm-agent': clientName,
+            ...(token ? { authorization: `Bearer ${token}` } : {}),
+            ...(args.body !== undefined ? { 'content-type': 'application/json' } : {}),
+          },
+          body: args.body !== undefined ? JSON.stringify(args.body) : undefined,
+        });
+      } catch {
+        throw new Error(`The dev server is not reachable at ${devServerUrl(root)}. Start it with \`npm run dev\`.`);
+      }
+      const text = await res.text();
+      let body;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = clip(text, 4000);
+      }
+      return { status: res.status, requestId: res.headers.get('x-request-id'), as: args.as ?? 'anonymous', body };
+    }
+    case 'calm_test': {
+      const res = await capture(process.execPath, ['--test', ...(args.pattern ? [args.pattern] : [])], { cwd: root, env: { NODE_TEST_CONTEXT: undefined } });
+      return parseTap(`${res.stdout}\n${res.stderr}`);
+    }
+    case 'calm_audit': {
+      const report = await runAuditInProject(root);
+      return {
+        ok: report.ok,
+        summary: report.summary,
+        failures: report.results.filter((r) => r.ok === false),
+        leaks: report.leaks,
+        failedProbes: report.probes.filter((p) => !p.ok),
+        notes: report.notes,
+      };
+    }
+    case 'calm_security': {
+      const info = await introspect(root);
+      if (info.error) throw new Error(info.error.message);
+      const security = /secret|pii|sensitive|cors|rate|mail|policy|roles|public-write|email-unique|trust|encrypt/;
+      let events;
+      try {
+        events = (await devtools(root, '/security')).events.slice(0, 30);
+      } catch {
+        events = 'dev server not running';
+      }
+      return { exposure: info.exposure, findings: info.doctor.filter((f) => security.test(f.id)), recentEvents: events };
+    }
+    case 'calm_activity':
+      return readActivity(root, args.limit ?? 30).map((e) =>
+        e.type === 'file' && e.diff
+          ? { ...e, diff: { added: e.diff.added, removed: e.diff.removed, text: e.diff.hunks.map((h) => h.lines.join('\n')).join('\n...\n').slice(0, 3000) } }
+          : e,
+      );
     default:
       throw new Error(`Unknown tool ${name}`);
   }

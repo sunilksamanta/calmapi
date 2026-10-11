@@ -10,7 +10,7 @@
 
 import express from 'express';
 import { createRequire } from 'node:module';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, watchFile, unwatchFile, openSync, readSync, closeSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { currentRequest } from '../context.js';
 import { serialize } from '../resource/resource.js';
@@ -40,6 +40,8 @@ export function setupDevtools(app, ex) {
   const orphanQueries = ring(200);
   const logs = ring(1000);
   const mails = ring(100);
+  const activity = ring(500);
+  const securityEvents = ring(300);
   const clients = new Set();
   const inflight = new Map(); // driver requestId -> { record, query }
   let seq = 0;
@@ -54,6 +56,49 @@ export function setupDevtools(app, ex) {
     logs.push(entry);
     broadcast('log', entry);
   });
+
+  // Security events (failed logins, lockouts, rejected writes...)
+  app.events.on('security.*', (payload, name) => {
+    const event = { id: ++seq, time: new Date().toISOString(), type: name.slice('security.'.length), ...payload };
+    securityEvents.push(event);
+    broadcast('security', event);
+  });
+
+  // Project activity written by `calm dev` (file changes, restarts, crashes) and
+  // `calm mcp` (agent tool calls): .calm/activity.jsonl, tailed live.
+  const activityPath = join(app.root, '.calm', 'activity.jsonl');
+  let activityOffset = 0;
+  const readNewActivity = (initial) => {
+    if (!existsSync(activityPath)) return;
+    const size = statSync(activityPath).size;
+    if (size < activityOffset) activityOffset = 0; // file was compacted
+    if (initial) {
+      const lines = readFileSync(activityPath, 'utf8').trimEnd().split('\n').slice(-500);
+      for (const line of lines) pushActivity(line, false);
+      activityOffset = size;
+      return;
+    }
+    if (size === activityOffset) return;
+    const fd = openSync(activityPath, 'r');
+    const buf = Buffer.alloc(size - activityOffset);
+    readSync(fd, buf, 0, buf.length, activityOffset);
+    closeSync(fd);
+    activityOffset = size;
+    for (const line of buf.toString('utf8').split('\n')) pushActivity(line, true);
+  };
+  const pushActivity = (line, live) => {
+    if (!line.trim()) return;
+    try {
+      const event = { id: ++seq, ...JSON.parse(line) };
+      activity.push(event);
+      if (live) broadcast('activity', event);
+    } catch {
+      // partial line, picked up next time
+    }
+  };
+  readNewActivity(true);
+  watchFile(activityPath, { interval: 400 }, () => readNewActivity(false));
+  app.hooks.shutdown.push(() => unwatchFile(activityPath));
 
   app.mailer.observe((msg) => {
     const mail = { id: ++seq, to: msg.to, from: msg.from, subject: msg.subject, text: msg.text, html: msg.html, sentAt: msg.sentAt, meta: msg.meta };
@@ -117,6 +162,7 @@ export function setupDevtools(app, ex) {
       responseBody: null,
       queries: [],
       error: null,
+      agent: req.get('x-calm-agent')?.slice(0, 60) ?? null,
     };
     if (store) store.devtools = record;
     const started = performance.now();
@@ -180,6 +226,44 @@ export function setupDevtools(app, ex) {
   });
   api.get('/queries', (_req, res) => res.json(orphanQueries.list().slice().reverse()));
   api.get('/logs', (_req, res) => res.json(logs.list().slice(-500)));
+  api.get('/activity', (_req, res) => res.json(activity.list().slice().reverse()));
+  api.get('/security', async (_req, res) => {
+    const { config } = app;
+    const encrypted = [];
+    for (const { def } of app.registry.values()) {
+      for (const [k, f] of Object.entries(def.fields)) if (f.opts.encrypted) encrypted.push(`${def.name}.${k}`);
+    }
+    res.json({
+      matrix: await app.exposure(),
+      events: securityEvents.list().slice().reverse(),
+      posture: {
+        auth: Boolean(app.auth),
+        sessions: app.auth ? `opaque tokens, SHA-256 at rest, ${config.auth.sessionTtlDays} days` : null,
+        passwords: 'scrypt (node:crypto), common and personal passwords refused',
+        lockout: config.auth.lockout,
+        rateLimit: config.rateLimit.enabled ? { global: config.rateLimit.global, auth: config.rateLimit.auth } : 'off',
+        cors: config.cors.origins,
+        encryption: { keys: app.cipher?.keyIds ?? [], fields: encrypted },
+        jsonLimits: config.jsonLimits,
+        headers: ['X-Content-Type-Options', 'X-Frame-Options', 'Referrer-Policy', 'Cross-Origin-Opener-Policy', 'Content-Security-Policy', config.mode === 'production' ? 'Strict-Transport-Security' : null].filter(Boolean),
+      },
+    });
+  });
+  let auditRunning = null;
+  api.post('/audit', async (_req, res) => {
+    // Runs the same audit as `calm audit`, on a throwaway database.
+    auditRunning ??= import('../security/audit.js')
+      // Same MongoDB server as the dev database, but a throwaway database on it.
+      .then(({ runAudit }) => runAudit({ root: app.root, baseUri: app.config.db.uri }))
+      .finally(() => (auditRunning = null));
+    try {
+      const report = await auditRunning;
+      broadcast('audit', report.summary);
+      res.json(report);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
   api.get('/mails', (_req, res) => res.json(mails.list().slice().reverse()));
 
   api.get('/resources/:name/docs', async (req, res) => {
@@ -358,6 +442,7 @@ const summary = (r) => ({
   queries: r.queries.length,
   queryMs: Math.round(r.queries.reduce((s, q) => s + (q.durationMs ?? 0), 0) * 10) / 10,
   error: r.error ? r.error.code : null,
+  agent: r.agent ?? null,
 });
 
 function redactHeaders(headers) {

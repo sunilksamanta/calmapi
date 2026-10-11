@@ -60,10 +60,17 @@ export function run(cmd, args, { cwd, env, stdio = 'inherit' } = {}) {
   });
 }
 
+/** Merge env overrides; a key set to undefined is removed. */
+const mergeEnv = (extra = {}) => {
+  const out = { ...process.env, ...extra };
+  for (const [k, v] of Object.entries(out)) if (v === undefined) delete out[k];
+  return out;
+};
+
 /** Run a command and capture stdout/stderr. */
 export function capture(cmd, args, { cwd, env, input } = {}) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(cmd, args, { cwd, env: { ...process.env, ...env }, shell: process.platform === 'win32' });
+    const child = spawn(cmd, args, { cwd, env: mergeEnv(env), shell: process.platform === 'win32' });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d) => (stdout += d));

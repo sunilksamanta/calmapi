@@ -15,9 +15,10 @@ import { exposureMatrix } from './exposure.js';
 const ALLOWED_STATUS = { create: [201], list: [200], read: [200], update: [200], delete: [204] };
 const DENIED_STATUS = [401, 403, 404];
 
-export async function runAudit({ root, config = {} } = {}) {
+export async function runAudit({ root, config = {}, baseUri } = {}) {
   const t = await createTestApp({
     root,
+    baseUri,
     config: deepMerge({ rateLimit: { enabled: false }, auth: { lockout: { maxAttempts: 0 } } }, config),
   });
   const results = [];

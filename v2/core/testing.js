@@ -12,8 +12,8 @@ import { createApp } from './app.js';
 import { deepMerge } from './config.js';
 import { generateKey } from './security/encryption.js';
 
-export async function createTestApp({ root = process.cwd(), config = {} } = {}) {
-  const base = process.env.MONGODB_TEST_URI ?? 'mongodb://127.0.0.1:27017';
+export async function createTestApp({ root = process.cwd(), config = {}, baseUri } = {}) {
+  const base = baseUri ?? process.env.MONGODB_TEST_URI ?? 'mongodb://127.0.0.1:27017';
   const url = new URL(base);
   url.pathname = `/calm_test_${Date.now().toString(36)}_${randomBytes(3).toString('hex')}`;
 
