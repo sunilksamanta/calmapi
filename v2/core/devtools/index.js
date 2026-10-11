@@ -1,0 +1,448 @@
+// Devtools: a local dashboard at /_calm (development only).
+//
+// The collector below is yours like the rest of calm/. The UI is a separate dev
+// dependency (@calmapi/devtools) because it is a tool, not part of your app.
+//
+// Safety: never enabled in production (config.js forces it off), and every /_calm
+// request must come from this machine (loopback socket, localhost Host header, no
+// proxy headers). Writes also need the X-Calm-Devtools header, which a cross-site
+// page cannot send.
+
+import express from 'express';
+import { createRequire } from 'node:module';
+import { existsSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { currentRequest } from '../context.js';
+import { serialize } from '../resource/resource.js';
+import { runtimeChecks } from '../doctor.js';
+import { kebab } from '../utils/strings.js';
+
+const SKIP_COMMANDS = new Set(['hello', 'ismaster', 'isMaster', 'ping', 'endSessions', 'saslStart', 'saslContinue', 'buildInfo', 'getParameter', 'listIndexes', 'createIndexes']);
+const EXPLAINABLE = new Set(['find', 'aggregate', 'count', 'distinct', 'update', 'delete', 'findAndModify']);
+const SECRET_KEYS = /pass(word)?|secret|token|otp|api[-_]?key/i;
+const MAX_BODY = 64 * 1024;
+
+function ring(size) {
+  const items = [];
+  return {
+    push(item) {
+      items.push(item);
+      if (items.length > size) items.shift();
+      return item;
+    },
+    list: () => items,
+    find: (fn) => items.find(fn),
+    clear: () => void (items.length = 0),
+  };
+}
+
+export function setupDevtools(app, ex) {
+  const requests = ring(300);
+  const orphanQueries = ring(200);
+  const logs = ring(1000);
+  const mails = ring(100);
+  const clients = new Set();
+  const inflight = new Map(); // driver requestId -> { record, query }
+  let seq = 0;
+
+  const broadcast = (event, data) => {
+    const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const res of clients) res.write(frame);
+  };
+
+  // ---- capture -------------------------------------------------------------------
+  app.log.addSink((entry) => {
+    logs.push(entry);
+    broadcast('log', entry);
+  });
+
+  app.mailer.observe((msg) => {
+    const mail = { id: ++seq, to: msg.to, from: msg.from, subject: msg.subject, text: msg.text, html: msg.html, sentAt: msg.sentAt, meta: msg.meta };
+    mails.push(mail);
+    broadcast('mail', { id: mail.id, to: mail.to, subject: mail.subject, sentAt: mail.sentAt });
+  });
+
+  app.hooks.devtools.onConnect = (db) => {
+    const client = db.connection.getClient();
+    client.on('commandStarted', (ev) => {
+      if (SKIP_COMMANDS.has(ev.commandName)) return;
+      const store = currentRequest();
+      const record = store?.devtools;
+      const query = {
+        id: ++seq,
+        command: ev.commandName,
+        collection: collectionOf(ev),
+        summary: summarize(ev.commandName, ev.command),
+        raw: cleanCommand(ev.command),
+        database: ev.databaseName,
+        startedAt: Date.now(),
+        durationMs: null,
+        ok: null,
+      };
+      (record ? record.queries : null)?.push(query);
+      if (!record) orphanQueries.push(query);
+      inflight.set(ev.requestId, query);
+    });
+    const done = (ok) => (ev) => {
+      const query = inflight.get(ev.requestId);
+      if (!query) return;
+      inflight.delete(ev.requestId);
+      query.durationMs = Number(ev.duration?.toFixed?.(2) ?? ev.duration);
+      query.ok = ok;
+      if (ok) query.docs = countDocs(ev.reply);
+      else query.error = ev.failure?.message;
+    };
+    client.on('commandSucceeded', done(true));
+    client.on('commandFailed', done(false));
+  };
+
+  ex.use((req, res, next) => {
+    if (req.path.startsWith('/_calm')) return next();
+    const store = currentRequest();
+    const record = {
+      id: req.id,
+      method: req.method,
+      path: req.originalUrl,
+      startedAt: new Date().toISOString(),
+      status: null,
+      durationMs: null,
+      ip: req.ip,
+      user: null,
+      requestHeaders: redactHeaders(req.headers),
+      requestBody: null,
+      responseBody: null,
+      queries: [],
+      error: null,
+    };
+    if (store) store.devtools = record;
+    const started = performance.now();
+
+    const originalJson = res.json.bind(res);
+    res.json = (body) => {
+      record.responseBody = truncate(body);
+      return originalJson(body);
+    };
+    res.on('finish', () => {
+      record.status = res.statusCode;
+      record.durationMs = Math.round((performance.now() - started) * 10) / 10;
+      record.requestBody = req.body === undefined ? null : truncate(redact(req.body));
+      if (req.user) record.user = { id: req.user.id, name: req.user.name, email: req.user.email, roles: req.user.roles };
+      if (req.route) record.route = `${req.baseUrl}${req.route.path}`;
+      if (req.calmError) {
+        const { original, http } = req.calmError;
+        record.error = { status: http.status, code: http.code, message: http.message, internal: original?.message, stack: original?.stack, details: http.details };
+      }
+      record.logs = logs.list().filter((l) => l.requestId === record.id).slice(-50);
+      requests.push(record);
+      broadcast('request', summary(record));
+    });
+    next();
+  });
+
+  // ---- API -----------------------------------------------------------------------
+  const api = express.Router();
+  api.use(express.json({ limit: '1mb' }));
+  api.use((req, res, next) => {
+    if (req.method !== 'GET' && req.get('x-calm-devtools') !== '1') return res.status(403).json({ error: 'Missing X-Calm-Devtools header' });
+    next();
+  });
+
+  api.get('/overview', (_req, res) => res.json(overview(app)));
+  api.get('/doctor', (_req, res) => res.json(runtimeChecks(app)));
+  api.get('/requests', (_req, res) => res.json(requests.list().map(summary).reverse()));
+  api.delete('/requests', (_req, res) => {
+    requests.clear();
+    res.status(204).end();
+  });
+  api.get('/requests/:id', (req, res) => {
+    const record = requests.find((r) => r.id === req.params.id);
+    if (!record) return res.status(404).json({ error: 'Request not found (it may have rotated out)' });
+    res.json(record);
+  });
+  api.post('/queries/:qid/explain', async (req, res) => {
+    const query = findQuery(requests, orphanQueries, Number(req.params.qid));
+    if (!query) return res.status(404).json({ error: 'Query not found' });
+    if (!EXPLAINABLE.has(query.command)) return res.status(400).json({ error: `Cannot explain a ${query.command} command` });
+    try {
+      const db = app.mongoose.connection.getClient().db(query.database);
+      const out = await db.command({ explain: query.raw, verbosity: 'queryPlanner' });
+      res.json(planSummary(out));
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+  api.get('/queries', (_req, res) => res.json(orphanQueries.list().slice().reverse()));
+  api.get('/logs', (_req, res) => res.json(logs.list().slice(-500)));
+  api.get('/mails', (_req, res) => res.json(mails.list().slice().reverse()));
+
+  api.get('/resources/:name/docs', async (req, res) => {
+    const entry = app.registry.get(kebab(req.params.name));
+    if (!entry) return res.status(404).json({ error: 'Unknown resource' });
+    const limit = Math.min(Number(req.query.limit) || 20, 100);
+    const skip = Math.max(Number(req.query.skip) || 0, 0);
+    const hiddenSelect = Object.entries(entry.def.fields).filter(([, f]) => !f.isOutput).map(([k]) => `+${k}`).join(' ');
+    const [docs, total] = await Promise.all([
+      entry.model.find().sort({ _id: -1 }).skip(skip).limit(limit).select(hiddenSelect).lean(),
+      entry.model.countDocuments(),
+    ]);
+    let viewer = null;
+    if (req.query.as && app.registry.has('user')) {
+      const u = await app.model('user').findById(req.query.as).lean().catch(() => null);
+      if (u) viewer = { ...u, id: String(u._id) };
+    }
+    const items = await Promise.all(
+      docs.map(async (doc) => {
+        const returned = await serialize(entry.def, doc, { user: viewer, registry: app.registry });
+        const stored = maskSecrets(JSON.parse(JSON.stringify(doc)), entry.def);
+        const notReturned = Object.keys(stored).filter((k) => k !== '_id' && !(k in returned));
+        return { id: String(doc._id), stored, returned, notReturned };
+      }),
+    );
+    res.json({ total, skip, limit, viewer: viewer ? { id: viewer.id, name: viewer.name } : null, items });
+  });
+
+  api.get('/users', async (req, res) => {
+    if (!app.registry.has('user')) return res.json([]);
+    const q = typeof req.query.q === 'string' ? req.query.q.slice(0, 50) : '';
+    const filter = q ? { $or: [{ name: new RegExp(escape(q), 'i') }, { email: new RegExp(escape(q), 'i') }] } : {};
+    const users = await app.model('user').find(filter).sort({ _id: -1 }).limit(20).lean();
+    res.json(users.map((u) => ({ id: String(u._id), name: u.name, email: u.email, roles: u.roles ?? [], status: u.status })));
+  });
+
+  api.post('/act-as', async (req, res) => {
+    if (!app.auth) return res.status(400).json({ error: 'Auth is not enabled in this app' });
+    const user = await app.model('user').findById(req.body?.userId).lean().catch(() => null);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const session = await app.auth.service.createSession(user, req);
+    app.log.info(`Devtools: acting as ${user.email ?? user._id}`);
+    res.json({ ...session, user: { id: String(user._id), name: user.name, email: user.email, roles: user.roles ?? [] } });
+  });
+
+  api.get('/panels/:name', async (req, res) => {
+    const fn = app.hooks.devtools[req.params.name];
+    if (typeof fn !== 'function' || req.params.name === 'onConnect') return res.status(404).json({ error: 'Unknown panel' });
+    res.json(await fn(app));
+  });
+
+  api.get('/stream', (req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+    res.write('retry: 2000\n\n');
+    clients.add(res);
+    const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
+    req.on('close', () => {
+      clearInterval(ping);
+      clients.delete(res);
+    });
+  });
+
+  api.use((_req, res) => res.status(404).json({ error: 'Unknown devtools endpoint' }));
+
+  const router = express.Router();
+  router.use((req, res, next) => (isLocal(req) ? next() : res.status(404).end()));
+  router.use((_req, res, next) => {
+    res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'");
+    res.setHeader('X-Frame-Options', 'DENY');
+    next();
+  });
+  router.use('/api', api);
+  const ui = resolveUi(app.root);
+  if (ui) router.use(express.static(ui, { index: 'index.html' }));
+  else router.get('/', (_req, res) => res.type('html').send(MISSING_UI));
+  ex.use('/_calm', router);
+}
+
+// ---- helpers ---------------------------------------------------------------------
+
+function isLocal(req) {
+  const addr = req.socket.remoteAddress ?? '';
+  const loopback = addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1';
+  const host = (req.headers.host ?? '').replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
+  const localHost = ['localhost', '127.0.0.1', '::1'].includes(host);
+  return loopback && localHost && !req.headers['x-forwarded-for'] && !req.headers.forwarded;
+}
+
+function resolveUi(root) {
+  try {
+    const require = createRequire(join(root, 'package.json'));
+    const dir = join(dirname(require.resolve('@calmapi/devtools/package.json')), 'ui');
+    return existsSync(join(dir, 'index.html')) ? dir : null;
+  } catch {
+    return null;
+  }
+}
+
+function overview(app) {
+  const { config } = app;
+  return {
+    app: { name: config.app.name, version: config.app.version, mode: config.mode, url: config.app.url, apiPrefix: config.apiPrefix, root: app.root },
+    runtime: { node: process.versions.node, pid: process.pid, uptimeSeconds: Math.round(process.uptime()), memoryMb: Math.round(process.memoryUsage().rss / 1048576) },
+    database: {
+      connected: app.mongoose.connection.readyState === 1,
+      name: app.mongoose.connection.name,
+      host: app.mongoose.connection.host,
+    },
+    auth: Boolean(app.auth),
+    mail: app.mailer.transport,
+    openapi: config.openapi.enabled ? `${config.apiPrefix}${config.openapi.path}` : null,
+    resources: [...app.registry.values()].map(({ def, files }) => ({
+      name: def.name,
+      path: `${config.apiPrefix}${def.path}`,
+      collection: def.collection,
+      ownerField: def.ownerField,
+      files,
+      policy: Object.fromEntries(Object.entries(def.policy).map(([k, v]) => [k, (v ?? []).map((t) => (typeof t === 'function' ? t.name || 'custom' : t)).join(' | ')])),
+      defaultedPolicies: def.defaultedPolicies,
+      fields: Object.entries(def.fields).map(([name, field]) => describeField(name, field)),
+    })),
+    routes: app.routes.map((r) => ({
+      method: r.method,
+      path: `${config.apiPrefix}${r.path}`,
+      policy: r.policyLabel,
+      policyExplicit: r.policyExplicit,
+      source: r.source,
+      resource: r.resource,
+      action: r.action,
+      summary: r.summary ?? null,
+      file: r.file ?? null,
+      hidden: r.hidden,
+    })),
+    blocks: app.plugins,
+    panels: Object.keys(app.hooks.devtools).filter((k) => k !== 'onConnect'),
+  };
+}
+
+function describeField(name, field) {
+  const o = field.opts;
+  const flags = [];
+  for (const flag of ['required', 'unique', 'hidden', 'writeOnly', 'readOnly', 'immutable', 'searchable', 'sortable', 'owner', 'populate']) {
+    if (o[flag]) flags.push(flag);
+  }
+  if (field.filterOps.length) flags.push('filterable');
+  return {
+    name,
+    type: field.type === 'array' ? `${field.opts.of.type}[]` : field.type,
+    ref: o.ref ?? o.of?.opts?.ref ?? null,
+    values: o.values ?? o.of?.opts?.values ?? null,
+    default: typeof o.default === 'function' ? 'fn()' : (o.default ?? null),
+    flags,
+    filterOps: field.filterOps,
+    visibleTo: typeof o.visibleTo === 'string' ? o.visibleTo : o.visibleTo ? 'custom' : null,
+    writableBy: typeof o.writableBy === 'string' ? o.writableBy : o.writableBy ? 'custom' : null,
+    output: field.isOutput,
+    input: field.isInput,
+  };
+}
+
+const summary = (r) => ({
+  id: r.id,
+  method: r.method,
+  path: r.path,
+  route: r.route ?? null,
+  status: r.status,
+  durationMs: r.durationMs,
+  startedAt: r.startedAt,
+  user: r.user ? { id: r.user.id, name: r.user.name } : null,
+  queries: r.queries.length,
+  queryMs: Math.round(r.queries.reduce((s, q) => s + (q.durationMs ?? 0), 0) * 10) / 10,
+  error: r.error ? r.error.code : null,
+});
+
+function redactHeaders(headers) {
+  const out = { ...headers };
+  if (out.authorization) out.authorization = out.authorization.replace(/(\S{6})\S+(\S{4})$/, '$1…$2');
+  if (out.cookie) out.cookie = '[redacted]';
+  return out;
+}
+
+function redact(value, depth = 0) {
+  if (depth > 6 || value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
+  const out = {};
+  for (const [k, v] of Object.entries(value)) out[k] = SECRET_KEYS.test(k) && typeof v === 'string' ? '[redacted]' : redact(v, depth + 1);
+  return out;
+}
+
+function truncate(body) {
+  try {
+    const text = JSON.stringify(body);
+    if (text === undefined) return null;
+    return text.length > MAX_BODY ? { truncated: true, preview: text.slice(0, MAX_BODY) } : JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function maskSecrets(doc, def) {
+  for (const [k, field] of Object.entries(def.fields)) {
+    if (field.type === 'password' && typeof doc[k] === 'string') doc[k] = '•••••• (scrypt hash)';
+  }
+  return doc;
+}
+
+const collectionOf = (ev) => {
+  const v = ev.command?.[ev.commandName];
+  return typeof v === 'string' ? v : null;
+};
+
+function cleanCommand(command) {
+  const out = {};
+  for (const [k, v] of Object.entries(command ?? {})) {
+    if (k.startsWith('$') || k === 'lsid' || k === 'txnNumber' || k === 'apiVersion') continue;
+    out[k] = v;
+  }
+  return JSON.parse(JSON.stringify(out));
+}
+
+function summarize(name, cmd) {
+  switch (name) {
+    case 'find': return { filter: cmd.filter, sort: cmd.sort, limit: cmd.limit, skip: cmd.skip, projection: cmd.projection };
+    case 'aggregate': return { pipeline: cmd.pipeline };
+    case 'count': return { query: cmd.query };
+    case 'insert': return { documents: cmd.documents?.length };
+    case 'update': return { updates: cmd.updates?.map((u) => ({ q: u.q, u: u.u })) };
+    case 'delete': return { deletes: cmd.deletes?.map((d) => ({ q: d.q })) };
+    case 'findAndModify': return { query: cmd.query, update: cmd.update };
+    default: return {};
+  }
+}
+
+function countDocs(reply) {
+  if (!reply) return null;
+  if (reply.cursor?.firstBatch) return reply.cursor.firstBatch.length;
+  if (typeof reply.n === 'number') return reply.n;
+  return null;
+}
+
+function planSummary(explain) {
+  const stages = [];
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (node.stage) stages.push({ stage: node.stage, index: node.indexName ?? null });
+    for (const key of ['inputStage', 'queryPlan']) if (node[key]) walk(node[key]);
+    for (const child of node.inputStages ?? []) walk(child);
+  };
+  const planner = explain.queryPlanner ?? explain.stages?.[0]?.$cursor?.queryPlanner;
+  walk(planner?.winningPlan);
+  return {
+    stages,
+    collscan: stages.some((s) => s.stage === 'COLLSCAN'),
+    indexes: stages.filter((s) => s.index).map((s) => s.index),
+    namespace: planner?.namespace ?? null,
+  };
+}
+
+function findQuery(requests, orphans, id) {
+  for (const r of requests.list()) {
+    const q = r.queries.find((x) => x.id === id);
+    if (q) return q;
+  }
+  return orphans.find((q) => q.id === id);
+}
+
+const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const MISSING_UI = `<!doctype html><meta charset="utf-8"><title>CalmAPI devtools</title>
+<body style="font:16px system-ui;max-width:40rem;margin:4rem auto;padding:0 1rem;line-height:1.5">
+<h1>CalmAPI devtools</h1><p>The collector is running, but the UI package is not installed.</p>
+<pre style="background:#f4f4f5;padding:1rem;border-radius:8px">npm install -D @calmapi/devtools</pre>
+<p>The JSON API is available at <a href="/_calm/api/overview">/_calm/api/overview</a>.</p></body>`;

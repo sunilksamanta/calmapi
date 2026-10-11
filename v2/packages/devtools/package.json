@@ -1,0 +1,14 @@
+{
+  "name": "@calmapi/devtools",
+  "version": "2.0.0-alpha.0",
+  "description": "CalmAPI devtools UI: requests, queries, routes, data, mail and doctor for your local CalmAPI app. Development only.",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["index.js", "ui"],
+  "license": "MIT",
+  "homepage": "https://calmapi.dev",
+  "repository": { "type": "git", "url": "git+https://github.com/sunilksamanta/calmapi.git", "directory": "v2/packages/devtools" }
+}

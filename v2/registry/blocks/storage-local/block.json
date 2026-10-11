@@ -1,0 +1,15 @@
+{
+  "name": "storage-local",
+  "title": "Local file storage",
+  "description": "File uploads to local disk: a 'file' resource, type and size allowlists, magic-byte checks and safe downloads.",
+  "version": "1.0.0",
+  "categories": ["storage", "uploads"],
+  "dependencies": ["multer@^2.4.0"],
+  "conflicts": ["storage-s3"],
+  "envVars": {
+    "UPLOAD_DIR": "./uploads",
+    "UPLOAD_MAX_MB": "10",
+    "UPLOAD_ALLOWED_TYPES": "image/png,image/jpeg,image/gif,image/webp,application/pdf"
+  },
+  "docs": "Upload:   curl -H 'Authorization: Bearer <token>' -F file=@photo.png http://localhost:5001/api/files/upload\nDownload: GET /api/files/:id/download   List: GET /api/files   Delete: DELETE /api/files/:id\nAdd uploads/ to .gitignore. Files are private to their owner; change policies in app/resources/file/file.resource.js."
+}

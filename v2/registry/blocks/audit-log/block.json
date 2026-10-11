@@ -1,0 +1,9 @@
+{
+  "name": "audit-log",
+  "title": "Audit log",
+  "description": "Who changed what and when: every create, update and delete with a field-level diff (private fields never recorded). Admin API included.",
+  "version": "1.0.0",
+  "categories": ["security", "compliance"],
+  "envVars": { "AUDIT_RETENTION_DAYS": "365" },
+  "docs": "Every resource write is recorded automatically. Read it: GET /api/audit-log?resource=post&recordId=<id> (admins only).\nExclude a resource with `audit: false` in its resource() options."
+}

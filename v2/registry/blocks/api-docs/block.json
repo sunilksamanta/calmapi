@@ -1,0 +1,9 @@
+{
+  "name": "api-docs",
+  "title": "API docs",
+  "description": "Interactive API reference at /docs, generated from your OpenAPI document (Scalar).",
+  "version": "1.0.0",
+  "categories": ["docs"],
+  "envVars": { "API_DOCS": "on" },
+  "docs": "API reference: http://localhost:5001/docs\nOn by default in development. In production it is served only when API_DOCS=on."
+}

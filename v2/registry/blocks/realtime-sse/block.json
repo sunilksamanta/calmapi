@@ -1,0 +1,8 @@
+{
+  "name": "realtime-sse",
+  "title": "Realtime (SSE)",
+  "description": "Live resource changes over Server-Sent Events, filtered per subscriber with the same policies, scopes and field visibility as the REST API.",
+  "version": "1.0.0",
+  "categories": ["realtime"],
+  "docs": "1. POST /api/realtime/ticket (signed in) -> { data: { ticket } }   (single use, 60 seconds)\n2. new EventSource('/api/realtime/stream?resources=post,product&ticket=' + ticket)\nEvents: post.created / post.updated (serialized record) and post.deleted ({ id }).\nAnonymous visitors can subscribe without a ticket and only receive what 'public' policies allow.\nSingle instance: events are in-process. For several instances, publish events through MongoDB change streams (see block docs)."
+}

@@ -1,0 +1,35 @@
+// Outgoing email. The built-in transport only works in development: it prints a short
+// notice and hands the full message to devtools (open /_calm → Mail).
+// For real delivery add a transport block: `calm add @calmapi/mail-resend` (or SMTP),
+// or register your own: app.mailer.use({ name: 'x', send: async (msg) => {} }).
+
+export function createMailer({ log, mode, from }) {
+  let transport = null;
+  const observers = [];
+
+  return {
+    use(t) {
+      transport = t;
+    },
+    get transport() {
+      return transport?.name ?? (mode === 'production' ? null : 'dev-console');
+    },
+    observe(fn) {
+      observers.push(fn);
+    },
+    async send(message) {
+      const msg = { from, ...message, sentAt: new Date() };
+      for (const fn of observers) fn(msg);
+      const { meta: _meta, ...outgoing } = msg;
+      if (transport) return transport.send(outgoing);
+      if (mode === 'production') {
+        log.error('Email not sent: no mail transport configured. Add one with `calm add @calmapi/mail-resend`.', {
+          subject: msg.subject,
+        });
+        return;
+      }
+      log.info(`Email to ${msg.to}: "${msg.subject}" (dev transport, open /_calm to read it)`);
+      if (mode === 'development' && process.env.CALM_MAIL_PRINT === '1') log.info(msg.text);
+    },
+  };
+}

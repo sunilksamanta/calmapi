@@ -1,0 +1,4 @@
+{
+  "$comment": "Security advisories for code CalmAPI copied into projects. npm audit cannot see owned code, so `calm doctor` checks these patterns against your files.",
+  "advisories": []
+}

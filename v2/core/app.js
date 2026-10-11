@@ -1,0 +1,343 @@
+import { createServer } from 'node:http';
+import { styleText } from 'node:util';
+import express from 'express';
+import mongoose from 'mongoose';
+import { loadConfig } from './config.js';
+import { createLogger } from './logger.js';
+import { createEvents } from './events.js';
+import { createMailer } from './mail.js';
+import { loadResources, loadBlocks, loadAppRoutes } from './loader.js';
+import { compileResource } from './resource/resource.js';
+import { crudRoutes } from './resource/routes.js';
+import { RouteBuilder, toExpressHandler, servicesProxy, policyPreCheck } from './http/router.js';
+import { requestContext, securityHeaders, cors, rateLimit, createMemoryStore, accessLog } from './http/middleware.js';
+import { setupAuth } from './auth/index.js';
+import { buildOpenAPI } from './openapi.js';
+import { runtimeChecks } from './doctor.js';
+import { toHttpError, notFound } from './errors.js';
+
+/**
+ * Build a CalmAPI application from a project folder.
+ * Nothing touches the network until start()/listen().
+ *
+ * @param {{ root?: string, config?: object }} [options]
+ */
+export async function createApp({ root = process.cwd(), config: overrides = {} } = {}) {
+  const config = await loadConfig(root, overrides);
+  const log = createLogger(config.log);
+  const events = createEvents(log);
+  const db = new mongoose.Mongoose();
+  db.set('strictQuery', true);
+  db.set('autoIndex', config.db.autoIndex);
+
+  const registry = new Map();
+  const services = {
+    get(name) {
+      const entry = registry.get(name);
+      if (!entry) throw new Error(`Unknown service "${name}". Known: ${[...registry.keys()].join(', ')}`);
+      return entry.service;
+    },
+    has: (name) => registry.has(name),
+  };
+  services.proxy = servicesProxy(services);
+
+  const background = new Set();
+  const hooks = { start: [], shutdown: [], resource: [], service: [], middleware: [], routes: [], doctor: [], devtools: {} };
+  const rateStore = createMemoryStore();
+
+  const app = {
+    root,
+    config,
+    log,
+    events,
+    mongoose: db,
+    registry,
+    services,
+    routes: [],
+    plugins: [],
+    ext: {},
+    hooks,
+    rateStore,
+    mailer: createMailer({ log, mode: config.mode, from: config.mail?.from ?? `${config.app.name} <no-reply@localhost>` }),
+    express: null,
+    server: null,
+    auth: null,
+    started: false,
+
+    model: (name) => services.get(name).model,
+    service: (name) => services.get(name),
+    openapi: () => buildOpenAPI(app),
+    doctor: () => runtimeChecks(app),
+
+    /** Run work after the response, tracked so tests and shutdown can wait for it. */
+    background(fn) {
+      const p = new Promise((resolve) => setImmediate(resolve))
+        .then(fn)
+        .catch((err) => log.error('Background task failed', { err }))
+        .finally(() => background.delete(p));
+      background.add(p);
+      return p;
+    },
+    async idle() {
+      while (background.size) await Promise.allSettled([...background]);
+      await events.idle();
+    },
+
+    async start() {
+      if (app.started) return app;
+      await connect(app);
+      await Promise.all([...registry.values()].map((entry) => entry.model.init()));
+      for (const fn of hooks.start) await fn(app);
+      app.started = true;
+      return app;
+    },
+
+    async listen(port = config.port, host = config.host) {
+      await app.start();
+      app.server = createServer(app.express);
+      await new Promise((resolve, reject) => {
+        app.server.once('error', reject);
+        app.server.listen(port, host, resolve);
+      });
+      installShutdown(app);
+      printBanner(app);
+      return app.server;
+    },
+
+    async stop() {
+      if (app.server) {
+        const closed = new Promise((resolve) => app.server.close(resolve));
+        app.server.closeIdleConnections?.();
+        const timer = setTimeout(() => app.server?.closeAllConnections?.(), config.shutdownTimeoutMs);
+        await closed;
+        clearTimeout(timer);
+        app.server = null;
+      }
+      for (const fn of [...hooks.shutdown].reverse()) {
+        try {
+          await fn(app);
+        } catch (err) {
+          log.error('Shutdown hook failed', { err });
+        }
+      }
+      await app.idle();
+      await db.disconnect();
+      app.started = false;
+    },
+  };
+
+  // 1. Resources and blocks from disk
+  const loaded = await loadResources(root);
+  const blocks = [...(await loadBlocks(root)), ...(config.plugins ?? [])];
+
+  // 2. Plugins set themselves up before models compile, so they can extend resources.
+  for (const plugin of blocks) {
+    await plugin.setup(pluginApi(app, plugin));
+    app.plugins.push({ name: plugin.name, file: plugin.file ?? null });
+  }
+
+  // 3. Compile resources
+  for (const item of loaded) {
+    let def = item.def;
+    for (const hook of hooks.resource) {
+      const copy = { ...def, fields: { ...def.fields }, options: { ...def.options } };
+      def = Object.freeze((await hook(copy)) ?? copy);
+    }
+    if (registry.has(def.name)) throw new Error(`Two resources are named "${def.name}"`);
+    const model = compileResource(def, db);
+    const entry = { def, model, files: item.files, routesFn: item.routes };
+    entry.service = new item.ServiceClass({ def, model, app });
+    registry.set(def.name, entry);
+  }
+  for (const entry of registry.values()) for (const fn of hooks.service) await fn(entry, app);
+
+  // 4. Routes: auth, plugins, app routes, then each resource (custom before CRUD so
+  //    '/posts/featured' is never swallowed by '/posts/:id').
+  if (config.auth.enabled && registry.has('user')) {
+    app.auth = setupAuth(app);
+    app.routes.push(...app.auth.routes);
+  }
+  for (const { fn, options } of hooks.routes) {
+    const r = new RouteBuilder({ app, prefix: options.prefix ?? '', source: options.source, file: options.file });
+    await fn(r);
+    app.routes.push(...r.routes);
+  }
+  const appRoutes = await loadAppRoutes(root);
+  if (appRoutes) {
+    const r = new RouteBuilder({ app, source: 'app', file: appRoutes.file });
+    await appRoutes.fn(r);
+    app.routes.push(...r.routes);
+  }
+  for (const entry of registry.values()) {
+    if (entry.routesFn) {
+      const r = new RouteBuilder({ app, prefix: entry.def.path, entry, source: 'custom', file: entry.files.routes });
+      await entry.routesFn(r);
+      app.routes.push(...r.routes);
+    }
+    app.routes.push(...crudRoutes(app, entry));
+  }
+  warnDuplicates(app);
+
+  app.express = await buildExpress(app);
+  return app;
+}
+
+function pluginApi(app, plugin) {
+  return {
+    app,
+    name: plugin.name,
+    config: app.config,
+    log: app.log,
+    events: app.events,
+    mongoose: app.mongoose,
+    mailer: app.mailer,
+    on: (pattern, fn) => app.events.on(pattern, fn),
+    onResource: (fn) => app.hooks.resource.push(fn),
+    /** Called with { def, model, service } for every resource once services exist. */
+    onService: (fn) => app.hooks.service.push(fn),
+    routes: (fn, options = {}) => app.hooks.routes.push({ fn, options: { source: `block:${plugin.name}`, file: plugin.file, ...options } }),
+    use: (fn) => app.hooks.middleware.push(fn),
+    onStart: (fn) => app.hooks.start.push(fn),
+    onShutdown: (fn) => app.hooks.shutdown.push(fn),
+    provide: (key, value) => {
+      app.ext[key] = value;
+    },
+    doctor: (fn) => app.hooks.doctor.push(fn),
+    devtools: { panel: (name, fn) => (app.hooks.devtools[name] = fn) },
+  };
+}
+
+async function buildExpress(app) {
+  const { config, log } = app;
+  const ex = express();
+  ex.disable('x-powered-by');
+  ex.set('trust proxy', config.trustProxy);
+  ex.set('query parser', 'simple');
+
+  ex.use(requestContext());
+  if (config.devtools.enabled) {
+    const { setupDevtools } = await import('./devtools/index.js');
+    setupDevtools(app, ex);
+  }
+  ex.use(securityHeaders({ production: config.mode === 'production' }));
+  ex.use(cors(config.cors));
+  if (config.mode !== 'test') ex.use(accessLog(log));
+
+  ex.get('/health/live', (_req, res) => res.json({ status: 'ok' }));
+  ex.get('/health/ready', async (_req, res) => {
+    const up = app.mongoose.connection.readyState === 1 && (await app.mongoose.connection.db.admin().ping().then(() => true, () => false));
+    res.status(up ? 200 : 503).json({ status: up ? 'ok' : 'unavailable', database: up ? 'up' : 'down' });
+  });
+  for (const fn of app.hooks.middleware) ex.use(fn);
+
+  const api = express.Router();
+  api.use(express.json({ limit: config.bodyLimit }));
+  if (config.rateLimit.enabled) api.use(rateLimit({ store: app.rateStore, ...config.rateLimit.global, name: 'global' }));
+  if (app.auth) api.use(app.auth.service.authenticate);
+
+  const authLimiter = config.rateLimit.enabled
+    ? rateLimit({ store: app.rateStore, ...config.rateLimit.auth, name: 'auth', key: (req) => `${req.ip}:${req.path}` })
+    : null;
+
+  for (const route of app.routes) {
+    const chain = [];
+    if (route.rateLimit === 'auth' && authLimiter) chain.push(authLimiter);
+    else if (route.rateLimit && typeof route.rateLimit === 'object' && config.rateLimit.enabled) {
+      chain.push(rateLimit({ store: app.rateStore, name: `${route.method}:${route.path}`, ...route.rateLimit }));
+    }
+    if (route.middleware.length) chain.push(policyPreCheck(route), ...route.middleware);
+    api[route.method.toLowerCase()](route.path, ...chain, toExpressHandler(app, route));
+  }
+
+  if (config.openapi.enabled) api.get(config.openapi.path, (_req, res) => res.json(app.openapi()));
+  api.get('/', (_req, res) =>
+    res.json({ data: { name: config.app.name, version: config.app.version, openapi: config.openapi.enabled ? `${config.apiPrefix}${config.openapi.path}` : null } }),
+  );
+  api.use((_req, _res, next) => next(notFound('Route not found')));
+
+  ex.use(config.apiPrefix, api);
+  ex.get('/', (_req, res) => res.json({ name: config.app.name, api: config.apiPrefix }));
+  ex.use((_req, _res, next) => next(notFound('Route not found')));
+
+  ex.use((err, req, res, _next) => {
+    const httpErr = toHttpError(err);
+    req.calmError = { original: err, http: httpErr };
+    if (httpErr.status >= 500) log.error(`${req.method} ${req.originalUrl} failed`, { err });
+    const body = { error: { code: httpErr.code, message: httpErr.message, requestId: req.id } };
+    if (httpErr.details) body.error.details = httpErr.details;
+    if (httpErr.status >= 500 && config.mode === 'development') body.error.debug = { message: err?.message, stack: err?.stack };
+    if (res.headersSent) return void res.end();
+    res.status(httpErr.status).json(body);
+  });
+  return ex;
+}
+
+async function connect(app) {
+  const { config, log, mongoose: db } = app;
+  const retries = config.db.connectRetries;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await db.connect(config.db.uri, { serverSelectionTimeoutMS: 5000, monitorCommands: Boolean(config.devtools.enabled) });
+      app.hooks.devtools.onConnect?.(db);
+      return;
+    } catch (err) {
+      if (attempt >= retries) {
+        err.message = `Could not connect to MongoDB (${redact(config.db.uri)}): ${err.message}`;
+        throw err;
+      }
+      const wait = Math.min(1000 * 2 ** (attempt - 1), 10_000);
+      log.warn(`MongoDB not reachable, retrying in ${wait}ms (${attempt}/${retries})`);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+}
+
+const redact = (uri = '') => uri.replace(/\/\/([^@/]+)@/, '//***@');
+
+function warnDuplicates(app) {
+  const seen = new Set();
+  for (const r of app.routes) {
+    const key = `${r.method} ${r.path}`;
+    if (seen.has(key)) app.log.warn(`Route registered twice: ${key} (the first one wins)`);
+    seen.add(key);
+  }
+}
+
+function installShutdown(app) {
+  if (app.shutdownInstalled) return;
+  app.shutdownInstalled = true;
+  const stop = async (signal) => {
+    app.log.info(`${signal} received, shutting down gracefully`);
+    try {
+      await app.stop();
+      process.exit(0);
+    } catch (err) {
+      app.log.error('Shutdown failed', { err });
+      process.exit(1);
+    }
+  };
+  process.once('SIGTERM', stop);
+  process.once('SIGINT', stop);
+}
+
+function printBanner(app) {
+  if (app.config.mode === 'test' || app.config.log.level === 'silent') return;
+  const { config } = app;
+  const addr = app.server.address();
+  const base = `http://localhost:${addr.port}`;
+  const line = (label, value) => `  ${styleText('green', '➜')}  ${styleText('bold', label.padEnd(9))} ${value}`;
+  const lines = [
+    '',
+    `  ${styleText(['bold', 'green'], 'CalmAPI')} ${styleText('gray', `${config.app.name} v${config.app.version} (${config.mode})`)}`,
+    '',
+    line('API', `${base}${config.apiPrefix}`),
+  ];
+  if (config.openapi.enabled) lines.push(line('OpenAPI', `${base}${config.apiPrefix}${config.openapi.path}`));
+  if (config.devtools.enabled) lines.push(line('Devtools', styleText('cyan', `${base}/_calm`)));
+  lines.push(
+    '',
+    styleText('gray', `  ${app.registry.size} resources · ${app.routes.length} routes · ${app.plugins.length} blocks · MongoDB connected`),
+    '',
+  );
+  process.stdout.write(`${lines.join('\n')}\n`);
+}

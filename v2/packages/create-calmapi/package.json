@@ -1,0 +1,13 @@
+{
+  "name": "create-calmapi",
+  "version": "2.0.0-alpha.0",
+  "description": "Create a CalmAPI project: npm create calmapi@latest",
+  "type": "module",
+  "bin": { "create-calmapi": "index.js" },
+  "files": ["index.js"],
+  "engines": { "node": ">=22.12" },
+  "dependencies": { "calmapi": "2.0.0-alpha.0" },
+  "license": "MIT",
+  "homepage": "https://calmapi.dev",
+  "repository": { "type": "git", "url": "git+https://github.com/sunilksamanta/calmapi.git", "directory": "v2/packages/create-calmapi" }
+}

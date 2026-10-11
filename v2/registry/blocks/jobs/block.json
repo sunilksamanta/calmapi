@@ -1,0 +1,9 @@
+{
+  "name": "jobs",
+  "title": "Background jobs",
+  "description": "Background jobs and cron on MongoDB (no Redis): retries with backoff, schedules, event triggers, admin API and a devtools panel.",
+  "version": "1.0.0",
+  "categories": ["jobs", "queue", "cron"],
+  "envVars": { "JOBS_WORKER": "on", "JOBS_CONCURRENCY": "4" },
+  "docs": "Jobs live in app/jobs/*.js (see welcome-email.js):\n  export default defineJob({ name, run(data, { app, job, log }), retries, schedule: '0 * * * *' | 'every 5m', on: 'auth.registered' })\nEnqueue from anywhere: ctx.app.ext.jobs.enqueue('name', data, { delay: '10m' })\nAdmin API: GET /api/jobs, GET /api/jobs/stats, POST /api/jobs/:id/retry. Set JOBS_WORKER=off on instances that should not process jobs."
+}

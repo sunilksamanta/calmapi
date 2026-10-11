@@ -1,0 +1,31 @@
+{
+  "name": "{{name}}",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#calm": "./calm/index.js",
+    "#calm/*": "./calm/*",
+    "#app/*": "./app/*"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "calm dev",
+    "start": "node server.js",
+    "test": "node --test",
+    "doctor": "calm doctor",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "mongoose": "^9.0.0"
+  },
+  "devDependencies": {
+    "@calmapi/devtools": "^{{calmVersion}}",
+    "@eslint/js": "^10.0.0",
+    "calmapi": "^{{calmVersion}}",
+    "eslint": "^10.0.0"
+  }
+}

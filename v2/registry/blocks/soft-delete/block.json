@@ -1,0 +1,8 @@
+{
+  "name": "soft-delete",
+  "title": "Soft delete",
+  "description": "Opt-in soft delete per resource: DELETE marks records deleted, queries hide them, admins can list and restore them.",
+  "version": "1.0.0",
+  "categories": ["data"],
+  "docs": "Enable per resource: resource('post', { softDelete: true, fields: {...} })\nDELETE /api/posts/:id now sets deletedAt. Admins: GET /api/posts/trash, POST /api/posts/:id/restore."
+}

@@ -1,0 +1,1 @@
+# Present so npm ignores registry/.gitignore: the built registry/r must ship in the package.

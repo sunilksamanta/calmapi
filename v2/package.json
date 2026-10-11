@@ -1,0 +1,69 @@
+{
+  "name": "calmapi",
+  "version": "2.0.0-alpha.0",
+  "description": "The backend framework you own. Resources, policies, auth, devtools and an upgrade path for Node.js + MongoDB, with every line of framework code in your repo.",
+  "type": "module",
+  "bin": {
+    "calm": "bin/calm.js",
+    "calmapi": "bin/calm.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "core",
+    "templates",
+    "registry/r",
+    "advisories.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "workspaces": [
+    "packages/devtools"
+  ],
+  "scripts": {
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
+    "lint": "eslint .",
+    "build:registry": "node scripts/build-registry.js",
+    "prepack": "node scripts/build-registry.js"
+  },
+  "keywords": [
+    "calmapi",
+    "rest",
+    "api",
+    "framework",
+    "mongodb",
+    "mongoose",
+    "express",
+    "devtools",
+    "mcp",
+    "owned-code"
+  ],
+  "author": "Sunil Kumar Samanta",
+  "license": "MIT",
+  "homepage": "https://calmapi.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sunilksamanta/calmapi.git",
+    "directory": "v2"
+  },
+  "bugs": {
+    "url": "https://github.com/sunilksamanta/calmapi/issues"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1149.0",
+    "@aws-sdk/s3-request-presigner": "^3.1149.0",
+    "@eslint/js": "^10.0.0",
+    "eslint": "^10.0.0",
+    "express": "^5.1.0",
+    "mongoose": "^9.0.0",
+    "multer": "^2.4.0",
+    "nodemailer": "^10.1.0"
+  },
+  "exports": {
+    "./cli": "./src/cli/index.js",
+    "./package.json": "./package.json"
+  }
+}

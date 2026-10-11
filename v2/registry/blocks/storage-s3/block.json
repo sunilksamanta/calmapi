@@ -1,0 +1,19 @@
+{
+  "name": "storage-s3",
+  "title": "S3 file storage",
+  "description": "Direct-to-S3 uploads with presigned URLs (AWS S3, Cloudflare R2, MinIO): a 'file' resource, type and size allowlists, verified completion and private downloads.",
+  "version": "1.0.0",
+  "categories": ["storage", "uploads"],
+  "dependencies": ["@aws-sdk/client-s3@^3.1141.0", "@aws-sdk/s3-request-presigner@^3.1141.0"],
+  "conflicts": ["storage-local"],
+  "envVars": {
+    "S3_BUCKET": "",
+    "S3_REGION": "us-east-1",
+    "S3_ACCESS_KEY_ID": "",
+    "S3_SECRET_ACCESS_KEY": "",
+    "S3_ENDPOINT": "",
+    "UPLOAD_MAX_MB": "10",
+    "UPLOAD_ALLOWED_TYPES": "image/png,image/jpeg,image/gif,image/webp,application/pdf"
+  },
+  "docs": "1. POST /api/files/presign { fileName, contentType, size }  -> { data: { file, upload: { url, method, headers } } }\n2. PUT the bytes to upload.url with upload.headers (straight from the browser)\n3. POST /api/files/:id/complete  -> verifies the object in S3 and marks the file ready\nDownload: GET /api/files/:id/download (302 to a short-lived signed URL)\nFor R2/MinIO set S3_ENDPOINT. Configure CORS on the bucket to allow PUT from your frontend."
+}

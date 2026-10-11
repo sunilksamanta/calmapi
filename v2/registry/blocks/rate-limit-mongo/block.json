@@ -1,0 +1,8 @@
+{
+  "name": "rate-limit-mongo",
+  "title": "Shared rate limits (MongoDB)",
+  "description": "Store rate limit counters in MongoDB so limits hold across every instance of your API.",
+  "version": "1.0.0",
+  "categories": ["security", "scaling"],
+  "docs": "Nothing to configure: once added, config.rateLimit uses MongoDB (collection calm_rate_limits, cleaned up by a TTL index)."
+}

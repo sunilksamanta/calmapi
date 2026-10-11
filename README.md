@@ -1,4 +1,10 @@
 # Calm API
+
+> **CalmAPI 2 (alpha) is here.** A rewrite with resources and policies, secure auth, devtools,
+> blocks, `calm upgrade` and an MCP server for coding agents. It lives in [`v2/`](v2/README.md).
+> Using 1.x? Run `npx calmapi@next doctor` in your project: it checks it against published
+> CalmAPI advisories and tells you how to fix each one. Migration guide: [v2/MIGRATION.md](v2/MIGRATION.md).
+
 ### Production ready Modular REST API generator using NodeJS & MongoDB
 ![Calm API](https://repository-images.githubusercontent.com/352502404/d0e11c00-dce4-11eb-80de-9959e403a244)
 

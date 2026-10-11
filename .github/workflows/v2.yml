@@ -1,0 +1,67 @@
+name: CalmAPI 2
+
+on:
+  push:
+    branches: [master]
+    paths: ['v2/**', '.github/workflows/v2.yml']
+  pull_request:
+    paths: ['v2/**', '.github/workflows/v2.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node }}, MongoDB ${{ matrix.mongo }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+        mongo: ['8.0']
+    services:
+      mongodb:
+        image: mongo:${{ matrix.mongo }}
+        ports: ['27017:27017']
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    defaults:
+      run:
+        working-directory: v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: v2/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build:registry
+      - run: npm test
+        env:
+          MONGODB_TEST_URI: mongodb://127.0.0.1:27017
+
+  pack:
+    name: Pack and scaffold from the tarball
+    runs-on: ubuntu-latest
+    needs: test
+    defaults:
+      run:
+        working-directory: v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npm pack --pack-destination /tmp
+      - name: Create a project from the packed CLI
+        working-directory: /tmp
+        run: |
+          npm install -g /tmp/calmapi-*.tgz
+          calm create smoke-api --yes --no-install --no-git
+          test -f smoke-api/calm/index.js
+          test -f smoke-api/calm.lock
+          calm add --list | grep -q jobs
