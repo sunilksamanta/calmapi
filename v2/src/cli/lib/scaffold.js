@@ -6,6 +6,8 @@ import { humanize } from './strings.js';
 const RENAME = { gitignore: '.gitignore', dockerignore: '.dockerignore', 'env.example': '.env.example' };
 export const TEMPLATES = ['api', 'minimal'];
 export const CORE_DIR = join(PKG_ROOT, 'core');
+/** True when the CLI runs from a checkout (test/ is never published to npm). */
+export const FROM_SOURCE = existsSync(join(PKG_ROOT, 'test')) && process.env.CALM_FROM_NPM !== '1';
 
 /** Files of the owned core, as { 'calm/app.js': content }. */
 export function coreFiles() {
@@ -46,6 +48,15 @@ export function scaffold({ dir, name, template = 'api', mongoUri, calmVersion = 
     }
   }
   put('.env', render(readText(join(PKG_ROOT, 'templates', 'shared', 'env.example')), vars));
+
+  // Running from a git checkout (unpublished): point the dev dependencies at this copy.
+  if (FROM_SOURCE) {
+    const pkgFile = join(dir, 'package.json');
+    const pkg = JSON.parse(readText(pkgFile));
+    pkg.devDependencies.calmapi = `file:${PKG_ROOT}`;
+    pkg.devDependencies['@calmapi/devtools'] = `file:${join(PKG_ROOT, 'packages', 'devtools')}`;
+    writeJson(pkgFile, pkg);
+  }
 
   const core = coreFiles();
   for (const [rel, content] of Object.entries(core)) put(rel, content);
