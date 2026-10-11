@@ -54,7 +54,7 @@ describe('create', () => {
     assert.ok(existsSync(join(work, 'tiny', 'calm/auth/index.js')), 'auth code is there, unused until a user resource exists');
     symlinkSync(join(ROOT, 'node_modules'), join(work, 'tiny', 'node_modules'), 'dir');
     const { NODE_TEST_CONTEXT: _ctx, ...childEnv } = env; // a nested runner would report over IPC otherwise
-    const out = execFileSync(process.execPath, ['--test'], { cwd: join(work, 'tiny'), env: childEnv, encoding: 'utf8' });
+    const out = execFileSync(process.execPath, ['--test', '--test-reporter=tap'], { cwd: join(work, 'tiny'), env: childEnv, encoding: 'utf8' });
     assert.match(out, /# pass 1/);
     const routes = JSON.parse(calm(join(work, 'tiny'), 'routes', '--json'));
     assert.deepEqual(routes.map((r) => `${r.method} ${r.path}`), ['GET /api/hello']);

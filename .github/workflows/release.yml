@@ -4,8 +4,8 @@ name: Release CalmAPI 2
 # that tag. The run tests everything, then publishes calmapi, @calmapi/devtools and create-calmapi
 # to npm and fills in the release notes from CHANGELOG.md.
 #
-# Pushes that change the release setup run the same pipeline as a dry run (`npm publish --dry-run`,
-# nothing is published).
+# Pushes to master or claude/** that touch v2/ run the same pipeline as a dry run
+# (`npm publish --dry-run`, nothing is published).
 #
 # Authentication: npm trusted publishing (OIDC) when it is configured for the packages on
 # npmjs.com, otherwise the NPM_TOKEN repository secret. See v2/RELEASING.md.
@@ -18,9 +18,7 @@ on:
     branches: ['master', 'claude/**']
     paths:
       - '.github/workflows/release.yml'
-      - 'v2/scripts/check-release.js'
-      - 'v2/package.json'
-      - 'v2/packages/*/package.json'
+      - 'v2/**'
 
 permissions:
   contents: read

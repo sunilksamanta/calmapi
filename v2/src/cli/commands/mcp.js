@@ -377,7 +377,7 @@ async function callTool(root, name, args) {
       return { status: res.status, requestId: res.headers.get('x-request-id'), as: args.as ?? 'anonymous', body };
     }
     case 'calm_test': {
-      const res = await capture(process.execPath, ['--test', ...(args.pattern ? [args.pattern] : [])], { cwd: root, env: { NODE_TEST_CONTEXT: undefined } });
+      const res = await capture(process.execPath, ['--test', '--test-reporter=tap', ...(args.pattern ? [args.pattern] : [])], { cwd: root, env: { NODE_TEST_CONTEXT: undefined } });
       return parseTap(`${res.stdout}\n${res.stderr}`);
     }
     case 'calm_audit': {
