@@ -1,7 +1,7 @@
-// Resources: a relationship diagram from ref fields, then one card per resource with
-// its policies and fields.
+// Resources: a relationship diagram from ref fields, then one section per resource with
+// its policies and a dense field table.
 
-import { h, s, icon, mount, policyBadges, fileLink, empty, panelHead, plural } from '../lib.js';
+import { h, s, mount, policyText, fileLink, empty, bar, plural, joined } from '../lib.js';
 import { store } from '../store.js';
 
 const ACTIONS = ['list', 'read', 'create', 'update', 'delete'];
@@ -9,15 +9,10 @@ const ACTIONS = ['list', 'read', 'create', 'update', 'delete'];
 export default {
   id: 'resources',
   label: 'Resources',
-  icon: 'layers',
   badge: () => ({ text: store.overview?.resources.length ?? '' }),
   mount: mountResources,
 };
 
-const FLAG_TONE = {
-  required: 'strong', unique: 'blue', hidden: 'red', writeOnly: 'red', readOnly: 'gray', immutable: 'gray',
-  filterable: 'teal', sortable: 'teal', searchable: 'teal', owner: 'blue', populate: 'purple',
-};
 const FLAG_HINT = {
   hidden: 'Stored, never returned by the API',
   writeOnly: 'Accepted on input, never returned',
@@ -31,78 +26,61 @@ const FLAG_HINT = {
   populate: 'Populated by default',
   required: 'Required on create',
 };
+const FLAG_ORDER = ['required', 'unique', 'readOnly', 'immutable', 'owner', 'filterable', 'sortable', 'searchable', 'populate'];
 
 function mountResources(root, params) {
-  const body = h('div', { class: 'panel-body res-body' });
+  const body = h('div', { class: 'scroll res-scroll' });
+  const jump = h('nav', { class: 'bar-links', 'aria-label': 'Jump to resource' });
 
   function render() {
     const ov = store.overview;
-    if (!ov.resources.length) {
-      return mount(body, empty({ icon: 'layers', title: 'No resources yet', hint: 'A resource is a model, its API and its rules in one file.', code: 'npx calm make resource post' }));
-    }
-    mount(
-      body,
-      h(
-        'section',
-        { class: 'card diagram-card' },
-        h('header', { class: 'card-head' }, h('span', { class: 'card-icon' }, icon('link', 15)), h('h2', { class: 'card-title' }, 'Relationships'), h('span', { class: 'muted small' }, 'From ref fields. Click a resource to jump to it.')),
-        h('div', { class: 'diagram-wrap' }, diagram(ov)),
-      ),
-      h('nav', { class: 'res-index', 'aria-label': 'Resources' }, ov.resources.map((r) => h('a', { href: `#/resources/${r.name}`, class: 'chip-btn' }, icon('layers', 12), r.name, h('span', { class: 'muted num' }, r.fields.length)))),
-      ov.resources.map((r) => resourceCard(r, ov)),
-    );
+    mount(jump, ov.resources.map((r) => h('a', { href: `#/resources/${r.name}` }, r.name)));
+    if (!ov.resources.length) return mount(body, empty('No resources yet. Create one:', { code: 'npx calm make resource post' }));
+    mount(body, h('section', { class: 'res-diagram', 'aria-label': 'Relationships' }, diagram(ov)), ov.resources.map((r) => resourceSection(r, ov)));
   }
 
   function focus(name) {
     if (!name) return;
-    const card = body.querySelector(`#res-${CSS.escape(name)}`);
-    if (!card) return;
-    card.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    card.classList.remove('flash');
-    void card.offsetWidth;
-    card.classList.add('flash');
+    const sec = body.querySelector(`#res-${CSS.escape(name)}`);
+    if (!sec) return;
+    sec.scrollIntoView({ block: 'start' });
+    for (const x of body.querySelectorAll('.res.target')) x.classList.remove('target');
+    sec.classList.add('target');
   }
 
-  mount(root, h('div', { class: 'panel' }, panelHead({ title: 'Resources', sub: 'Your models, their API rules and how they relate. Defined in app/resources.' }), body));
+  mount(root, h('div', { class: 'panel' }, bar('Resources', jump), body));
   render();
   requestAnimationFrame(() => focus(params[0]));
   return { update: (p) => focus(p[0]), refresh: render };
 }
 
-// ---- cards -------------------------------------------------------------------------
+// ---- sections ----------------------------------------------------------------------
 
-function resourceCard(r, ov) {
-  const root = ov.app.root;
-  const files = Object.entries(r.files ?? {}).filter(([, f]) => f);
+function resourceSection(r, ov) {
+  const appRoot = ov.app.root;
+  const resFile = r.files?.resource;
   return h(
     'section',
-    { class: 'card res-card', id: `res-${r.name}` },
+    { class: 'res', id: `res-${r.name}` },
     h(
       'header',
       { class: 'res-head' },
-      h(
-        'div',
-        { class: 'res-title-row' },
-        h('span', { class: 'res-mark', style: { '--h': 168 } }, r.name[0].toUpperCase()),
-        h('h2', { class: 'res-name' }, r.name),
-        h('span', { class: 'mono res-path' }, r.path),
-        h('span', { class: 'spacer' }),
-        h('a', { class: 'btn xs', href: `#/data/${r.name}` }, icon('database', 12), 'Browse data'),
-      ),
-      h(
-        'div',
-        { class: 'res-facts' },
-        h('span', null, h('span', { class: 'muted' }, 'collection '), h('code', null, r.collection)),
-        r.ownerField ? h('span', { title: 'The owner policy compares this field with the signed-in user' }, h('span', { class: 'muted' }, 'owner field '), h('code', null, r.ownerField)) : null,
-        files.map(([kind, f]) => h('span', { class: 'res-file' }, h('span', { class: 'muted' }, `${kind} `), fileLink(root, f, { label: f.split('/').pop() }))),
-      ),
+      h('h2', { class: 'res-name' }, r.name),
+      h('span', { class: 'res-facts' }, joined([
+        h('span', { class: 'mono' }, r.path),
+        h('span', null, h('span', { class: 'muted' }, 'collection '), h('span', { class: 'mono' }, r.collection)),
+        r.ownerField ? h('span', { title: 'The owner policy compares this field with the signed-in user' }, h('span', { class: 'muted' }, 'owner '), h('span', { class: 'mono' }, r.ownerField)) : null,
+      ])),
+      h('span', { class: 'spacer' }),
+      resFile ? fileLink(appRoot, resFile) : null,
+      h('a', { class: 'btn ghost', href: `#/data/${r.name}` }, 'Browse data'),
     ),
     h(
-      'div',
-      { class: 'res-policies' },
+      'dl',
+      { class: 'res-policy' },
       ACTIONS.map((a) => {
         const defaulted = r.defaultedPolicies?.includes(a);
-        return h('div', { class: 'res-policy' }, h('span', { class: 'res-policy-label' }, a), policyBadges(r.policy[a], { explicit: !defaulted, title: defaulted ? `Defaulted to "${r.policy[a]}". Write policy.${a} out so the intent is visible.` : null }));
+        return h('div', { class: 'res-policy-item' }, h('dt', null, a), h('dd', null, policyText(r.policy[a], { explicit: !defaulted, title: defaulted ? `Defaulted to "${r.policy[a]}". Write policy.${a} out so the intent is visible.` : null })));
       }),
     ),
     fieldsTable(r, ov),
@@ -110,41 +88,54 @@ function resourceCard(r, ov) {
 }
 
 function fieldsTable(r, ov) {
-  const head = h('div', { class: 'fd-row fd-head', role: 'row' }, ['Field', 'Type', 'Values', 'Flags', 'Access'].map((t) => h('span', { role: 'columnheader' }, t)));
+  const head = h('tr', null, ['Field', 'Type', 'Values', 'Flags', 'Access'].map((t) => h('th', { scope: 'col' }, t)));
   const rows = r.fields.map((f) => {
     const details = [];
     if (f.ref) {
       const known = ov.resources.some((x) => x.name === f.ref);
-      details.push(known ? h('a', { class: 'ref-link', href: `#/resources/${f.ref}` }, icon('arrowRight', 12), f.ref) : h('span', { class: 'badge t-red', title: 'Unknown resource' }, `${f.ref}?`));
+      details.push(known ? h('a', { class: 'mono', href: `#/resources/${f.ref}`, title: `References ${f.ref}` }, `→ ${f.ref}`) : h('span', { class: 'mono t-red', title: 'Unknown resource' }, `→ ${f.ref}?`));
     }
-    if (f.values) details.push(h('span', { class: 'enum' }, f.values.map((v) => h('span', { class: 'enum-v' }, String(v)))));
-    if (f.default != null && !(Array.isArray(f.default) && !f.default.length && f.values)) details.push(h('span', { class: 'fd-default' }, h('span', { class: 'muted' }, 'default '), h('code', null, typeof f.default === 'string' ? f.default : JSON.stringify(f.default))));
-    const flags = f.flags.map((fl) => h('span', { class: ['flag', `t-${FLAG_TONE[fl] ?? 'gray'}`], title: FLAG_HINT[fl] ?? fl }, fl === 'hidden' || fl === 'writeOnly' ? icon('eyeOff', 11) : null, fl));
+    if (f.values) details.push(h('span', { class: 'mono' }, f.values.map(String).join(' | ')));
+    if (f.default != null && !(Array.isArray(f.default) && !f.default.length && f.values)) details.push(h('span', null, h('span', { class: 'muted' }, 'default '), h('span', { class: 'mono' }, typeof f.default === 'string' ? f.default : JSON.stringify(f.default))));
+    const special = f.flags.filter((fl) => fl === 'hidden' || fl === 'writeOnly');
+    const plain = FLAG_ORDER.filter((fl) => f.flags.includes(fl));
     const access = [];
-    if (!f.output) access.push(h('span', { class: 'access never', title: 'This field never leaves the server' }, icon('lock', 11), 'never returned'));
-    if (f.visibleTo) access.push(h('span', { class: 'access' }, h('span', { class: 'muted' }, 'visible to'), policyBadges(f.visibleTo)));
-    if (f.writableBy) access.push(h('span', { class: 'access' }, h('span', { class: 'muted' }, 'writable by'), policyBadges(f.writableBy)));
-    if (!access.length) access.push(h('span', { class: 'muted small' }, f.input ? 'read, write' : 'read'));
+    if (!f.output) access.push(h('span', { class: 't-red', title: 'This field never leaves the server' }, 'never returned'));
+    if (f.visibleTo) access.push(h('span', null, h('span', { class: 'muted' }, 'visible to '), policyText(f.visibleTo)));
+    if (f.writableBy) access.push(h('span', null, h('span', { class: 'muted' }, 'writable by '), policyText(f.writableBy)));
+    if (!access.length) access.push(h('span', { class: 'muted' }, f.input ? 'read, write' : 'read only'));
     return h(
-      'div',
-      { class: ['fd-row', !f.output && 'is-private'], role: 'row' },
-      h('span', { class: 'fd-name', role: 'cell' }, h('code', null, f.name), h('span', { class: 'io', title: `${f.output ? 'Returned' : 'Not returned'}, ${f.input ? 'accepted on input' : 'not accepted on input'}` }, h('span', { class: ['io-dot', f.output && 'on'] }, 'R'), h('span', { class: ['io-dot', f.input && 'on'] }, 'W'))),
-      h('span', { class: 'fd-type mono', role: 'cell' }, f.type),
-      h('span', { class: 'fd-details', role: 'cell' }, details),
-      h('span', { class: 'fd-flags', role: 'cell' }, flags),
-      h('span', { class: 'fd-access', role: 'cell' }, access),
+      'tr',
+      { class: !f.output ? 'is-private' : null },
+      h('td', { class: 'mono strong' }, f.name),
+      h('td', { class: 'mono muted' }, f.type),
+      h('td', null, joined(details)),
+      h(
+        'td',
+        { class: 'fd-flags' },
+        special.map((fl) => h('span', { class: 'badge', title: FLAG_HINT[fl] }, fl === 'writeOnly' ? 'write-only' : fl)),
+        h('span', { class: 'muted' }, joined(plain.map((fl) => h('span', { title: FLAG_HINT[fl] ?? fl }, fl)))),
+      ),
+      h('td', null, joined(access, ', ')),
     );
   });
-  return h('div', { class: 'fd-table', role: 'table', 'aria-label': `${r.name} fields` }, head, rows, h('div', { class: 'fd-foot' }, `Plus id, createdAt and updatedAt on every document. ${plural(r.fields.length, 'field')} defined.`));
+  return h(
+    'table',
+    { class: 'tbl fields' },
+    h('caption', { class: 'sr-only' }, `${r.name} fields`),
+    h('thead', null, head),
+    h('tbody', null, rows),
+    h('tfoot', null, h('tr', null, h('td', { colspan: '5', class: 'muted' }, `${plural(r.fields.length, 'field')}, plus id, createdAt and updatedAt.`))),
+  );
 }
 
 // ---- diagram -----------------------------------------------------------------------
 
-const W = 176;
-const H = 60;
-const GAP_X = 150;
-const GAP_Y = 26;
-const PAD = 24;
+const W = 148;
+const H = 40;
+const GAP_X = 120;
+const GAP_Y = 22;
+const PAD = 20;
 
 function diagram(ov) {
   const edges = [];
@@ -172,10 +163,10 @@ function diagram(ov) {
   const colOf = (n) => maxD - depth(n);
   // Edges that skip a column would cross the nodes in between: they get a lane above.
   const longEdges = edges.filter((e) => e.from !== e.to && Math.abs(colOf(e.from) - colOf(e.to)) > 1);
-  const laneSpace = longEdges.length ? longEdges.length * 16 + 20 : 0;
+  const laneSpace = longEdges.length ? longEdges.length * 16 + 12 : 0;
   const tallest = Math.max(...cols.map((c) => c.length));
-  const width = PAD * 2 + cols.length * W + (cols.length - 1) * GAP_X + 40;
-  const height = PAD * 2 + laneSpace + tallest * H + (tallest - 1) * GAP_Y + 10;
+  const width = PAD * 2 + cols.length * W + (cols.length - 1) * GAP_X + 30;
+  const height = PAD * 2 + laneSpace + tallest * H + (tallest - 1) * GAP_Y;
   const pos = new Map();
   cols.forEach((c, ci) => {
     const colH = c.length * H + (c.length - 1) * GAP_Y;
@@ -195,10 +186,10 @@ function diagram(ov) {
     const inn = kind === 'fwd' ? 'left' : 'right';
     return { ...e, a, b, kind, out, inn };
   });
-  // Lane edges leave and arrive at the top anchors so they never cross the direct ones.
+  // Lane edges leave and enter through the top of the nodes, so direct edges stay straight.
   const isLong = (p) => longEdges.some((e) => e.from === p.from && e.to === p.to && e.field === p.field);
-  plan.sort((x, y) => Number(isLong(y)) - Number(isLong(x)));
   for (const p of plan) {
+    if (isLong(p)) continue;
     for (const k of [sideKey(p.from, p.out), sideKey(p.to, p.inn)]) sideCount.set(k, (sideCount.get(k) ?? 0) + 1);
   }
   const offset = (n, side) => {
@@ -206,12 +197,12 @@ function diagram(ov) {
     const i = sideIndex.get(k) ?? 0;
     sideIndex.set(k, i + 1);
     const total = sideCount.get(k);
-    return (i - (total - 1) / 2) * 14;
+    return (i - (total - 1) / 2) * 10;
   };
 
-  const svg = s('svg', { class: 'diagram', viewBox: `0 0 ${width} ${height}`, width, height, role: 'img', 'aria-label': `Resource relationships: ${edges.map((e) => `${e.from}.${e.field} references ${e.to}`).join('; ') || 'no references'}` });
+  const svg = s('svg', { class: 'diagram', viewBox: `0 0 ${width} ${height}`, width: '100%', role: 'img', 'aria-label': `Resource relationships: ${edges.map((e) => `${e.from}.${e.field} references ${e.to}`).join('; ') || 'no references'}` });
   svg.style.maxWidth = `${width}px`;
-  const defs = s('defs', null, s('marker', { id: 'dg-arrow', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, s('path', { d: 'M0,1 L9,5 L0,9 z', class: 'dg-head' })));
+  const defs = s('defs', null, s('marker', { id: 'dg-arrow', viewBox: '0 0 8 8', refX: 7.5, refY: 4, markerWidth: 7, markerHeight: 7, markerUnits: 'userSpaceOnUse', orient: 'auto-start-reverse' }, s('path', { d: 'M0,0.5 L7.5,4 L0,7.5', class: 'dg-head' })));
   const edgeLayer = s('g', { class: 'dg-edges' });
   const labelLayer = s('g', { class: 'dg-labels' });
   const nodeLayer = s('g', { class: 'dg-nodes' });
@@ -219,46 +210,42 @@ function diagram(ov) {
 
   for (const p of plan) {
     const { a, b } = p;
-    const oy = offset(p.from, p.out);
-    const iy = offset(p.to, p.inn);
+    const lane = longEdges.findIndex((e) => e.from === p.from && e.to === p.to && e.field === p.field);
+    const oy = lane >= 0 ? 0 : offset(p.from, p.out);
+    const iy = lane >= 0 ? 0 : offset(p.to, p.inn);
     let d;
     let mid;
     if (p.kind === 'self') {
       const x = a.x + W;
-      const y1 = a.y + H / 2 - 10;
-      const y2 = a.y + H / 2 + 10;
-      d = `M${x},${y1} C${x + 56},${y1 - 34} ${x + 56},${y2 + 34} ${x},${y2}`;
-      mid = { x: x + 44, y: a.y + H / 2 };
+      const y1 = a.y + H / 2 - 8;
+      const y2 = a.y + H / 2 + 8;
+      d = `M${x},${y1} C${x + 44},${y1 - 26} ${x + 44},${y2 + 26} ${x},${y2}`;
+      mid = { x: x + 36, y: a.y + H / 2 };
     } else {
       const x1 = p.out === 'right' ? a.x + W : a.x;
       const y1 = a.y + H / 2 + oy;
       const x2 = p.inn === 'left' ? b.x : b.x + W;
       const y2 = b.y + H / 2 + iy;
-      let c1x;
-      let c2x;
-      const lane = longEdges.findIndex((e) => e.from === p.from && e.to === p.to && e.field === p.field);
       if (lane >= 0) {
         const yL = PAD + 4 + lane * 16;
         const dir = p.kind === 'back' ? -1 : 1;
-        const k = 46 * dir;
-        d = `M${x1},${y1} C${x1 + k},${y1} ${x1 + k},${yL} ${x1 + 2 * k},${yL} L${x2 - 2 * k},${yL} C${x2 - k},${yL} ${x2 - k},${y2} ${x2},${y2}`;
-        mid = { x: (x1 + x2) / 2, y: yL + 1 };
+        const r = 6;
+        const sx = a.x + W / 2 + dir * (W / 4) - lane * 8 * dir;
+        const tx = b.x + W / 2 - dir * (W / 4) + lane * 8 * dir;
+        d = `M${sx},${a.y} L${sx},${yL + r} Q${sx},${yL} ${sx + dir * r},${yL} L${tx - dir * r},${yL} Q${tx},${yL} ${tx},${yL + r} L${tx},${b.y}`;
+        mid = { x: (sx + tx) / 2, y: yL };
+      } else if (p.kind === 'fwd' || p.kind === 'back') {
+        const dx = (x2 - x1) / 2;
+        d = `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
+        mid = { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
       } else {
-        if (p.kind === 'fwd' || p.kind === 'back') {
-          const dx = (x2 - x1) / 2;
-          c1x = x1 + dx;
-          c2x = x2 - dx;
-        } else {
-          const bulge = 60 + Math.abs(y2 - y1) * 0.15;
-          c1x = x1 + bulge;
-          c2x = x2 + bulge;
-        }
-        d = `M${x1},${y1} C${c1x},${y1} ${c2x},${y2} ${x2},${y2}`;
-        mid = { x: (x1 + 3 * c1x + 3 * c2x + x2) / 8, y: (y1 + 3 * y1 + 3 * y2 + y2) / 8 };
+        const bulge = 50 + Math.abs(y2 - y1) * 0.15;
+        d = `M${x1},${y1} C${x1 + bulge},${y1} ${x2 + bulge},${y2} ${x2},${y2}`;
+        mid = { x: x1 + bulge * 0.75, y: (y1 + y2) / 2 };
       }
     }
     edgeLayer.append(s('path', { d, class: ['dg-edge', b.missing && 'missing'].filter(Boolean).join(' '), 'marker-end': 'url(#dg-arrow)', 'data-from': p.from, 'data-to': p.to }));
-    labelLayer.append(s('text', { x: mid.x, y: mid.y - 6, class: 'dg-label', 'text-anchor': 'middle', 'data-from': p.from, 'data-to': p.to }, `${p.field}${p.many ? '[]' : ''}`));
+    labelLayer.append(s('text', { x: mid.x, y: mid.y - 5, class: 'dg-label', 'text-anchor': 'middle', 'data-from': p.from, 'data-to': p.to }, `${p.field}${p.many ? '[]' : ''}`));
   }
 
   for (const [name, n] of nodes) {
@@ -267,11 +254,9 @@ function diagram(ov) {
     const g = s(
       'g',
       { class: ['dg-node', n.missing && 'missing'].filter(Boolean).join(' '), transform: `translate(${p.x},${p.y})`, tabindex: n.missing ? null : '0', role: n.missing ? null : 'link', 'aria-label': n.missing ? null : `Resource ${name}` },
-      s('rect', { width: W, height: H, rx: 10, class: 'dg-box' }),
-      s('rect', { x: 12, y: 16, width: 28, height: 28, rx: 7, class: 'dg-mark' }),
-      s('text', { x: 26, y: 35, 'text-anchor': 'middle', class: 'dg-mark-text' }, name[0].toUpperCase()),
-      s('text', { x: 50, y: 28, class: 'dg-name' }, name),
-      s('text', { x: 50, y: 45, class: 'dg-sub' }, sub),
+      s('rect', { x: 0.5, y: 0.5, width: W - 1, height: H - 1, rx: 3, class: 'dg-box' }),
+      s('text', { x: 10, y: 17, class: 'dg-name' }, name),
+      s('text', { x: 10, y: 31, class: 'dg-sub' }, sub),
     );
     if (!n.missing) {
       const go = () => (location.hash = `#/resources/${name}`);
@@ -290,8 +275,6 @@ function diagram(ov) {
     nodeLayer.append(g);
   }
 
-  if (!edges.length) {
-    return h('div', null, svg, h('p', { class: 'muted small center' }, 'No ref fields yet. Add one with ', h('code', null, "f.ref('user')"), ' to link resources.'));
-  }
+  if (!edges.length) return h('div', null, svg, h('p', { class: 'muted' }, 'No ref fields yet. Link resources with ', h('code', null, "f.ref('user')"), '.'));
   return svg;
 }

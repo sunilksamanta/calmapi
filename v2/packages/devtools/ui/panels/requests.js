@@ -4,7 +4,7 @@
 import {
   h, icon, mount, clear, api, fmtMs, relTime, clock, fullDate, methodTag, statusTag, statusClass, pathView, STATUS_TEXT,
   codeBlock, jsonLine, jsonViewer, empty, loading, errorBox, searchBox, segmented, tabs, copy, toast, plural, editorUrl, relPath,
-  bar, joined, hoverTip, hideTip, storage,
+  bar, joined, hoverTip, hideTip, storage, actorMark,
 } from '../lib.js';
 import { store, on, getRecord, clearRequests, authHeader, startActAs } from '../store.js';
 import { logRow } from './logs.js';
@@ -20,8 +20,7 @@ export default {
   id: 'requests',
   label: 'Requests',
   badge: () => {
-    const errors = store.requests.filter((r) => r.status >= 500).length;
-    return { text: store.requests.length || '', tone: errors ? 'red' : null, title: errors ? `${plural(errors, 'server error')} (5xx)` : null };
+    return { text: store.requests.length || '' };
   },
   mount: mountRequests,
 };
@@ -30,11 +29,12 @@ function matches(r) {
   if (state.quick === 'errors' && !(r.status >= 400)) return false;
   if (state.quick === 'slow' && !(r.durationMs >= SLOW_MS)) return false;
   if (state.quick === 'heavy' && !(r.queries > MANY_QUERIES)) return false;
+  if (state.quick === 'agent' && !r.agent) return false;
   const q = state.filter.trim().toLowerCase();
   if (!q) return true;
   return q.split(/\s+/).every((term) => {
     if (/^[1-5]xx$/.test(term)) return String(r.status ?? '').startsWith(term[0]);
-    const hay = `${r.method} ${r.path} ${routeOf(r) ?? ''} ${r.status ?? ''} ${r.user?.name ?? 'anonymous'} ${r.error ?? ''}`.toLowerCase();
+    const hay = `${r.method} ${r.path} ${routeOf(r) ?? ''} ${r.status ?? ''} ${r.user?.name ?? 'anonymous'} ${r.error ?? ''} ${r.agent ? `agent ${r.agent}` : ''}`.toLowerCase();
     return hay.includes(term);
   });
 }
@@ -71,7 +71,7 @@ function mountRequests(root, params) {
     h('span', { class: 'c-bar', title: 'Duration, with time spent in MongoDB shaded' }, 'Time split'),
     h('span', { class: 'num' }, 'When'),
   );
-  const list = h('div', { class: 'rq-rows', role: 'listbox', 'aria-label': 'Requests', tabindex: '0' });
+  const list = h('div', { class: 'rq-rows', role: 'listbox', 'aria-label': 'Requests', tabindex: '0', onpointerdown: () => list.classList.remove('kbd') });
   const scroll = h('div', { class: 'scroll rq-scroll' }, head, list);
   const listPane = h('section', { class: 'rq-list' }, scroll);
   const detail = h('section', { class: 'rq-detail', 'aria-label': 'Request detail' });
@@ -126,6 +126,7 @@ function mountRequests(root, params) {
       { value: 'errors', label: 'Errors', title: 'Status 400 and above' },
       { value: 'slow', label: 'Slow', title: `${SLOW_MS} ms or more` },
       { value: 'heavy', label: 'N+1', title: `More than ${MANY_QUERIES} queries` },
+      { value: 'agent', label: 'Agent', title: 'Sent by an AI agent (X-Calm-Agent header)' },
     ],
     state.quick,
     (v) => {
@@ -184,13 +185,14 @@ function mountRequests(root, params) {
     const el = h(
       'div',
       {
-        class: 'rq-row',
+        class: ['rq-row', r.agent && 'by-agent'],
         role: 'option',
         id: `rq-${r.id}`,
         'aria-selected': String(r.id === openId),
         dataset: { id: r.id },
         onclick: () => open(r.id),
       },
+      r.agent ? actorMark('agent', `Sent by an AI agent: ${r.agent}`) : null,
       statusTag(r.status),
       methodTag(r.method),
       h('span', { class: 'rq-path', title: routeOf(r) ? `${r.path}\nRoute ${routeOf(r)}` : r.path }, pathView(r.path, routeOf(r)), r.error ? h('span', { class: ['rq-err', statusClass(r.status)] }, r.error) : null),
@@ -353,6 +355,13 @@ function mountRequests(root, params) {
           methodTag(rec.method),
           h('h2', { class: 'dt-path', title: rec.path }, pathView(rec.path, routeOf(rec))),
           h(
+            'span',
+            { class: 'dt-actions' },
+            h('button', { class: 'btn ghost', onclick: () => copy(toCurl(rec), 'curl command copied') }, 'Copy as curl'),
+            h('button', { class: 'btn ghost', onclick: () => openInPlayground(rec), title: 'Edit and resend in the Playground' }, 'Edit in Playground'),
+            h('button', { class: 'btn primary', onclick: () => replay(rec), title: store.actAs ? `Replay as ${store.actAs.user.name}` : 'Replay this request' }, replayLabel),
+          ),
+          h(
             'div',
             { class: 'dt-nav' },
             h('button', { class: 'icon-btn', 'aria-label': 'Newer request (k)', title: 'Newer (k)', disabled: idx <= 0, onclick: () => step(-1) }, icon('chevronUp', 14)),
@@ -371,16 +380,10 @@ function mountRequests(root, params) {
               h('span', { class: ['mono', rec.durationMs >= SLOW_MS && 't-amber'] }, fmtMs(rec.durationMs)),
               h('span', { class: heavy ? 't-amber' : null }, plural(rec.queries.length, 'query', 'queries'), rec.queries.length ? h('span', { class: 'mono' }, ` ${fmtMs(dbMs)}`) : null),
               rec.user ? h('span', { title: [rec.user.email, (rec.user.roles ?? []).join(', ')].filter(Boolean).join(' · ') }, rec.user.name) : 'anonymous',
+              rec.agent ? h('span', { class: 'dt-agent', title: `Sent by an AI agent (X-Calm-Agent: ${rec.agent})` }, actorMark('agent'), rec.agent) : null,
               h('span', { class: 'mono', title: fullDate(rec.startedAt) }, clock(rec.startedAt)),
               h('button', { class: 'link-btn mono', title: `Copy request id ${rec.id}`, onclick: () => copy(rec.id, 'Request id copied') }, rec.id.slice(0, 8)),
             ]),
-          ),
-          h(
-            'span',
-            { class: 'dt-actions' },
-            h('button', { class: 'btn ghost', onclick: () => copy(toCurl(rec), 'curl command copied') }, 'Copy as curl'),
-            h('button', { class: 'btn ghost', onclick: () => openInPlayground(rec), title: 'Edit and resend in the Playground' }, 'Edit in Playground'),
-            h('button', { class: 'btn primary', onclick: () => replay(rec), title: store.actAs ? `Replay as ${store.actAs.user.name}` : 'Replay this request' }, replayLabel),
           ),
         ),
       ),
@@ -440,8 +443,8 @@ function mountRequests(root, params) {
       hideTip();
     },
     onKey(e) {
-      if (e.key === 'j' || e.key === 'ArrowDown') step(1);
-      else if (e.key === 'k' || e.key === 'ArrowUp') step(-1);
+      if (e.key === 'j' || e.key === 'ArrowDown') (list.classList.add('kbd'), step(1));
+      else if (e.key === 'k' || e.key === 'ArrowUp') (list.classList.add('kbd'), step(-1));
       else if (e.key === 'Enter' && state.selected && !openId) open(state.selected);
       else if (e.key === 'Escape' && openId) close();
       else return;
@@ -621,8 +624,8 @@ export function queryRow(q, { index, offset, absolute, repeated: rep } = {}) {
   };
   const line = h(
     'button',
-    { class: 'qr-line', 'aria-expanded': 'false', type: 'button' },
-    h('span', { class: 'qr-idx num' }, index ?? ''),
+    { class: ['qr-line', index == null && 'no-idx'], 'aria-expanded': 'false', type: 'button' },
+    index != null ? h('span', { class: 'qr-idx num' }, index) : null,
     h('span', { class: 'qr-cmd' }, rep ? h('span', { class: 'dot dot-amber', title: 'Repeated with the same shape in this request (possible N+1)' }) : null, q.command),
     h('span', { class: 'qr-coll' }, q.collection ?? q.database),
     h('span', { class: 'qr-sum' }, jsonLine(value)),

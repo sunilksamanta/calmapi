@@ -1,9 +1,9 @@
 // Playground: send requests to your API, optionally as any user (a real session from
 // POST /_calm/api/act-as, kept in memory only).
 
-import { h, icon, mount, clear, methodChip, statusChip, STATUS_TEXT, fmtMs, fmtBytes, jsonViewer, empty, tabs, popover, pickerList, userOption, avatar, api, toast, closePopover, policyBadges, relTime, panelHead, copy } from '../lib.js';
+import { h, icon, mount, clear, methodTag, statusTag, STATUS_TEXT, fmtMs, fmtBytes, jsonViewer, empty, tabs, popover, pickerList, userOption, api, toast, closePopover, policyText, routePath, relTime, bar, copy, joined } from '../lib.js';
 import { store, on, startActAs, stopActAs, authHeader } from '../store.js';
-import { pathParts, isExplicit } from './routes.js';
+import { isExplicit } from './routes.js';
 import { sampleBody } from './data.js';
 
 const METHODS = ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'];
@@ -14,13 +14,13 @@ let lastResponse = null;
 export default {
   id: 'playground',
   label: 'Playground',
-  icon: 'send',
-  badge: () => (store.actAs ? { text: firstName(store.actAs.user.name), tone: 'teal' } : null),
+  badge: () => (store.actAs ? { text: firstName(store.actAs.user.name), title: `Acting as ${store.actAs.user.name}` } : null),
   mount: mountPlayground,
 };
 
 const firstName = (n) => String(n ?? '').split(' ')[0];
 const withBody = (m) => m !== 'GET' && m !== 'HEAD';
+const methodKey = (m) => ({ GET: 'get', POST: 'post', PATCH: 'put', PUT: 'put', DELETE: 'del' })[m] ?? 'other';
 
 function routeRegex(path) {
   return new RegExp(`^${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/:[A-Za-z_]\w*/g, '[^/]+')}/?$`);
@@ -46,16 +46,17 @@ function mountPlayground(root) {
   }
 
   const methodSel = h('select', { class: 'input method-select', 'aria-label': 'HTTP method', onchange: () => { draft.method = methodSel.value; syncMethod(); } }, METHODS.map((m) => h('option', { value: m, selected: m === draft.method }, m)));
-  const pathInput = h('input', { class: 'input mono path-input', value: draft.path, placeholder: `${store.overview.app.apiPrefix}/...`, 'aria-label': 'Path', spellcheck: false, autocomplete: 'off', 'aria-autocomplete': 'list', 'aria-expanded': 'false' });
+  const pathInput = h('input', { class: 'input path-input', value: draft.path, placeholder: `${store.overview.app.apiPrefix}/...`, 'aria-label': 'Path', spellcheck: false, autocomplete: 'off', 'aria-autocomplete': 'list', 'aria-expanded': 'false' });
   const suggest = h('div', { class: 'suggest', role: 'listbox', hidden: true });
-  const sendBtn = h('button', { class: 'btn primary send-btn', onclick: () => send() }, icon('send', 14), 'Send', h('kbd', { class: 'on-accent' }, 'Ctrl ↵'));
-  const bodyArea = h('textarea', { class: 'input mono body-input', spellcheck: false, placeholder: '{\n  "title": "Hello"\n}', 'aria-label': 'JSON body', value: draft.body });
-  const bodyState = h('span', { class: 'body-state' });
+  const sendBtn = h('button', { class: 'btn primary send-btn', type: 'button', title: 'Send (Ctrl + Enter)', onclick: () => send() }, 'Send');
+  const asBtn = h('button', { class: 'btn ghost picker-btn', type: 'button', 'aria-haspopup': 'dialog' });
+  const tokenBtn = h('button', { class: 'btn ghost', type: 'button', title: 'Copy the bearer token of this session', onclick: () => store.actAs && copy(store.actAs.token, 'Session token copied') }, 'Copy token');
+  const bodyArea = h('textarea', { class: 'input body-input', spellcheck: false, placeholder: '{\n  "title": "Hello"\n}', 'aria-label': 'JSON body', value: draft.body });
+  const bodyState = h('span', { class: 'muted' });
   const matchLine = h('div', { class: 'pg-match' });
-  const authLine = h('div', { class: 'pg-auth' });
   const historyEl = h('div', { class: 'pg-history' });
-  const responseEl = h('section', { class: 'card pg-response', 'aria-label': 'Response', 'aria-live': 'polite' });
-  const bodyWrap = h('div', { class: 'pg-body' });
+  const responseEl = h('section', { class: 'pg-response', 'aria-label': 'Response', 'aria-live': 'polite' });
+  const bodyPane = h('div', { class: 'pg-body' });
 
   // ---- suggestions ---------------------------------------------------------------
 
@@ -67,7 +68,7 @@ function mountPlayground(root) {
     sugItems = routes
       .filter((r) => !q || `${r.method} ${r.path} ${r.summary ?? ''}`.toLowerCase().includes(q))
       .sort((a, b) => (a.method === draft.method ? -1 : 0) - (b.method === draft.method ? -1 : 0))
-      .slice(0, 9);
+      .slice(0, 10);
     if (!sugItems.length || (sugItems.length === 1 && sugItems[0].path === pathInput.value && sugItems[0].method === draft.method)) return hideSuggest();
     sugActive = Math.min(sugActive, sugItems.length - 1);
     mount(
@@ -76,8 +77,8 @@ function mountPlayground(root) {
         h(
           'button',
           { type: 'button', class: ['sug', i === sugActive && 'active'], role: 'option', 'aria-selected': String(i === sugActive), onmousedown: (e) => (e.preventDefault(), pick(r)) },
-          methodChip(r.method, 'sm'),
-          h('span', { class: 'sug-path mono' }, pathParts(r.path)),
+          methodTag(r.method),
+          h('span', { class: 'sug-path' }, routePath(r.path)),
           h('span', { class: 'sug-sum' }, r.summary ?? ''),
         ),
       ),
@@ -142,14 +143,23 @@ function mountPlayground(root) {
   function validate() {
     const text = bodyArea.value.trim();
     bodyArea.classList.remove('invalid');
-    if (!text) return mount(bodyState, h('span', { class: 'muted' }, withBody(draft.method) ? 'Empty body' : 'No body for GET'));
+    if (!text) {
+      bodyState.className = 'muted';
+      bodyState.textContent = withBody(draft.method) ? 'empty' : `not sent with ${draft.method}`;
+      bodyState.title = '';
+      return null;
+    }
     try {
       JSON.parse(text);
-      mount(bodyState, h('span', { class: 't-green-text' }, icon('check', 12), 'Valid JSON'));
+      bodyState.className = 'muted';
+      bodyState.textContent = 'valid JSON';
+      bodyState.title = '';
       return true;
     } catch (err) {
       bodyArea.classList.add('invalid');
-      mount(bodyState, h('span', { class: 't-red-text', title: err.message }, icon('alertCircle', 12), 'Invalid JSON'));
+      bodyState.className = 't-red';
+      bodyState.textContent = 'invalid JSON';
+      bodyState.title = err.message;
       return false;
     }
   }
@@ -168,66 +178,64 @@ function mountPlayground(root) {
   });
 
   function syncMethod() {
-    bodyWrap.classList.toggle('disabled', !withBody(draft.method));
-    methodSel.dataset.method = draft.method;
+    bodyPane.classList.toggle('disabled', !withBody(draft.method));
+    methodSel.className = `input method-select m-${methodKey(draft.method)}`;
     validate();
     renderMatch();
   }
 
   function renderMatch() {
     const r = matchRoute(draft.method, draft.path || '');
-    if (!r) return mount(matchLine, draft.path ? h('span', { class: 'muted' }, icon('info', 13), 'No declared route matches; you will probably get a 404.') : h('span', { class: 'muted' }, 'Type a path or pick a route. Suggestions come from your routes.'));
+    if (!r) return mount(matchLine, h('span', { class: 'muted' }, draft.path ? 'No declared route matches this path. Expect a 404.' : 'Type a path or pick one of your routes.'));
     const needsUser = !String(r.policy).split('|').map((t) => t.trim()).includes('public');
     mount(
       matchLine,
-      h('span', { class: 'pg-match-route' }, icon('route', 13), methodChip(r.method, 'sm'), h('span', { class: 'mono' }, r.path)),
-      policyBadges(r.policy, { explicit: isExplicit(r) }),
-      r.summary ? h('span', { class: 'muted' }, r.summary) : null,
-      needsUser && !store.actAs && store.overview.auth ? h('span', { class: 't-amber-text' }, icon('alert', 12), 'Needs a signed-in user: act as someone first.') : null,
+      joined([
+        h('span', null, h('span', { class: 'muted' }, 'Route '), h('span', { class: 'mono' }, routePath(r.path))),
+        policyText(r.policy, { explicit: isExplicit(r) }),
+        r.summary ? h('span', { class: 'muted' }, r.summary) : null,
+        needsUser && !store.actAs && store.overview.auth ? h('span', { class: 't-amber' }, 'needs a signed-in user: pick one in As') : null,
+      ]),
     );
   }
 
   // ---- act as ----------------------------------------------------------------------
 
   function renderAuth() {
-    if (!store.overview.auth) return mount(authLine, h('span', { class: 'muted' }, icon('info', 13), 'Auth is not enabled in this app, so requests are anonymous.'));
     const a = store.actAs;
-    if (a) {
-      return mount(
-        authLine,
-        h(
-          'div',
-          { class: 'actas-card' },
-          avatar(a.user.name, 28),
-          h('div', { class: 'actas-text' }, h('div', null, 'Acting as ', h('b', null, a.user.name), (a.user.roles ?? []).filter((r) => r !== 'user').map((r) => h('span', { class: `badge t-${r === 'admin' ? 'purple' : 'gray'}` }, r))), h('div', { class: 'muted small' }, `${a.user.email ?? a.user.id} · real session token, kept in memory`)),
-          h('button', { class: 'btn ghost', onclick: () => copy(a.token, 'Session token copied'), title: 'Copy the bearer token' }, icon('key', 13), 'Token'),
-          h('button', { class: 'btn', onclick: stopActAs }, icon('stop', 12), 'Stop'),
-        ),
-      );
+    if (!store.overview.auth) {
+      asBtn.disabled = true;
+      asBtn.title = 'Auth is not enabled in this app, so requests are anonymous';
+      mount(asBtn, h('span', { class: 'muted' }, 'As'), 'Anonymous');
+      tokenBtn.hidden = true;
+      return;
     }
-    const btn = h('button', { class: 'btn', 'aria-haspopup': 'dialog' }, icon('users', 14), 'Act as a user', icon('chevronDown', 14));
-    btn.addEventListener('click', () =>
-      popover(
-        btn,
-        pickerList({
-          placeholder: 'Search users by name or email',
-          load: (q) => api(`/users?q=${encodeURIComponent(q)}`),
-          render: userOption,
-          onPick: async (u) => {
-            closePopover();
-            try {
-              await startActAs(u);
-              toast(`Acting as ${u.name}`, { tone: 'ok', detail: 'Playground requests and Replay now carry a real session for this user.' });
-            } catch (err) {
-              toast(err.message, { tone: 'error' });
-            }
-          },
-        }),
-        { width: 340 },
-      ),
-    );
-    mount(authLine, h('div', { class: 'actas-card off' }, h('span', { class: 'avatar anon lg' }, icon('eyeOff', 14)), h('div', { class: 'actas-text' }, h('div', null, 'Anonymous'), h('div', { class: 'muted small' }, 'No Authorization header is sent.')), btn));
+    asBtn.title = a ? `Requests carry a real session for ${a.user.email ?? a.user.name}` : 'Send requests as a user (creates a real session, kept in memory)';
+    mount(asBtn, h('span', { class: 'muted' }, 'As'), h('span', { class: a ? 'strong' : null }, a ? a.user.name : 'Anonymous'), icon('chevronDown', 12));
+    tokenBtn.hidden = !a;
   }
+
+  asBtn.addEventListener('click', () =>
+    popover(
+      asBtn,
+      pickerList({
+        placeholder: 'Search users by name or email',
+        fixed: [{ id: null, name: 'Anonymous', sub: store.actAs ? 'Stop acting, send no Authorization header' : 'No Authorization header' }],
+        load: (q) => api(`/users?q=${encodeURIComponent(q)}`),
+        render: userOption,
+        onPick: async (u) => {
+          closePopover();
+          if (!u.id) return stopActAs();
+          try {
+            await startActAs(u);
+          } catch (err) {
+            toast(err.message, { tone: 'error' });
+          }
+        },
+      }),
+      { width: 320, align: 'end' },
+    ),
+  );
 
   // ---- send ----------------------------------------------------------------------
 
@@ -237,7 +245,7 @@ function mountPlayground(root) {
     if (!path) return pathInput.focus();
     if (/^https?:\/\//i.test(path)) {
       const u = new URL(path);
-      if (u.origin !== location.origin) return toast('The Playground only calls this app (same origin).', { tone: 'warn' });
+      if (u.origin !== location.origin) return toast('The Playground only calls this app', { tone: 'warn' });
       path = u.pathname + u.search;
     }
     if (!path.startsWith('/')) path = `/${path}`;
@@ -250,7 +258,7 @@ function mountPlayground(root) {
       headers['Content-Type'] = 'application/json';
     }
     sendBtn.disabled = true;
-    mount(responseEl, h('div', { class: 'pg-wait' }, h('span', { class: 'spinner' }), `${method} ${path}`));
+    mount(responseEl, h('div', { class: 'empty loading' }, `${method} ${path}…`));
     const started = performance.now();
     try {
       const res = await fetch(path, { method, headers, body });
@@ -276,29 +284,23 @@ function mountPlayground(root) {
 
   function renderResponse() {
     const r = lastResponse;
-    if (!r) {
-      return mount(responseEl, empty({ icon: 'send', title: 'Send a request', hint: 'The response shows up here. It is also recorded in Requests, with its queries and logs. Tip: Ctrl + Enter sends.' }));
-    }
-    if (r.error) return mount(responseEl, empty({ icon: 'alertCircle', title: 'Network error', hint: r.error, tone: 'error' }));
+    if (!r) return mount(responseEl, h('div', { class: 'pane-head' }, h('span', { class: 'pane-title' }, 'Response')), empty('Nothing sent yet. Ctrl + Enter sends.'));
+    if (r.error) return mount(responseEl, h('div', { class: 'pane-head' }, h('span', { class: 'pane-title' }, 'Response')), h('div', { class: 'empty is-error' }, `Network error: ${r.error}`));
     let tab = 'body';
-    const content = h('div', { class: 'pg-resp-body' });
+    const content = h('div', { class: 'scroll pg-resp-body' });
     const paint = () => {
-      if (tab === 'headers') return mount(content, h('dl', { class: 'kv mono' }, r.headers.map(([k, v]) => [h('dt', null, k), h('dd', null, v)])));
-      if (r.json !== undefined) return mount(content, jsonViewer(r.json, { open: 3 }));
-      return mount(content, r.text ? h('pre', { class: 'code plain' }, r.text) : empty({ icon: 'braces', title: 'Empty body', hint: `${r.status} ${STATUS_TEXT[r.status] ?? ''}` }));
+      if (tab === 'headers') return mount(content, h('dl', { class: 'kv mono pad' }, r.headers.map(([k, v]) => [h('dt', null, k), h('dd', null, v)])));
+      if (r.json !== undefined) return mount(content, h('div', { class: 'pad' }, jsonViewer(r.json, { open: 3 })));
+      return mount(content, r.text ? h('pre', { class: 'code plain pad' }, r.text) : empty('Empty body.'));
     };
     mount(
       responseEl,
       h(
-        'header',
-        { class: 'pg-resp-head' },
-        statusChip(r.status, 'lg'),
-        h('b', null, STATUS_TEXT[r.status] ?? ''),
-        h('span', { class: 'muted num' }, fmtMs(r.ms)),
-        h('span', { class: 'muted num' }, fmtBytes(r.size)),
-        r.as ? h('span', { class: 'muted small' }, icon('user', 12), `as ${r.as}`) : null,
+        'div',
+        { class: 'pane-head' },
+        h('span', { class: 'resp-line' }, statusTag(r.status), h('span', null, STATUS_TEXT[r.status] ?? ''), h('span', { class: 'muted' }, joined([h('span', { class: 'mono' }, fmtMs(r.ms)), h('span', { class: 'mono' }, fmtBytes(r.size)), r.as ? `as ${r.as}` : null]))),
         h('span', { class: 'spacer' }),
-        r.requestId ? h('a', { class: 'btn xs', href: `#/requests/${r.requestId}` }, icon('activity', 12), 'Open in Requests') : null,
+        r.requestId ? h('a', { class: 'btn ghost', href: `#/requests/${r.requestId}` }, 'Open in Requests') : null,
       ),
       tabs(
         [
@@ -317,11 +319,12 @@ function mountPlayground(root) {
     if (!history.length) return clear(historyEl);
     mount(
       historyEl,
-      h('div', { class: 'section-label' }, 'Recent'),
+      h('div', { class: 'pane-head' }, h('span', { class: 'pane-title' }, 'History'), h('span', { class: 'muted' }, history.length)),
       history.map((x) =>
         h(
           'button',
           {
+            type: 'button',
             class: 'hist-row',
             title: 'Load this request',
             onclick: () => {
@@ -334,11 +337,11 @@ function mountPlayground(root) {
               syncMethod();
             },
           },
-          methodChip(x.method, 'sm'),
+          statusTag(x.status),
+          methodTag(x.method),
           h('span', { class: 'mono ellipsis' }, x.path),
-          statusChip(x.status, 'sm'),
-          h('span', { class: 'muted num small' }, fmtMs(x.ms)),
-          h('span', { class: 'muted small' }, relTime(x.at)),
+          h('span', { class: 'mono muted num' }, fmtMs(x.ms)),
+          h('span', { class: 'muted num' }, relTime(x.at)),
         ),
       ),
     );
@@ -353,28 +356,20 @@ function mountPlayground(root) {
     }
   };
 
-  bodyWrap.append(h('div', { class: 'pg-body-head' }, h('span', { class: 'section-label' }, 'Body', h('span', { class: 'muted' }, ' JSON')), bodyState, h('span', { class: 'spacer' }), h('button', { class: 'btn ghost xs', onclick: format }, icon('wrap', 12), 'Format')), bodyArea);
+  bodyPane.append(h('div', { class: 'pane-head' }, h('span', { class: 'pane-title' }, 'Body'), bodyState, h('span', { class: 'spacer' }), h('button', { class: 'btn ghost', type: 'button', onclick: format }, 'Format')), bodyArea);
 
   mount(
     root,
     h(
       'div',
       { class: 'panel' },
-      panelHead({ title: 'Playground', sub: 'Call your API as anyone. Every call is recorded in Requests with its queries.' }),
+      bar('Playground', h('span', { class: 'bar-meta' }, 'Every call is recorded in Requests')),
       h(
         'div',
-        { class: 'panel-body pg' },
-        h(
-          'section',
-          { class: 'card pg-builder', 'aria-label': 'Request' },
-          h('div', { class: 'pg-line' }, methodSel, h('div', { class: 'path-wrap' }, pathInput, suggest), sendBtn),
-          matchLine,
-          h('div', { class: 'section-label' }, 'Auth'),
-          authLine,
-          bodyWrap,
-          historyEl,
-        ),
-        responseEl,
+        { class: 'pg' },
+        h('div', { class: 'pg-line' }, methodSel, h('div', { class: 'path-wrap' }, pathInput, suggest), asBtn, tokenBtn, sendBtn),
+        matchLine,
+        h('div', { class: 'pg-split' }, h('section', { class: 'pg-left', 'aria-label': 'Request body' }, bodyPane, historyEl), responseEl),
       ),
     ),
   );

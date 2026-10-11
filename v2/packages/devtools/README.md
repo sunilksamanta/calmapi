@@ -17,14 +17,16 @@ page explaining how to add it.
 
 | Panel | What it shows |
 | --- | --- |
-| **Requests** | Every API call, live. Method, path, status, duration, query count (tinted when a request runs more than 10 queries, a likely N+1), user and time. Open one for a waterfall timeline of its MongoDB queries, each query with an **Explain** button (COLLSCAN or the index used), request headers and body, the response as a collapsible JSON tree, its logs, and the error with the internal message and stack. **Copy as curl**, **Replay** and **Edit in Playground**. A second tab lists background queries (jobs, startup). |
-| **Logs** | Live tail with level chips and a text filter. Request ids link to the request. |
+| **Requests** | Every API call, live: status, method, path, user, duration, query count (amber when a request runs more than 10 queries, a likely N+1), a duration bar with the MongoDB share, and time. Requests sent by an AI agent (`X-Calm-Agent`) carry a small violet marker. Open one in a resizable split pane for a waterfall timeline of its MongoDB queries, each query with **Explain** (COLLSCAN or the index used), request headers and body, the response as a collapsible JSON tree, its logs, and the error with the internal message and stack. **Copy as curl**, **Replay** and **Edit in Playground**. **Background queries** lists queries from jobs and startup. |
+| **Activity** | What happened in the project, newest first: tool calls from AI agents (`calm mcp`), file changes with an inline diff, restarts and crashes (`calm dev`). Agent and human edits are told apart by a marker; the latest crash opens with its stderr. The sidebar counts new events since you last looked. |
+| **Logs** | Live tail with level toggles and a text filter. Request ids link to the request. |
 | **Mail** | An inbox for everything sent through the development transport. Nothing is delivered for real. |
 | **Routes** | Every endpoint grouped by resource or source, with its policy (policies that were defaulted instead of written out are flagged), summary and a link that opens the file in VS Code. **Try it** sends it to the Playground. |
 | **Resources** | A relationship diagram built from `f.ref()` fields, then each resource with its policies per action and its fields: type, refs, enum values, defaults, flags and who can see or write them. |
 | **Data** | Documents, paginated. The **privacy lens** puts the raw stored document next to exactly what the API returns to a given viewer, with every withheld field struck through and labeled (hidden, write only, password, `visibleTo`). Use **View as** to switch viewers. |
 | **Playground** | Send requests to your API with route suggestions, a JSON body editor and **Act as**: pick a user and devtools creates a real session for them (kept in memory only, never stored by the page). |
-| **Doctor** | Runtime checks against your config, resources and routes, grouped by level. Run `npx calm doctor` for static checks on top. |
+| **Doctor** | Runtime checks against your config, resources and routes, as a list sorted by severity. Run `npx calm doctor` for static checks on top. |
+| **Security** | The access matrix (every action and field per persona, computed from your resources), **Run audit** to call every route as every persona on a throwaway database and overlay pass or fail on the matrix, live security events (failed logins, lockouts, rejected writes) and the security posture. |
 | **Blocks** | One panel per `calm.devtools.panel(name, fn)` registered by a block. |
 
 ## Keyboard
@@ -79,7 +81,8 @@ import { uiDir, version } from '@calmapi/devtools';
 ```
 
 The UI talks to the JSON API under `/_calm/api` (`/overview`, `/requests`, `/queries`,
-`/logs`, `/mails`, `/resources/:name/docs`, `/users`, `/act-as`, `/panels/:name`, `/doctor`)
+`/logs`, `/mails`, `/resources/:name/docs`, `/users`, `/act-as`, `/panels/:name`, `/doctor`,
+`/activity`, `/security`, `/audit`)
 and streams updates from `/_calm/api/stream` (Server-Sent Events).
 
 ## Files
@@ -90,7 +93,7 @@ ui/index.html      shell, loads theme.js, styles.css and app.js
 ui/theme.js        applies the saved theme before first paint
 ui/app.js          shell, navigation, header, keyboard shortcuts
 ui/store.js        shared state and the live event stream
-ui/lib.js          DOM, icons, formatting, JSON views, toasts, popovers
+ui/lib.js          DOM, a few functional icons, formatting, JSON views, toasts, tooltips, popovers
 ui/panels/*.js     one module per panel
 ui/styles.css      light and dark themes via CSS custom properties
 ```

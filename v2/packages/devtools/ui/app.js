@@ -2,8 +2,10 @@
 // Vanilla ES modules, no build step. Every panel lives in ./panels/.
 
 import { h, icon, mount, clear, fmtUptime, storage, closePopover, toast } from './lib.js';
-import { store, on, connect, loadOverview, loadRequests, loadLogs, loadMails, loadDoctor, stopActAs } from './store.js';
+import { store, on, connect, loadOverview, loadRequests, loadLogs, loadMails, loadDoctor, loadActivity, stopActAs } from './store.js';
 import requests from './panels/requests.js';
+import activity from './panels/activity.js';
+import security from './panels/security.js';
 import routes from './panels/routes.js';
 import resources from './panels/resources.js';
 import data from './panels/data.js';
@@ -13,11 +15,11 @@ import logs from './panels/logs.js';
 import doctor from './panels/doctor.js';
 import { blockPanel } from './panels/block.js';
 
-const CORE = [requests, logs, mail, routes, resources, data, playground, doctor];
+const CORE = [requests, activity, logs, mail, routes, resources, data, playground, doctor, security];
 const GROUPS = [
-  { label: 'Observe', ids: ['requests', 'logs', 'mail'] },
+  { label: 'Observe', ids: ['requests', 'activity', 'logs', 'mail'] },
   { label: 'Explore', ids: ['routes', 'resources', 'data'] },
-  { label: 'Tools', ids: ['playground', 'doctor'] },
+  { label: 'Tools', ids: ['playground', 'doctor', 'security'] },
 ];
 
 let blockPanels = [];
@@ -85,7 +87,7 @@ function shell() {
       'header',
       { class: 'top' },
       h('div', { class: 'top-id' }, el.sideBtn, h('a', { class: 'app-link', href: '#/requests', title: 'CalmAPI devtools' }, el.appName), el.appVer),
-      h('div', { class: 'top-main' }, el.mode, h('span', { class: 'spacer' }), el.actAs, el.db, el.openapi, themeButton()),
+      h('div', { class: 'top-main' }, h('span', { class: 'spacer' }), el.actAs, el.mode, el.db, el.openapi, themeButton()),
     ),
     h(
       'aside',
@@ -136,9 +138,13 @@ function renderHeader() {
   el.db.title = db.connected ? `MongoDB connected: ${db.host}/${db.name}` : 'MongoDB is not connected';
   if (ov.openapi) mount(el.openapi, h('a', { class: 'top-link', href: ov.openapi, target: '_blank', rel: 'noopener', title: `OpenAPI document at ${ov.openapi}` }, 'OpenAPI', icon('external', 12)));
   else clear(el.openapi);
-  const uptime = () => fmtUptime(ov.runtime.uptimeSeconds + (Date.now() - store.overviewAt) / 1000);
+  const uptime = () => {
+    const sec = ov.runtime.uptimeSeconds + (Date.now() - store.overviewAt) / 1000;
+    return fmtUptime(sec < 60 ? sec : sec - (sec % 60)).replace(/ 0s$/, '');
+  };
   el.uptime = h('span', null, uptime());
-  mount(el.runtime, h('span', { title: `pid ${ov.runtime.pid}` }, `Node ${ov.runtime.node}`), ' · ', `${ov.runtime.memoryMb} MB`, ' · up ', el.uptime);
+  mount(el.runtime, h('span', { title: `Node.js ${ov.runtime.node}, pid ${ov.runtime.pid}` }, `Node ${ov.runtime.node.split('.').slice(0, 2).join('.')}`), ' · ', `${ov.runtime.memoryMb} MB`, ' · up ', el.uptime);
+  el.runtime.title = `Node.js ${ov.runtime.node} · pid ${ov.runtime.pid} · ${ov.runtime.memoryMb} MB resident · up ${fmtUptime(ov.runtime.uptimeSeconds)}`;
   el.tickUptime = () => {
     if (el.uptime) el.uptime.textContent = uptime();
   };
@@ -264,7 +270,7 @@ async function boot() {
     renderNav();
     if (changed && current) current.instance?.refresh?.();
   });
-  for (const ev of ['request', 'requests:reset', 'log', 'logs:reset', 'mails:reset', 'mails:seen', 'doctor', 'actas']) on(ev, () => renderNav());
+  for (const ev of ['request', 'requests:reset', 'log', 'logs:reset', 'mails:reset', 'mails:seen', 'doctor', 'actas', 'activity', 'activity:reset', 'activity:seen', 'audit', 'audit:start']) on(ev, () => renderNav());
   on('actas', renderActAs);
   on('live', renderLive);
 
@@ -282,7 +288,7 @@ async function boot() {
     });
   }
   if (store.overview) {
-    await Promise.allSettled([loadRequests(), loadLogs(), loadMails(), loadDoctor()]);
+    await Promise.allSettled([loadRequests(), loadLogs(), loadMails(), loadDoctor(), loadActivity()]);
     route();
   }
 

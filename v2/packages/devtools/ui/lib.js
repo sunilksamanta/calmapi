@@ -78,6 +78,7 @@ const ICONS = {
   moon: '<path d="M13.25 9.6A5.5 5.5 0 0 1 6.4 2.75a5.5 5.5 0 1 0 6.85 6.85z"/>',
   system: '<circle cx="8" cy="8" r="5.75"/><path d="M8 2.25v11.5" /><path d="M8 2.25a5.75 5.75 0 0 1 0 11.5z" fill="currentColor" stroke="none"/>',
   sidebar: '<rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M6 2.5v11"/>',
+  check: '<path d="M3.5 8.5l3 3 6-7"/>',
 };
 
 /** Inline SVG icon (functional icons only: close, chevrons, copy, theme, external). */
@@ -174,6 +175,14 @@ export function methodTag(method, cls = '') {
   const m = String(method || '').toUpperCase();
   const key = { GET: 'get', POST: 'post', PATCH: 'put', PUT: 'put', DELETE: 'del' }[m] ?? 'other';
   return h('span', { class: ['method', `m-${key}`, cls] }, m === 'DELETE' ? 'DEL' : m);
+}
+
+/**
+ * Who did something, as a quiet glyph: agent (violet diamond), human (gray dot),
+ * server (hollow ring), crash (red dot). Shared by Activity and Requests.
+ */
+export function actorMark(kind, title) {
+  return h('span', { class: ['mark', `mark-${kind}`], title: title ?? null, role: title ? 'img' : null, 'aria-label': title ?? null, 'aria-hidden': title ? null : 'true' });
 }
 
 /** Status code as colored monospace text. */
@@ -554,7 +563,10 @@ export function searchBox({ placeholder = 'Filter', value = '', oninput, label =
 /** Text toggles (one active). options: [{ value, label, count?, title? }] */
 export function segmented(options, value, onchange, label = 'Options') {
   const wrap = h('div', { class: 'seg', role: 'group', 'aria-label': label });
+  let selected = value;
   const render = (current) => {
+    selected = current;
+    const focused = wrap.contains(document.activeElement) ? [...wrap.children].indexOf(document.activeElement) : -1;
     clear(wrap);
     for (const o of options) {
       wrap.append(
@@ -566,9 +578,15 @@ export function segmented(options, value, onchange, label = 'Options') {
         ),
       );
     }
+    if (focused >= 0) wrap.children[focused]?.focus();
   };
   render(value);
   wrap.set = render;
+  /** Replace the options (labels, counts) and keep the selection. */
+  wrap.setOptions = (next) => {
+    options = next;
+    render(selected);
+  };
   return wrap;
 }
 

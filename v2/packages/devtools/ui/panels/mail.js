@@ -1,6 +1,6 @@
-// Mail: everything the app sent through the dev transport, as an inbox.
+// Mail: everything the app sent through the dev transport, as a two pane inbox.
 
-import { h, mount, empty, relTime, fullDate, linkify, avatar, tabs, jsonViewer, panelHead, searchBox } from '../lib.js';
+import { h, mount, empty, relTime, fullDate, linkify, tabs, jsonViewer, bar, searchBox, plural } from '../lib.js';
 import { store, on, emit } from '../store.js';
 
 const state = { filter: '' };
@@ -8,22 +8,22 @@ const state = { filter: '' };
 export default {
   id: 'mail',
   label: 'Mail',
-  icon: 'mail',
   badge: () => {
     const unread = store.mails.filter((m) => !store.seenMail.has(m.id)).length;
-    return unread ? { text: unread, tone: 'teal' } : { text: store.mails.length || '' };
+    return unread ? { text: unread, tone: 'strong', title: `${unread} unread` } : { text: store.mails.length || '' };
   },
   mount: mountMail,
 };
 
-const snippet = (text) => String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, 110);
+const snippet = (text) => String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, 140);
+const recipients = (to) => (Array.isArray(to) ? to.join(', ') : to ?? '');
 
 function mountMail(root, params) {
   let openId = params[0] ? Number(params[0]) : null;
   let tab = 'text';
-  const list = h('div', { class: 'mail-list', role: 'listbox', 'aria-label': 'Inbox' });
+  const list = h('div', { class: 'mail-list scroll', role: 'listbox', 'aria-label': 'Inbox' });
   const reader = h('section', { class: 'mail-reader', 'aria-label': 'Message' });
-  const split = h('div', { class: 'mail-split' }, h('div', { class: 'mail-list-pane' }, h('div', { class: 'toolbar pad' }, searchBox({ placeholder: 'Filter mail', value: state.filter, oninput: (v) => ((state.filter = v), render()) })), list), reader);
+  const count = h('span', { class: 'bar-meta' });
 
   const visible = () => {
     const q = state.filter.trim().toLowerCase();
@@ -32,21 +32,17 @@ function mountMail(root, params) {
 
   function render() {
     const mails = visible();
+    count.textContent = `${plural(store.mails.length, 'message')} · ${store.overview?.mail ?? 'no'} transport, nothing is delivered`;
     if (!store.mails.length) {
-      split.classList.add('is-empty');
       const forgot = store.overview?.routes.find((r) => r.path.endsWith('/auth/password/forgot'));
+      mount(list, null);
       return mount(
-        list,
-        empty({
-          icon: 'inbox',
-          title: 'Emails sent in development land here',
-          hint: 'Nothing is delivered for real: the dev transport hands every message to devtools instead. Trigger one, for example a password reset.',
+        reader,
+        empty('No mail yet. Mail sent in development lands here. Try a password reset:', {
           code: forgot ? `curl -X POST ${location.origin}${forgot.path} -H 'Content-Type: application/json' --data '{"email":"you@example.com"}'` : null,
-          action: forgot ? { label: 'Try it in the Playground', icon: 'send', run: () => ((store.prefill = { method: 'POST', path: forgot.path, body: '{\n  "email": "you@example.com"\n}' }), (location.hash = '#/playground')) } : null,
         }),
       );
     }
-    split.classList.remove('is-empty');
     if (openId == null && mails[0]) openId = mails[0].id;
     if (openId != null && !store.seenMail.has(openId)) {
       store.seenMail.add(openId);
@@ -58,18 +54,13 @@ function mountMail(root, params) {
         ? mails.map((m) =>
             h(
               'button',
-              { class: ['mail-item', m.id === openId && 'active', !store.seenMail.has(m.id) && 'unread'], role: 'option', 'aria-selected': String(m.id === openId), onclick: () => open(m.id) },
-              avatar(m.to, 30),
-              h(
-                'span',
-                { class: 'mail-item-text' },
-                h('span', { class: 'mail-item-top' }, h('span', { class: 'mail-to ellipsis' }, m.to), h('span', { class: 'muted small num', title: fullDate(m.sentAt) }, relTime(m.sentAt))),
-                h('span', { class: 'mail-subject ellipsis' }, m.subject),
-                h('span', { class: 'mail-snippet' }, snippet(m.text)),
-              ),
+              { type: 'button', class: ['mail-item', !store.seenMail.has(m.id) && 'unread'], role: 'option', 'aria-selected': String(m.id === openId), onclick: () => open(m.id) },
+              h('span', { class: 'mail-item-top' }, h('span', { class: 'mail-to ellipsis' }, recipients(m.to)), h('span', { class: 'muted num', title: fullDate(m.sentAt) }, relTime(m.sentAt))),
+              h('span', { class: 'mail-subject ellipsis' }, m.subject),
+              h('span', { class: 'mail-snippet ellipsis' }, snippet(m.text)),
             ),
           )
-        : empty({ icon: 'search', title: 'No mail matches', hint: 'Clear the filter to see everything.' }),
+        : empty('No mail matches.'),
     );
     renderReader();
   }
@@ -82,10 +73,10 @@ function mountMail(root, params) {
 
   function renderReader() {
     const m = store.mails.find((x) => x.id === openId);
-    if (!m) return mount(reader, empty({ icon: 'mail', title: 'Select a message', hint: 'Pick an email on the left to read it.' }));
+    if (!m) return mount(reader, empty('Select a message.'));
     const tabDefs = [{ id: 'text', label: 'Text' }, m.html ? { id: 'html', label: 'HTML' } : null, { id: 'raw', label: 'Raw' }].filter(Boolean);
     if (!tabDefs.some((t) => t.id === tab)) tab = 'text';
-    const content = h('div', { class: 'mail-content' });
+    const content = h('div', { class: 'mail-content scroll' });
     const paint = () => {
       if (tab === 'text') return mount(content, h('div', { class: 'mail-text' }, linkify(m.text ?? '(no text part)')));
       if (tab === 'html') {
@@ -94,7 +85,7 @@ function mountMail(root, params) {
         frame.srcdoc = m.html;
         return mount(content, frame);
       }
-      return mount(content, jsonViewer(m, { open: 2 }));
+      return mount(content, h('div', { class: 'pad' }, jsonViewer(m, { open: 2 })));
     };
     const meta = Object.entries(m.meta ?? {}).filter(([, v]) => v != null && typeof v !== 'object');
     mount(
@@ -105,12 +96,12 @@ function mountMail(root, params) {
         h('h2', { class: 'mail-title' }, m.subject),
         h(
           'dl',
-          { class: 'mail-meta' },
+          { class: 'kv mail-meta' },
           h('dt', null, 'From'), h('dd', null, m.from ?? ''),
-          h('dt', null, 'To'), h('dd', null, Array.isArray(m.to) ? m.to.join(', ') : m.to),
+          h('dt', null, 'To'), h('dd', null, recipients(m.to)),
           h('dt', null, 'Sent'), h('dd', null, fullDate(m.sentAt), h('span', { class: 'muted' }, ` · ${relTime(m.sentAt)}`)),
+          meta.map(([k, v]) => [h('dt', null, k), h('dd', { class: 'mono ellipsis', title: String(v) }, String(v))]),
         ),
-        meta.length ? h('div', { class: 'mail-tags' }, meta.map(([k, v]) => h('span', { class: 'badge t-gray', title: `${k}: ${v}` }, h('span', { class: 'muted' }, `${k} `), String(v).length > 28 ? `${String(v).slice(0, 26)}…` : String(v)))) : null,
       ),
       tabs(tabDefs, tab, (t) => ((tab = t), paint())),
       content,
@@ -118,7 +109,15 @@ function mountMail(root, params) {
     paint();
   }
 
-  mount(root, h('div', { class: 'panel' }, panelHead({ title: 'Mail', sub: `Development inbox. Transport: ${store.overview?.mail ?? 'none'}. Nothing leaves your machine.` }), split));
+  mount(
+    root,
+    h(
+      'div',
+      { class: 'panel' },
+      bar('Mail', searchBox({ placeholder: 'Filter mail', value: state.filter, oninput: (v) => ((state.filter = v), render()) }), h('span', { class: 'spacer' }), count),
+      h('div', { class: 'mail-split' }, list, reader),
+    ),
+  );
   render();
   const off = on('mails:reset', (e) => {
     if (e?.fresh && store.mails[0]) openId = openId ?? store.mails[0].id;
@@ -136,7 +135,7 @@ function mountMail(root, params) {
       else if (e.key === 'k' || e.key === 'ArrowUp') mails[i - 1] && open(mails[i - 1].id);
       else return;
       e.preventDefault();
-      list.querySelector('.active')?.scrollIntoView({ block: 'nearest' });
+      list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
     },
   };
 }

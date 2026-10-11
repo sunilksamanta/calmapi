@@ -1,9 +1,11 @@
 // Shared state for every panel, kept fresh by the /stream Server-Sent Events.
 
-import { api, API } from './lib.js';
+import { api, API, storage } from './lib.js';
 
 const MAX_REQUESTS = 300;
 const MAX_LOGS = 1000;
+const MAX_ACTIVITY = 500;
+const MAX_SECURITY = 300;
 
 export const store = {
   overview: null,
@@ -17,6 +19,11 @@ export const store = {
   prefill: null, // playground prefill from "Try it" buttons
   seenMail: new Set(),
   records: new Map(), // full request records by id
+  activity: [], // project activity, newest first (calm dev + calm mcp)
+  activitySeen: storage.get('activity-seen', null), // ISO time of the newest event seen in the panel
+  security: null, // { matrix, events, posture } from GET /security
+  audit: null, // last audit report (or { summary } when it ran elsewhere)
+  auditRunning: false,
 };
 
 const listeners = new Map();
@@ -64,6 +71,43 @@ export async function loadLogs() {
 export async function loadMails() {
   store.mails = await api('/mails');
   emit('mails:reset');
+}
+
+export async function loadActivity() {
+  store.activity = await api('/activity');
+  // First visit ever: start counting from now instead of flagging the whole history as new.
+  if (store.activitySeen == null) markActivitySeen();
+  emit('activity:reset');
+}
+
+export function markActivitySeen() {
+  const newest = store.activity[0]?.time ?? new Date(0).toISOString();
+  if (store.activitySeen && store.activitySeen >= newest) return;
+  store.activitySeen = newest;
+  storage.set('activity-seen', newest);
+  emit('activity:seen');
+}
+
+export const unseenActivity = () => (store.activitySeen ? store.activity.filter((e) => e.time > store.activitySeen) : []);
+
+export async function loadSecurity() {
+  store.security = await api('/security');
+  emit('security:reset');
+  return store.security;
+}
+
+export async function runAudit() {
+  if (store.auditRunning) return;
+  store.auditRunning = true;
+  emit('audit:start');
+  try {
+    store.audit = await api('/audit', { method: 'POST' });
+  } catch (err) {
+    store.audit = { error: err.message };
+  } finally {
+    store.auditRunning = false;
+    emit('audit');
+  }
 }
 
 export async function loadDoctor() {
@@ -114,7 +158,7 @@ export function connect() {
     if (wasDown) {
       // The server restarted (or the connection dropped): resync everything.
       wasDown = false;
-      Promise.allSettled([loadOverview(), loadRequests(), loadLogs(), loadMails(), loadDoctor()]);
+      Promise.allSettled([loadOverview(), loadRequests(), loadLogs(), loadMails(), loadDoctor(), loadActivity()]);
     }
   });
   es.addEventListener('error', () => {
@@ -136,6 +180,27 @@ export function connect() {
     store.logs.push(entry);
     if (store.logs.length > MAX_LOGS) store.logs.splice(0, store.logs.length - MAX_LOGS);
     emit('log', entry);
+  });
+  es.addEventListener('activity', (e) => {
+    const event = JSON.parse(e.data);
+    if (store.activity.some((x) => x.id === event.id)) return;
+    store.activity.unshift(event);
+    if (store.activity.length > MAX_ACTIVITY) store.activity.length = MAX_ACTIVITY;
+    emit('activity', event);
+  });
+  es.addEventListener('security', (e) => {
+    const event = JSON.parse(e.data);
+    if (store.security) {
+      store.security.events.unshift(event);
+      if (store.security.events.length > MAX_SECURITY) store.security.events.length = MAX_SECURITY;
+    }
+    emit('security', event);
+  });
+  es.addEventListener('audit', (e) => {
+    // An audit finished (here, in another tab, or from an agent via calm_audit).
+    if (store.auditRunning) return;
+    store.audit = { summary: JSON.parse(e.data), elsewhere: true };
+    emit('audit');
   });
   es.addEventListener('mail', async () => {
     try {
