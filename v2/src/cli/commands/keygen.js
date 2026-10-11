@@ -35,5 +35,5 @@ export async function run(argv) {
   let n = ids.length + 1;
   while (ids.includes(`k${n}`)) n++;
   writeFileSync(envFile, text.replace(m[0], `CALM_ENCRYPTION_KEYS=k${n}:${secret},${m[1]}`));
-  ok(`Rotated: k${n} encrypts new data; ${ids.join(', ')} still decrypt existing data.`);
+  ok(`Rotated: k${n} encrypts new data; ${ids.join(', ')} still ${ids.length === 1 ? 'decrypts' : 'decrypt'} existing data.`);
 }
