@@ -28,8 +28,16 @@ export function compileAuthModels(mongoose) {
   );
   reset.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
+  // Failed sign-ins per email address (hashed), for account lockout.
+  const attempts = new Schema(
+    { _id: String, count: Number, firstAt: Date, lockedUntil: Date, expiresAt: Date },
+    { collection: 'calm_login_attempts', versionKey: false },
+  );
+  attempts.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
   return {
     Session: mongoose.model('calmSession', session),
     PasswordReset: mongoose.model('calmPasswordReset', reset),
+    LoginAttempt: mongoose.model('calmLoginAttempt', attempts),
   };
 }

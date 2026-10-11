@@ -272,7 +272,7 @@ describe('platform', () => {
     assert.equal(res.headers.get('x-powered-by'), null);
     assert.ok(res.headers.get('x-request-id'));
 
-    const findings = t.app.doctor();
+    const findings = await t.app.doctor();
     assert.ok(findings.some((f) => f.id === 'route-policy' && f.title.includes('/products/nopolicy')));
     assert.deepEqual(findings.filter((f) => f.level === 'error'), []);
   });

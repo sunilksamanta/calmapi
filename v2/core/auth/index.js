@@ -5,7 +5,11 @@
 //  - Passwords hashed with scrypt (node:crypto), no native addons.
 //  - Login and reset never reveal whether an email is registered.
 //  - Reset tokens are single use, expire, and revoke every session when used.
-//  - Rate limited (config.rateLimit.auth).
+//  - Rate limited per IP (config.rateLimit.auth) and locked per account after repeated
+//    failures (config.auth.lockout), keyed by the email string so locks never reveal
+//    whether an account exists.
+//  - Common passwords and passwords containing the user's email or name are refused.
+//  - Every suspicious event is emitted as security.* (devtools, audit-log, your alerts).
 
 import { compileAuthModels } from './models.js';
 import { createToken, hashToken } from './tokens.js';
@@ -13,7 +17,8 @@ import { hashPassword, verifyPassword, needsRehash } from './password.js';
 import { RouteBuilder } from '../http/router.js';
 import { validateInput, serialize } from '../resource/resource.js';
 import { f } from '../resource/fields.js';
-import { CalmError, unauthorized, validationError, forbidden, notFound } from '../errors.js';
+import { CalmError, unauthorized, validationError, forbidden, notFound, tooManyRequests } from '../errors.js';
+import { passwordContextProblem } from './password-policy.js';
 
 const SESSION_TOUCH_MS = 5 * 60_000;
 
@@ -25,7 +30,47 @@ export function setupAuth(app) {
     throw new Error('The user resource needs an "email" field and an f.password() field for auth');
   }
 
-  const { Session, PasswordReset } = compileAuthModels(app.mongoose);
+  const { Session, PasswordReset, LoginAttempt } = compileAuthModels(app.mongoose);
+  const lockout = { maxAttempts: 5, windowMinutes: 15, lockMinutes: 15, ...(app.config.auth.lockout ?? {}) };
+  const security = (name, data) => app.events.emit(`security.${name}`, data);
+  const mask = (email) => String(email).replace(/^(.)[^@]*(@.*)$/, '$1***$2');
+  const attemptKey = (email) => hashToken(`login:${String(email).toLowerCase()}`);
+
+  async function lockedUntil(email) {
+    if (!lockout.maxAttempts) return null;
+    const doc = await LoginAttempt.findById(attemptKey(email)).lean();
+    return doc?.lockedUntil && doc.lockedUntil > new Date() ? doc.lockedUntil : null;
+  }
+
+  async function recordFailure(email, req, reason) {
+    security('login_failed', { email: mask(email), ip: req?.ip, reason });
+    if (!lockout.maxAttempts) return;
+    const now = Date.now();
+    const key = attemptKey(email);
+    const expiresAt = new Date(now + (lockout.windowMinutes + lockout.lockMinutes) * 60_000);
+    let doc = await LoginAttempt.findOneAndUpdate(
+      { _id: key, firstAt: { $gt: new Date(now - lockout.windowMinutes * 60_000) } },
+      { $inc: { count: 1 }, $set: { expiresAt } },
+      { returnDocument: 'after' },
+    ).lean();
+    doc ??= await LoginAttempt.findOneAndUpdate(
+      { _id: key },
+      { $set: { count: 1, firstAt: new Date(now), lockedUntil: null, expiresAt } },
+      { upsert: true, returnDocument: 'after' },
+    ).lean();
+    if (doc.count >= lockout.maxAttempts) {
+      const until = new Date(now + lockout.lockMinutes * 60_000);
+      await LoginAttempt.updateOne({ _id: key }, { $set: { lockedUntil: until } });
+      security('account_locked', { email: mask(email), ip: req?.ip, until });
+    }
+  }
+
+  const clearFailures = (email) => LoginAttempt.deleteOne({ _id: attemptKey(email) });
+
+  function checkPasswordContext(password, user) {
+    const problem = passwordContextProblem(password, user);
+    if (problem) throw validationError({ [passwordField]: problem });
+  }
   const User = userEntry.model;
   const cfg = app.config.auth;
   let dummyHash;
@@ -56,7 +101,10 @@ export function setupAuth(app) {
     if (!match) return next(unauthorized('Authorization header must be "Bearer <token>"'));
 
     const session = await Session.findOne({ tokenHash: hashToken(match[1]), expiresAt: { $gt: new Date() } }).lean();
-    if (!session) return next(unauthorized('Session is invalid or has expired'));
+    if (!session) {
+      security('invalid_token', { ip: req.ip, path: req.originalUrl });
+      return next(unauthorized('Session is invalid or has expired'));
+    }
     const user = await User.findById(session.user).lean();
     if (!user || user.status === 'disabled') return next(unauthorized('Session is invalid or has expired'));
 
@@ -71,12 +119,14 @@ export function setupAuth(app) {
   const service = {
     Session,
     PasswordReset,
+    LoginAttempt,
     createSession,
     authenticate,
 
     async register(body, ctx) {
       if (!cfg.register) throw forbidden('Registration is disabled');
       const data = await validateInput(userEntry.def, body, { mode: 'create', user: null, unknownFields: app.config.unknownFields });
+      checkPasswordContext(data[passwordField], data);
       const user = await userEntry.service.create(data, { ...ctx, user: null });
       const session = await createSession(user, ctx.req);
       app.events.emit('auth.registered', { user: toAuthUser(user) });
@@ -89,14 +139,25 @@ export function setupAuth(app) {
         body,
         { mode: 'create' },
       );
+      const locked = await lockedUntil(input.email);
+      if (locked) {
+        security('locked_login_attempt', { email: mask(input.email), ip: ctx.req?.ip });
+        const minutes = Math.max(1, Math.ceil((locked - Date.now()) / 60_000));
+        throw tooManyRequests(`Too many failed sign-in attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`);
+      }
       const user = await User.findOne({ email: input.email }).select(`+${passwordField}`).lean();
       if (!user) {
         // Spend the same time as a real check so response timing does not reveal accounts.
         dummyHash ??= await hashPassword('calm-dummy-password', cfg.password);
         await verifyPassword(input.password, dummyHash);
+        await recordFailure(input.email, ctx.req, 'unknown_email');
         throw unauthorized('Invalid email or password');
       }
-      if (!(await verifyPassword(input.password, user[passwordField]))) throw unauthorized('Invalid email or password');
+      if (!(await verifyPassword(input.password, user[passwordField]))) {
+        await recordFailure(input.email, ctx.req, 'wrong_password');
+        throw unauthorized('Invalid email or password');
+      }
+      await clearFailures(input.email);
       if (user.status === 'disabled') throw forbidden('This account is disabled');
 
       if (needsRehash(user[passwordField], cfg.password)) {
@@ -135,8 +196,10 @@ export function setupAuth(app) {
       );
       const user = await User.findById(ctx.user._id).select(`+${passwordField}`).lean();
       if (!(await verifyPassword(input.currentPassword, user[passwordField]))) {
+        security('password_change_failed', { userId: String(user._id), ip: ctx.req?.ip });
         throw validationError({ currentPassword: 'Current password is incorrect' });
       }
+      checkPasswordContext(input.newPassword, user);
       await userEntry.service.update(user._id, { [passwordField]: input.newPassword }, { ...ctx, scope: null });
       await Session.deleteMany({ user: user._id, _id: { $ne: ctx.session.id } });
       app.events.emit('auth.password_changed', { user: toAuthUser(user) });
@@ -177,9 +240,15 @@ export function setupAuth(app) {
         { tokenHash: hashToken(input.token), usedAt: null, expiresAt: { $gt: new Date() } },
         { $set: { usedAt: new Date() } },
       ).lean();
-      if (!reset) throw new CalmError(400, 'INVALID_TOKEN', 'This reset link is invalid or has expired');
+      if (!reset) {
+        security('invalid_reset_token', {});
+        throw new CalmError(400, 'INVALID_TOKEN', 'This reset link is invalid or has expired');
+      }
+      const owner = await User.findById(reset.user).lean();
+      checkPasswordContext(input.password, owner ?? {});
 
-      await userEntry.service.update(reset.user, { [passwordField]: input.password }, {});
+      await userEntry.service.update(reset.user, { [passwordField]: input.password }, { system: true });
+      if (owner?.email) await clearFailures(owner.email);
       await Promise.all([
         Session.deleteMany({ user: reset.user }),
         PasswordReset.deleteMany({ user: reset.user, usedAt: null }),

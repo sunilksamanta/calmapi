@@ -12,6 +12,8 @@ const COMMANDS = {
   doctor: () => import('./commands/doctor.js'),
   upgrade: () => import('./commands/upgrade.js'),
   admin: () => import('./commands/admin.js'),
+  audit: () => import('./commands/audit.js'),
+  keygen: () => import('./commands/keygen.js'),
   mcp: () => import('./commands/mcp.js'),
 };
 const ALIASES = { new: 'create', init: 'create', generate: 'make', g: 'make', m: 'make' };
@@ -33,7 +35,9 @@ const HELP = `
     routes                       every route with its access policy
     openapi                      write openapi.json
     doctor                       security and correctness checks (--ci for pipelines)
+    audit                        test every route as every role on a throwaway database
     admin <email>                give a user the admin role (--revoke to remove)
+    keygen [--write]             encryption key for .encrypted() fields (rotates)
 
   ${c.bold('Maintain')}
     upgrade                      merge framework updates into calm/, keeping your edits

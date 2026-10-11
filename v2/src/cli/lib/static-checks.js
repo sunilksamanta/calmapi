@@ -82,9 +82,46 @@ const RULES = [
   },
 ];
 
+const SECRETS = [
+  { id: 'aws-key', re: /AKIA[0-9A-Z]{16}/, what: 'an AWS access key' },
+  { id: 'private-key', re: /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/, what: 'a private key' },
+  { id: 'stripe-key', re: /\b[sr]k_live_[0-9a-zA-Z]{16,}/, what: 'a Stripe live key' },
+  { id: 'github-token', re: /\bgh[pousr]_[A-Za-z0-9]{36,}/, what: 'a GitHub token' },
+  { id: 'slack-token', re: /\bxox[abprs]-[A-Za-z0-9-]{10,}/, what: 'a Slack token' },
+  { id: 'resend-key', re: /\bre_[A-Za-z0-9]{20,}/, what: 'a Resend API key' },
+  { id: 'db-credentials', re: /mongodb(?:\+srv)?:\/\/[^\s'"`:@/]+:[^\s'"`@/]+@/, what: 'database credentials' },
+  { id: 'generic-secret', re: /(?:api[_-]?key|secret|token|passw(?:or)?d)\s*[:=]\s*['"`][A-Za-z0-9_\-+/=.]{16,}['"`]/i, what: 'a hardcoded secret' },
+];
+
+/** Hardcoded credentials in source files (values are masked in the report). */
+export function secretChecks(root) {
+  const findings = [];
+  const files = walk(root, { ignore: ['node_modules', '.git', 'calm', 'test', 'coverage'] }).filter(
+    (f) => /\.(m?js|cjs|ts|json|ya?ml)$/.test(f) && !f.endsWith('package-lock.json') && f !== 'calm.lock' && !f.startsWith('.calm/'),
+  );
+  for (const rel of files) {
+    const lines = readText(join(root, rel)).split('\n');
+    lines.forEach((line, i) => {
+      for (const s of SECRETS) {
+        const m = s.re.exec(line);
+        if (!m) continue;
+        findings.push({
+          level: 'error',
+          id: `secret-${s.id}`,
+          title: `Looks like ${s.what} in source code`,
+          detail: `Found "${m[0].slice(0, 6)}…" Move it to an environment variable (.env, never committed) and rotate it: anything that reached git is compromised.`,
+          file: `${rel}:${i + 1}`,
+        });
+        break;
+      }
+    });
+  }
+  return findings;
+}
+
 /** Pattern checks over app/ source plus project hygiene. */
 export function staticChecks(root, lock) {
-  const findings = [];
+  const findings = [...secretChecks(root)];
   for (const rel of walk(join(root, 'app'))) {
     if (!rel.endsWith('.js')) continue;
     const text = readText(join(root, 'app', rel));
@@ -108,4 +145,33 @@ export function staticChecks(root, lock) {
     if (missing.length) findings.push({ level: 'warn', id: 'core-missing', title: `${missing.length} framework file(s) deleted from calm/`, detail: missing.join(', ') });
   }
   return findings;
+}
+
+/** .env committed to git? (only when the project is a git repository) */
+export async function gitChecks(root, capture) {
+  if (!existsSync(join(root, '.git'))) return [];
+  const tracked = await capture('git', ['ls-files', '--error-unmatch', '.env'], { cwd: root }).catch(() => ({ code: 1 }));
+  return tracked.code === 0
+    ? [{ level: 'error', id: 'env-committed', title: '.env is committed to git', detail: 'Remove it from the repository (git rm --cached .env), rotate every secret in it, and keep it in .gitignore.' }]
+    : [];
+}
+
+/** npm audit summary for production dependencies. */
+export async function auditChecks(root, capture) {
+  const res = await capture('npm', ['audit', '--json', '--omit=dev'], { cwd: root }).catch(() => null);
+  let report;
+  try {
+    report = JSON.parse(res?.stdout ?? '');
+  } catch {
+    return [{ level: 'info', id: 'npm-audit', title: 'npm audit could not run', detail: 'Check your network or run `npm audit` yourself.' }];
+  }
+  const v = report.metadata?.vulnerabilities ?? {};
+  const serious = (v.high ?? 0) + (v.critical ?? 0);
+  if (!serious && !v.moderate) return [{ level: 'info', id: 'npm-audit', title: 'npm audit: no known vulnerabilities in production dependencies' }];
+  return [{
+    level: serious ? 'error' : 'warn',
+    id: 'npm-audit',
+    title: `npm audit: ${v.critical ?? 0} critical, ${v.high ?? 0} high, ${v.moderate ?? 0} moderate`,
+    detail: 'Run `npm audit` for details and `npm audit fix` to update.',
+  }];
 }

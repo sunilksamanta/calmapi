@@ -33,7 +33,8 @@ try {
   result.routes = app.routes.map((r) => ({ method: r.method, path: app.config.apiPrefix + r.path, policy: r.policyLabel, policyExplicit: r.policyExplicit, source: r.source, resource: r.resource, summary: r.summary || null, file: r.file || null, hidden: r.hidden }));
   result.blocks = app.plugins;
   result.openapi = app.openapi();
-  result.doctor = app.doctor();
+  result.doctor = await app.doctor();
+  result.exposure = await app.exposure();
   await app.mongoose.disconnect();
 } catch (err) {
   result.error = { message: err.message, code: err.code || null, stack: err.stack };

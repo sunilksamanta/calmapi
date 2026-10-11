@@ -6,6 +6,8 @@
 //   cost:  f.number().hidden()          // stored, never returned
 //   author: f.ref('user').owner()       // set from the session, drives 'owner' policies
 
+import { passwordProblem } from '../auth/password-policy.js';
+
 const STRING_TYPES = new Set(['string', 'text', 'email', 'url', 'password']);
 const OBJECT_ID = /^[a-f\d]{24}$/i;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -62,6 +64,8 @@ export class Field {
   writableBy(policy) { return this.#with({ writableBy: policy }); }
   /** Only users matching the policy see this field, e.g. .visibleTo('owner | admin'). */
   visibleTo(policy) { return this.#with({ visibleTo: policy }); }
+  /** Encrypted at rest with AES-256-GCM (CALM_ENCRYPTION_KEYS). Cannot be queried. */
+  encrypted() { return this.#with({ encrypted: true }); }
 
   // ---- querying ------------------------------------------------------------------
   filterable(ops) { return this.#with({ filterable: ops ?? true }); }
@@ -143,6 +147,10 @@ export async function validateValue(field, value, path = '') {
       if (field.type === 'email' && !EMAIL.test(v)) return { error: 'Must be a valid email address' };
       if (field.type === 'url' && !isHttpUrl(v)) return { error: 'Must be a valid http(s) URL' };
       if (o.pattern && !o.pattern.test(v)) return { error: o.patternMessage ?? 'Has an invalid format' };
+      if (field.type === 'password') {
+        const problem = passwordProblem(v);
+        if (problem) return { error: problem };
+      }
       break;
     }
     case 'number':

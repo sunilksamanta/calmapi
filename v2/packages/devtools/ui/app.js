@@ -1,7 +1,7 @@
 // CalmAPI devtools: app shell, navigation, header and keyboard shortcuts.
 // Vanilla ES modules, no build step. Every panel lives in ./panels/.
 
-import { h, icon, logo, mount, clear, fmtUptime, storage, segmented, closePopover, toast } from './lib.js';
+import { h, icon, mount, clear, fmtUptime, storage, closePopover, toast } from './lib.js';
 import { store, on, connect, loadOverview, loadRequests, loadLogs, loadMails, loadDoctor, stopActAs } from './store.js';
 import requests from './panels/requests.js';
 import routes from './panels/routes.js';
@@ -21,10 +21,14 @@ const GROUPS = [
 ];
 
 let blockPanels = [];
-let current = null; // { panel, instance, key }
+let current = null; // { panel, instance }
 const allPanels = () => [...CORE, ...blockPanels];
+const navOrder = () => [...GROUPS.flatMap((g) => g.ids.map((id) => CORE.find((p) => p.id === id))), ...blockPanels];
 
 // ---- theme -------------------------------------------------------------------------
+
+const THEMES = ['system', 'light', 'dark'];
+const THEME_LABEL = { system: 'Theme: match system', light: 'Theme: light', dark: 'Theme: dark' };
 
 function applyTheme(mode) {
   if (mode === 'light' || mode === 'dark') document.documentElement.dataset.theme = mode;
@@ -32,126 +36,109 @@ function applyTheme(mode) {
   storage.set('theme', mode);
 }
 
-function themeToggle() {
-  const mode = storage.get('theme', 'system');
-  return segmented(
-    [
-      { value: 'light', icon: 'sun', aria: 'Light theme', title: 'Light' },
-      { value: 'system', icon: 'monitor', aria: 'System theme', title: 'Match system' },
-      { value: 'dark', icon: 'moon', aria: 'Dark theme', title: 'Dark' },
-    ],
-    mode,
-    applyTheme,
-    'Theme',
-  );
+function themeButton() {
+  const btn = h('button', { class: 'icon-btn', type: 'button' });
+  const paint = (mode) => {
+    const next = THEMES[(THEMES.indexOf(mode) + 1) % THEMES.length];
+    mount(btn, icon(mode === 'system' ? 'system' : mode === 'light' ? 'sun' : 'moon', 15));
+    btn.title = `${THEME_LABEL[mode]} (click for ${next})`;
+    btn.setAttribute('aria-label', `${THEME_LABEL[mode]}. Switch to ${next}`);
+  };
+  btn.addEventListener('click', () => {
+    const mode = storage.get('theme', 'system');
+    const next = THEMES[(THEMES.indexOf(mode) + 1) % THEMES.length];
+    applyTheme(next);
+    paint(next);
+  });
+  paint(storage.get('theme', 'system'));
+  return btn;
 }
 
 // ---- shell -------------------------------------------------------------------------
 
 const el = {};
 
+function setCollapsed(app, next) {
+  app.classList.toggle('collapsed', next);
+  storage.set('collapsed', next);
+  el.sideBtn.setAttribute('aria-expanded', String(!next));
+  el.sideBtn.title = next ? 'Show sidebar' : 'Hide sidebar';
+}
+
 function shell() {
   el.appName = h('span', { class: 'app-name' }, 'CalmAPI app');
   el.appVer = h('span', { class: 'app-ver' });
-  el.mode = h('span', { class: 'mode-badge' });
-  el.status = h('div', { class: 'top-status' });
+  el.mode = h('span', { class: 'top-mode' });
+  el.db = h('span', { class: 'top-db' });
+  el.openapi = h('span', { class: 'top-openapi' });
   el.actAs = h('div', { class: 'top-actas' });
   el.nav = h('nav', { class: 'nav', 'aria-label': 'Panels' });
   el.live = h('div', { class: 'live', role: 'status', 'aria-live': 'polite' });
+  el.runtime = h('div', { class: 'runtime' });
   el.main = h('main', { class: 'main', id: 'main', tabindex: '-1' });
+  el.sideBtn = h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Toggle sidebar', 'aria-controls': 'sidebar' }, icon('sidebar', 15));
 
-  const collapsed = storage.get('collapsed', false);
   const app = h(
     'div',
-    { class: ['app', collapsed && 'collapsed'] },
+    { class: 'app' },
     h(
       'header',
-      { class: 'topbar' },
-      h(
-        'div',
-        { class: 'brand-zone' },
-        h('a', { class: 'brand', href: '#/requests', 'aria-label': 'CalmAPI devtools home' }, logo(22), h('span', { class: 'wordmark' }, 'Calm', h('b', null, 'API'))),
-      ),
-      h('div', { class: 'app-id' }, el.appName, el.appVer, el.mode),
-      h('div', { class: 'spacer' }),
-      el.actAs,
-      el.status,
-      themeToggle(),
+      { class: 'top' },
+      h('div', { class: 'top-id' }, el.sideBtn, h('a', { class: 'app-link', href: '#/requests', title: 'CalmAPI devtools' }, el.appName), el.appVer),
+      h('div', { class: 'top-main' }, el.mode, h('span', { class: 'spacer' }), el.actAs, el.db, el.openapi, themeButton()),
     ),
     h(
       'aside',
-      { class: 'sidebar' },
+      { class: 'side', id: 'sidebar' },
       el.nav,
       h('div', { class: 'spacer' }),
       h(
         'div',
         { class: 'side-foot' },
-        el.live,
-        h(
-          'div',
-          { class: 'side-tools' },
-          h('button', { class: 'icon-btn ghost', 'aria-label': 'Keyboard shortcuts', title: 'Keyboard shortcuts (?)', onclick: showHelp }, icon('keyboard', 16)),
-          h(
-            'button',
-            {
-              class: 'icon-btn ghost collapse-btn',
-              'aria-label': 'Toggle sidebar',
-              title: 'Collapse sidebar',
-              onclick: () => {
-                const next = !app.classList.contains('collapsed');
-                app.classList.toggle('collapsed', next);
-                storage.set('collapsed', next);
-              },
-            },
-            icon('sidebar', 16),
-          ),
-        ),
+        h('div', { class: 'side-foot-row' }, el.live, h('button', { class: 'link-btn muted', type: 'button', title: 'Keyboard shortcuts (?)', onclick: showHelp }, 'Shortcuts')),
+        el.runtime,
       ),
     ),
     el.main,
   );
+  el.sideBtn.addEventListener('click', () => setCollapsed(app, !app.classList.contains('collapsed')));
+  setCollapsed(app, storage.get('collapsed', false));
   document.body.append(h('a', { class: 'skip', href: '#main' }, 'Skip to content'), app);
 }
 
 function renderNav() {
   const active = current?.panel.id;
-  const items = [];
-  let n = 0;
+  const order = navOrder();
   const item = (p) => {
-    n++;
+    const n = order.indexOf(p) + 1;
     const badge = p.badge?.();
+    const show = badge && badge.text !== '' && badge.text != null;
     return h(
       'a',
-      { class: 'nav-item', href: `#/${p.id}`, 'aria-current': p.id === active ? 'page' : null, title: `${p.label}${n <= 9 ? ` (${n})` : ''}`, 'aria-label': p.label },
-      icon(p.icon, 16),
+      { class: 'nav-item', href: `#/${p.id}`, 'aria-current': p.id === active ? 'page' : null, title: n && n <= 9 ? `${p.label} (${n})` : p.label },
       h('span', { class: 'nav-label' }, p.label),
-      badge && badge.text !== '' && badge.text != null ? h('span', { class: ['nav-badge', badge.tone && `t-${badge.tone}`] }, badge.text) : null,
+      show ? h('span', { class: ['nav-count', badge.tone && `t-${badge.tone}`], title: badge.title ?? null }, badge.text) : null,
     );
   };
-  for (const g of GROUPS) {
-    items.push(h('div', { class: 'nav-group' }, h('div', { class: 'nav-group-label' }, g.label), g.ids.map((id) => item(CORE.find((p) => p.id === id)))));
-  }
-  if (blockPanels.length) items.push(h('div', { class: 'nav-group' }, h('div', { class: 'nav-group-label' }, 'Blocks'), blockPanels.map(item)));
-  mount(el.nav, items);
+  const groups = GROUPS.map((g) => h('div', { class: 'nav-group' }, h('div', { class: 'nav-group-label' }, g.label), g.ids.map((id) => item(CORE.find((p) => p.id === id)))));
+  if (blockPanels.length) groups.push(h('div', { class: 'nav-group' }, h('div', { class: 'nav-group-label' }, 'Blocks'), blockPanels.map(item)));
+  mount(el.nav, groups);
 }
 
 function renderHeader() {
   const ov = store.overview;
   if (!ov) return;
   el.appName.textContent = ov.app.name;
-  el.appVer.textContent = ov.app.version ? `v${ov.app.version}` : '';
+  el.appVer.textContent = ov.app.version ?? '';
   el.mode.textContent = ov.app.mode;
-  el.mode.className = `mode-badge mode-${ov.app.mode}`;
   const db = ov.database;
+  mount(el.db, h('span', { class: ['dot', db.connected ? 'dot-green' : 'dot-red'] }), h('span', { class: 'mono' }, db.name ?? 'database'));
+  el.db.title = db.connected ? `MongoDB connected: ${db.host}/${db.name}` : 'MongoDB is not connected';
+  if (ov.openapi) mount(el.openapi, h('a', { class: 'top-link', href: ov.openapi, target: '_blank', rel: 'noopener', title: `OpenAPI document at ${ov.openapi}` }, 'OpenAPI', icon('external', 12)));
+  else clear(el.openapi);
   const uptime = () => fmtUptime(ov.runtime.uptimeSeconds + (Date.now() - store.overviewAt) / 1000);
-  el.uptime = h('span', { class: 'num' }, uptime());
-  mount(
-    el.status,
-    h('span', { class: 'top-stat', title: db.connected ? `MongoDB connected: ${db.host}/${db.name}` : 'MongoDB is not connected' }, h('span', { class: ['dot', db.connected ? 'dot-ok' : 'dot-bad'] }), icon('database', 14), h('span', { class: 'top-stat-text' }, db.name ?? 'database')),
-    h('span', { class: 'top-stat hide-md', title: `Node.js ${ov.runtime.node}, pid ${ov.runtime.pid}` }, h('span', { class: 'muted' }, 'Node'), h('span', { class: 'num' }, ov.runtime.node)),
-    h('span', { class: 'top-stat hide-md', title: `Uptime, ${ov.runtime.memoryMb} MB resident memory` }, icon('clock', 14), el.uptime),
-    ov.openapi ? h('a', { class: 'top-stat link', href: ov.openapi, target: '_blank', rel: 'noopener', title: `OpenAPI document at ${ov.openapi}` }, icon('braces', 14), h('span', { class: 'top-stat-text' }, 'OpenAPI'), icon('external', 12, 'ext')) : null,
-  );
+  el.uptime = h('span', null, uptime());
+  mount(el.runtime, h('span', { title: `pid ${ov.runtime.pid}` }, `Node ${ov.runtime.node}`), ' · ', `${ov.runtime.memoryMb} MB`, ' · up ', el.uptime);
   el.tickUptime = () => {
     if (el.uptime) el.uptime.textContent = uptime();
   };
@@ -161,20 +148,22 @@ function renderHeader() {
 function renderActAs() {
   const a = store.actAs;
   if (!a) return clear(el.actAs);
+  const admin = (a.user.roles ?? []).includes('admin');
   mount(
     el.actAs,
     h(
       'span',
-      { class: 'actas-pill', title: `Requests from the Playground and Replay use a real session for ${a.user.email ?? a.user.name}` },
-      icon('user', 13),
-      h('span', null, 'Acting as ', h('b', null, a.user.name ?? a.user.email)),
-      h('button', { class: 'actas-stop', 'aria-label': 'Stop acting as this user', title: 'Stop', onclick: stopActAs }, icon('x', 12)),
+      { class: 'actas', title: `Playground requests and Replay send a real session for ${a.user.email ?? a.user.name}` },
+      h('span', { class: 'actas-label' }, 'Acting as'),
+      h('b', null, a.user.name ?? a.user.email),
+      admin ? h('span', { class: 'actas-role' }, 'admin') : null,
+      h('button', { class: 'actas-stop', type: 'button', onclick: stopActAs, title: 'Stop acting as this user' }, 'Stop'),
     ),
   );
 }
 
 function renderLive() {
-  mount(el.live, h('span', { class: ['dot', store.live ? 'dot-live' : 'dot-warn'] }), h('span', { class: 'live-text' }, store.live ? 'Live' : 'Reconnecting'));
+  mount(el.live, h('span', { class: ['dot', store.live ? 'dot-green' : 'dot-amber'] }), h('span', null, store.live ? 'Live' : 'Reconnecting'));
   el.live.title = store.live ? 'Streaming requests, logs and mail from the server' : 'Lost the event stream. Retrying every 2 seconds.';
 }
 
@@ -195,14 +184,13 @@ function route() {
   if (!store.overview) return;
   closePopover();
   const { id, params } = parseHash();
-  const panel = allPanels().find((p) => p.id === id) ?? (store.overview ? requests : null);
-  if (!panel) return;
+  const panel = allPanels().find((p) => p.id === id) ?? requests;
   if (current?.panel === panel && current.instance?.update) {
     current.instance.update(params);
   } else {
     current?.instance?.destroy?.();
     clear(el.main);
-    const host = h('div', { class: `panel-host panel-${panel.id}` });
+    const host = h('div', { class: `panel-host panel-${panel.id.replace(/[^\w-]/g, '-')}` });
     el.main.append(host);
     current = { panel, instance: null };
     current.instance = panel.mount(host, params) ?? {};
@@ -233,8 +221,7 @@ function onKey(e) {
     return showHelp();
   }
   if (/^[1-9]$/.test(e.key)) {
-    const order = [...GROUPS.flatMap((g) => g.ids.map((id) => CORE.find((p) => p.id === id))), ...blockPanels];
-    const p = order[Number(e.key) - 1];
+    const p = navOrder()[Number(e.key) - 1];
     if (p) navigate(`#/${p.id}`);
     return;
   }
@@ -254,8 +241,8 @@ function showHelp() {
   const dlg = h(
     'dialog',
     { class: 'dialog', 'aria-label': 'Keyboard shortcuts' },
-    h('div', { class: 'dialog-head' }, h('h2', null, 'Keyboard shortcuts'), h('button', { class: 'icon-btn ghost', 'aria-label': 'Close', onclick: () => dlg.close() }, icon('x', 16))),
-    h('dl', { class: 'keys' }, rows.map(([k, d]) => [h('dt', null, k.split(' ').map((p) => (/^(\/|or|to)$/.test(p) && p !== '/' ? ` ${p} ` : h('kbd', null, p)))), h('dd', null, d)])),
+    h('div', { class: 'dialog-head' }, h('h2', null, 'Keyboard shortcuts'), h('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: () => dlg.close() }, icon('x', 14))),
+    h('dl', { class: 'keys' }, rows.map(([k, d]) => [h('dt', null, k.split(' ').map((p) => (/^(\/|or|to|\+)$/.test(p) && p !== '/' ? ` ${p} ` : h('kbd', null, p)))), h('dd', null, d)])),
   );
   dlg.addEventListener('close', () => dlg.remove());
   dlg.addEventListener('click', (e) => e.target === dlg && dlg.close());
@@ -277,7 +264,7 @@ async function boot() {
     renderNav();
     if (changed && current) current.instance?.refresh?.();
   });
-  for (const ev of ['request', 'requests:reset', 'log', 'logs:reset', 'mails:reset', 'mails:seen', 'doctor']) on(ev, () => renderNav());
+  for (const ev of ['request', 'requests:reset', 'log', 'logs:reset', 'mails:reset', 'mails:seen', 'doctor', 'actas']) on(ev, () => renderNav());
   on('actas', renderActAs);
   on('live', renderLive);
 
@@ -287,7 +274,7 @@ async function boot() {
   try {
     await loadOverview();
   } catch (err) {
-    mount(el.main, h('div', { class: 'boot-error' }, h('h1', null, 'Devtools cannot reach the app'), h('p', null, err.message), h('p', { class: 'muted' }, 'Is the server still running in development mode? This page reconnects on its own as soon as it is back.')));
+    mount(el.main, h('div', { class: 'boot-error' }, h('p', null, h('b', null, 'Devtools cannot reach the app. '), err.message), h('p', { class: 'muted' }, 'Is the server running in development mode? This page reconnects on its own.')));
     // The event stream reconnects and resyncs; mount the first panel when the overview arrives.
     const off = on('overview', () => {
       off();

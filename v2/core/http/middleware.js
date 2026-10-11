@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { runWithRequest } from '../context.js';
-import { tooManyRequests } from '../errors.js';
+import { tooManyRequests, badRequest } from '../errors.js';
 
 /** Assigns req.id (honours a sane incoming X-Request-Id) and runs the request in its context. */
 export function requestContext() {
@@ -78,7 +78,7 @@ export function createMemoryStore() {
   };
 }
 
-export function rateLimit({ store, windowMs, max, key = (req) => req.ip, name = 'global' }) {
+export function rateLimit({ store, windowMs, max, key = (req) => req.ip, name = 'global', onLimit }) {
   return async (req, res, next) => {
     const { count, resetAt } = await store.hit(`${name}:${key(req)}`, windowMs);
     const resetSeconds = Math.max(0, Math.ceil((resetAt - Date.now()) / 1000));
@@ -87,7 +87,29 @@ export function rateLimit({ store, windowMs, max, key = (req) => req.ip, name = 
     res.setHeader('RateLimit-Reset', String(resetSeconds));
     if (count > max) {
       res.setHeader('Retry-After', String(resetSeconds));
+      if (count === max + 1) onLimit?.(req, name); // once per window, not on every rejected hit
       return next(tooManyRequests());
+    }
+    next();
+  };
+}
+
+/**
+ * Refuse JSON bodies that are absurdly nested or wide. express.json limits bytes;
+ * this limits the work recursive code (validation, sanitizers) could be made to do.
+ */
+export function jsonGuard({ maxDepth = 20, maxKeys = 10_000 } = {}) {
+  return (req, _res, next) => {
+    if (req.body === null || typeof req.body !== 'object') return next();
+    let keys = 0;
+    const stack = [[req.body, 1]];
+    while (stack.length) {
+      const [value, depth] = stack.pop();
+      if (depth > maxDepth) return next(badRequest(`JSON body is nested deeper than ${maxDepth} levels`));
+      for (const child of Array.isArray(value) ? value : Object.values(value)) {
+        if (++keys > maxKeys) return next(badRequest(`JSON body has more than ${maxKeys} values`));
+        if (child !== null && typeof child === 'object') stack.push([child, depth + 1]);
+      }
     }
     next();
   };

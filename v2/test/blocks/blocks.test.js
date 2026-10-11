@@ -67,9 +67,9 @@ describe('calm add', () => {
     assert.match(again, /unchanged\s+app\/blocks\/jobs\/index\.js/);
   });
 
-  test('the app boots with every block and doctor stays clean', () => {
+  test('the app boots with every block and doctor stays clean', async () => {
     assert.deepEqual(t.app.plugins.map((p) => p.name).sort(), ['api-docs', 'audit-log', 'jobs', 'mcp-server', 'rate-limit-mongo', 'realtime-sse', 'soft-delete', 'storage-local']);
-    assert.deepEqual(t.app.doctor().filter((f) => f.level === 'error'), []);
+    assert.deepEqual((await t.app.doctor()).filter((f) => f.level === 'error'), []);
   });
 });
 

@@ -14,7 +14,6 @@ import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { currentRequest } from '../context.js';
 import { serialize } from '../resource/resource.js';
-import { runtimeChecks } from '../doctor.js';
 import { kebab } from '../utils/strings.js';
 
 const SKIP_COMMANDS = new Set(['hello', 'ismaster', 'isMaster', 'ping', 'endSessions', 'saslStart', 'saslContinue', 'buildInfo', 'getParameter', 'listIndexes', 'createIndexes']);
@@ -156,7 +155,7 @@ export function setupDevtools(app, ex) {
   });
 
   api.get('/overview', (_req, res) => res.json(overview(app)));
-  api.get('/doctor', (_req, res) => res.json(runtimeChecks(app)));
+  api.get('/doctor', async (_req, res) => res.json(await app.doctor()));
   api.get('/requests', (_req, res) => res.json(requests.list().map(summary).reverse()));
   api.delete('/requests', (_req, res) => {
     requests.clear();

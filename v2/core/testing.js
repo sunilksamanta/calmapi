@@ -10,6 +10,7 @@
 import { randomBytes } from 'node:crypto';
 import { createApp } from './app.js';
 import { deepMerge } from './config.js';
+import { generateKey } from './security/encryption.js';
 
 export async function createTestApp({ root = process.cwd(), config = {} } = {}) {
   const base = process.env.MONGODB_TEST_URI ?? 'mongodb://127.0.0.1:27017';
@@ -23,6 +24,7 @@ export async function createTestApp({ root = process.cwd(), config = {} } = {}) 
         mode: 'test',
         db: { uri: url.toString(), connectRetries: 1 },
         auth: { password: { logN: 10, r: 8, p: 1 } },
+        encryption: { keys: process.env.CALM_ENCRYPTION_KEYS ?? generateKey('test') },
         log: { level: process.env.CALM_TEST_LOG ?? 'silent' },
       },
       config,

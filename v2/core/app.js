@@ -10,11 +10,13 @@ import { loadResources, loadBlocks, loadAppRoutes } from './loader.js';
 import { compileResource } from './resource/resource.js';
 import { crudRoutes } from './resource/routes.js';
 import { RouteBuilder, toExpressHandler, servicesProxy, policyPreCheck } from './http/router.js';
-import { requestContext, securityHeaders, cors, rateLimit, createMemoryStore, accessLog } from './http/middleware.js';
+import { requestContext, securityHeaders, cors, rateLimit, createMemoryStore, accessLog, jsonGuard } from './http/middleware.js';
 import { setupAuth } from './auth/index.js';
 import { buildOpenAPI } from './openapi.js';
 import { runtimeChecks } from './doctor.js';
+import { exposureMatrix, exposureFindings } from './security/exposure.js';
 import { toHttpError, notFound } from './errors.js';
+import { parseKeys, createCipher } from './security/encryption.js';
 
 /**
  * Build a CalmAPI application from a project folder.
@@ -29,6 +31,9 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
   const db = new mongoose.Mongoose();
   db.set('strictQuery', true);
   db.set('autoIndex', config.db.autoIndex);
+
+  const keys = parseKeys(config.encryption?.keys ?? process.env.CALM_ENCRYPTION_KEYS ?? process.env.CALM_ENCRYPTION_KEY ?? '');
+  const cipher = keys.length ? createCipher(keys) : null;
 
   const registry = new Map();
   const services = {
@@ -58,6 +63,7 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
     ext: {},
     hooks,
     rateStore,
+    cipher,
     mailer: createMailer({ log, mode: config.mode, from: config.mail?.from ?? `${config.app.name} <no-reply@localhost>` }),
     express: null,
     server: null,
@@ -67,7 +73,8 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
     model: (name) => services.get(name).model,
     service: (name) => services.get(name),
     openapi: () => buildOpenAPI(app),
-    doctor: () => runtimeChecks(app),
+    doctor: async () => [...runtimeChecks(app), ...exposureFindings(await exposureMatrix(app))],
+    exposure: () => exposureMatrix(app),
 
     /** Run work after the response, tracked so tests and shutdown can wait for it. */
     background(fn) {
@@ -148,7 +155,7 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
       def = Object.freeze((await hook(copy)) ?? copy);
     }
     if (registry.has(def.name)) throw new Error(`Two resources are named "${def.name}"`);
-    const model = compileResource(def, db);
+    const model = compileResource(def, db, { cipher });
     const entry = { def, model, files: item.files, routesFn: item.routes };
     entry.service = new item.ServiceClass({ def, model, app });
     registry.set(def.name, entry);
@@ -234,20 +241,22 @@ async function buildExpress(app) {
   });
   for (const fn of app.hooks.middleware) ex.use(fn);
 
+  const onLimit = (req, name) => app.events.emit('security.rate_limited', { ip: req.ip, path: req.originalUrl, limiter: name });
   const api = express.Router();
   api.use(express.json({ limit: config.bodyLimit }));
-  if (config.rateLimit.enabled) api.use(rateLimit({ store: app.rateStore, ...config.rateLimit.global, name: 'global' }));
+  api.use(jsonGuard(config.jsonLimits));
+  if (config.rateLimit.enabled) api.use(rateLimit({ store: app.rateStore, ...config.rateLimit.global, name: 'global', onLimit }));
   if (app.auth) api.use(app.auth.service.authenticate);
 
   const authLimiter = config.rateLimit.enabled
-    ? rateLimit({ store: app.rateStore, ...config.rateLimit.auth, name: 'auth', key: (req) => `${req.ip}:${req.path}` })
+    ? rateLimit({ store: app.rateStore, ...config.rateLimit.auth, name: 'auth', key: (req) => `${req.ip}:${req.path}`, onLimit })
     : null;
 
   for (const route of app.routes) {
     const chain = [];
     if (route.rateLimit === 'auth' && authLimiter) chain.push(authLimiter);
     else if (route.rateLimit && typeof route.rateLimit === 'object' && config.rateLimit.enabled) {
-      chain.push(rateLimit({ store: app.rateStore, name: `${route.method}:${route.path}`, ...route.rateLimit }));
+      chain.push(rateLimit({ store: app.rateStore, name: `${route.method}:${route.path}`, ...route.rateLimit, onLimit }));
     }
     if (route.middleware.length) chain.push(policyPreCheck(route), ...route.middleware);
     api[route.method.toLowerCase()](route.path, ...chain, toExpressHandler(app, route));
@@ -266,6 +275,9 @@ async function buildExpress(app) {
   ex.use((err, req, res, _next) => {
     const httpErr = toHttpError(err);
     req.calmError = { original: err, http: httpErr };
+    const who = { userId: req.user?.id ?? null, ip: req.ip, method: req.method, path: req.originalUrl };
+    if (err?.blockedFields) app.events.emit('security.write_rejected', { ...who, ...err.blockedFields });
+    else if (httpErr.status === 403) app.events.emit('security.forbidden', who);
     if (httpErr.status >= 500) log.error(`${req.method} ${req.originalUrl} failed`, { err });
     const body = { error: { code: httpErr.code, message: httpErr.message, requestId: req.id } };
     if (httpErr.details) body.error.details = httpErr.details;

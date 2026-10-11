@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util';
-import { findProjectRoot, findV1Root, readLock } from '../lib/project.js';
+import { findProjectRoot, findV1Root, readLock, capture } from '../lib/project.js';
 import { introspect } from '../lib/introspect.js';
-import { scanAdvisories, staticChecks } from '../lib/static-checks.js';
+import { scanAdvisories, staticChecks, gitChecks, auditChecks } from '../lib/static-checks.js';
 import { PKG } from '../lib/files.js';
 import { c, out } from '../lib/ui.js';
 
@@ -13,6 +13,7 @@ ${c.bold('calm doctor')} [--prod] [--ci] [--strict] [--json]
   projects, where it reports the published security advisories.
 
   --prod     evaluate as production (NODE_ENV=production rules)
+  --audit    also run npm audit on production dependencies
   --ci       exit with code 1 when there are errors (with --strict: also warnings)
   --json     machine readable output
 `;
@@ -25,6 +26,7 @@ export async function run(argv) {
     args: argv,
     options: {
       prod: { type: 'boolean' },
+      audit: { type: 'boolean' },
       ci: { type: 'boolean' },
       strict: { type: 'boolean' },
       json: { type: 'boolean' },
@@ -57,7 +59,8 @@ export async function run(argv) {
     } else {
       findings.push(...info.doctor);
     }
-    findings.push(...staticChecks(root, lock), ...scanAdvisories(root, 'v2'));
+    findings.push(...staticChecks(root, lock), ...scanAdvisories(root, 'v2'), ...(await gitChecks(root, capture)));
+    if (values.audit) findings.push(...(await auditChecks(root, capture)));
     if (lock?.calmapi && lock.calmapi !== PKG.version) {
       findings.push({ level: 'info', id: 'upgrade', title: `calm/ is from calmapi ${lock.calmapi}, this CLI is ${PKG.version}`, detail: 'Run `npx calm upgrade` to merge framework updates into calm/.' });
     }

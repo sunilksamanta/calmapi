@@ -1,4 +1,5 @@
 import { Field, validateValue, toJSONSchema } from './fields.js';
+import { encryptionPlugin } from '../security/encryption.js';
 import { parsePolicy, fieldAllowed } from './policy.js';
 import { kebab, pluralize, camel, isPlainObject } from '../utils/strings.js';
 import { validationError } from '../errors.js';
@@ -34,6 +35,11 @@ export function resource(name, def) {
     if (field.opts.owner) {
       if (ownerField && ownerField !== key) throw new Error(`resource('${slug}'): only one field can be .owner()`);
       ownerField = key;
+    }
+    if (field.opts.encrypted) {
+      const clash = ['filterable', 'sortable', 'searchable', 'unique', 'index', 'owner'].filter((o) => field.opts[o]);
+      if (clash.length) throw new Error(`resource('${slug}'): "${key}" is .encrypted() and cannot also be ${clash.join(', ')} (ciphertext cannot be queried)`);
+      if (field.type === 'ref' || field.type === 'id') throw new Error(`resource('${slug}'): "${key}": references cannot be encrypted`);
     }
     fields[key] = field;
   }
@@ -76,10 +82,23 @@ export const isResource = (value) => value?.kind === 'calm.resource';
 // Mongoose compilation
 // ---------------------------------------------------------------------------------
 
-export function compileResource(def, mongoose) {
+export function compileResource(def, mongoose, { cipher } = {}) {
   const { Schema } = mongoose;
   const shape = {};
-  for (const [key, field] of Object.entries(def.fields)) shape[key] = mongooseType(field, Schema);
+  const encrypted = [];
+  for (const [key, field] of Object.entries(def.fields)) {
+    shape[key] = mongooseType(field, Schema);
+    if (field.opts.encrypted) {
+      encrypted.push(key);
+      // Stored as a ciphertext string; untyped here so Mongoose never casts the plaintext
+      // before the encryption hook runs (validateInput already checked its real type).
+      shape[key] = { ...shape[key], type: Schema.Types.Mixed };
+      delete shape[key].enum;
+      delete shape[key].trim;
+      delete shape[key].lowercase;
+      delete shape[key].uppercase;
+    }
+  }
 
   const schema = new Schema(shape, {
     timestamps: def.timestamps,
@@ -88,6 +107,10 @@ export function compileResource(def, mongoose) {
   });
   for (const { fields, options } of def.indexes) schema.index(fields, options);
   for (const plugin of def.options.schemaPlugins ?? []) schema.plugin(plugin);
+  if (encrypted.length) {
+    if (!cipher) throw new Error(`${def.name}: fields ${encrypted.join(', ')} are .encrypted() but CALM_ENCRYPTION_KEYS is not set. Run \`npx calm keygen\` and add the line to .env.`);
+    schema.plugin(encryptionPlugin(encrypted, cipher));
+  }
 
   return mongoose.model(def.modelName, schema);
 }
@@ -140,6 +163,7 @@ export async function validateInput(def, input, { mode, user, doc, unknownFields
   if (!isPlainObject(input)) throw validationError({ body: 'Request body must be a JSON object' }, 'Request body must be a JSON object');
 
   const details = {};
+  const blocked = [];
   const out = {};
   for (const key of Object.keys(input)) {
     const field = def.fields[key];
@@ -150,6 +174,7 @@ export async function validateInput(def, input, { mode, user, doc, unknownFields
     }
     if (!field.isInput) {
       details[key] = 'Is read-only';
+      blocked.push(key);
       continue;
     }
     if (mode === 'update' && field.opts.immutable) {
@@ -164,6 +189,7 @@ export async function validateInput(def, input, { mode, user, doc, unknownFields
       const ok = await fieldAllowed(parsePolicy(field.opts.writableBy), { user, resource: def, doc, action: mode });
       if (!ok) {
         details[key] = 'You are not allowed to set this field';
+        blocked.push(key);
         continue;
       }
     }
@@ -185,7 +211,11 @@ export async function validateInput(def, input, { mode, user, doc, unknownFields
     }
   }
 
-  if (Object.keys(details).length) throw validationError(details);
+  if (Object.keys(details).length) {
+    const err = validationError(details);
+    if (blocked.length) err.blockedFields = { resource: def.name, fields: blocked };
+    throw err;
+  }
   return out;
 }
 

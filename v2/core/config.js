@@ -40,6 +40,7 @@ export async function loadConfig(root, overrides = {}) {
     apiPrefix: '/api',
     trustProxy: parseTrustProxy(env.TRUST_PROXY),
     bodyLimit: '1mb',
+    jsonLimits: { maxDepth: 20, maxKeys: 10_000 },
     db: { uri: env.MONGODB_URI, autoIndex: true, connectRetries: 5 },
     cors: { origins: env.CORS_ORIGINS ? env.CORS_ORIGINS.split(',').map((s) => s.trim()) : mode === 'production' ? [] : '*' },
     pagination: { defaultLimit: 20, maxLimit: 100 },
@@ -56,6 +57,7 @@ export async function loadConfig(root, overrides = {}) {
       resetTokenTtlMinutes: 30,
       resetUrl: null,
       password: { logN: 15, r: 8, p: 3 }, // scrypt cost; length rules live on f.password()
+      lockout: { maxAttempts: 5, windowMinutes: 15, lockMinutes: 15 }, // per account, 0 disables
     },
     openapi: { enabled: true, path: '/openapi.json' },
     devtools: { enabled: mode === 'development' },
