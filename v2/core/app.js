@@ -47,7 +47,7 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
   services.proxy = servicesProxy(services);
 
   const background = new Set();
-  const hooks = { start: [], shutdown: [], resource: [], service: [], middleware: [], routes: [], doctor: [], devtools: {} };
+  const hooks = { start: [], shutdown: [], resource: [], service: [], middleware: [], routes: [], doctor: [], login: [], devtools: {} };
   const rateStore = createMemoryStore();
 
   const app = {
@@ -206,6 +206,11 @@ function pluginApi(app, plugin) {
     onResource: (fn) => app.hooks.resource.push(fn),
     /** Called with { def, model, service } for every resource once services exist. */
     onService: (fn) => app.hooks.service.push(fn),
+    /**
+     * After a correct password, before a session is created. Return an object (e.g.
+     * { mfaRequired: true, mfaToken }) to answer the login with a challenge instead.
+     */
+    loginChallenge: (fn) => app.hooks.login.push(fn),
     routes: (fn, options = {}) => app.hooks.routes.push({ fn, options: { source: `block:${plugin.name}`, file: plugin.file, ...options } }),
     use: (fn) => app.hooks.middleware.push(fn),
     onStart: (fn) => app.hooks.start.push(fn),

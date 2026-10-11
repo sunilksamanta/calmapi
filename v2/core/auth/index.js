@@ -163,7 +163,17 @@ export function setupAuth(app) {
       if (needsRehash(user[passwordField], cfg.password)) {
         await User.updateOne({ _id: user._id }, { $set: { [passwordField]: await hashPassword(input.password, cfg.password) } });
       }
-      const session = await createSession(user, ctx.req);
+      const { [passwordField]: _hash, ...safeUser } = user;
+      for (const challenge of app.hooks.login) {
+        const answer = await challenge(safeUser, ctx);
+        if (answer) return answer; // e.g. second factor required
+      }
+      return service.finishLogin(safeUser, ctx.req);
+    },
+
+    /** Create the session and the login response (also used by second-factor blocks). */
+    async finishLogin(user, req) {
+      const session = await createSession(user, req);
       app.events.emit('auth.login', { user: toAuthUser(user) });
       return { user: await publicUser(user), ...session };
     },

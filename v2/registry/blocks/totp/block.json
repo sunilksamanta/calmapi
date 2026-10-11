@@ -1,0 +1,9 @@
+{
+  "name": "totp",
+  "title": "Two-factor authentication (TOTP)",
+  "description": "Authenticator-app codes (RFC 6238) on login: setup with an otpauth URL, hashed single-use recovery codes, replay protection, attempt limits. Zero dependencies.",
+  "version": "1.0.0",
+  "categories": ["security", "auth"],
+  "envVars": { "TOTP_ISSUER": "My App" },
+  "docs": "1. POST /api/auth/2fa/setup -> { secret, otpauthUrl } (render the URL as a QR code in your app)\n2. POST /api/auth/2fa/enable { code } -> { recoveryCodes } (shown once)\n3. Login now answers { mfaRequired: true, mfaToken }: POST /api/auth/2fa/verify { mfaToken, code } -> { token, user }\nRecovery: send { mfaToken, recoveryCode } instead of code. Disable: POST /api/auth/2fa/disable { password }.\nSet CALM_ENCRYPTION_KEYS (npx calm keygen --write) so TOTP secrets are encrypted at rest."
+}
