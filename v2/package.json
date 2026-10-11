@@ -65,5 +65,8 @@
   "exports": {
     "./cli": "./src/cli/index.js",
     "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "tag": "next"
   }
 }

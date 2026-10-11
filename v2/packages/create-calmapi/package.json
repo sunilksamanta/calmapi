@@ -2,12 +2,38 @@
   "name": "create-calmapi",
   "version": "2.0.0-alpha.0",
   "description": "Create a CalmAPI project: npm create calmapi@latest",
+  "keywords": [
+    "calmapi",
+    "create",
+    "scaffold",
+    "express",
+    "mongodb",
+    "rest",
+    "api"
+  ],
   "type": "module",
-  "bin": { "create-calmapi": "index.js" },
-  "files": ["index.js"],
-  "engines": { "node": ">=22.12" },
-  "dependencies": { "calmapi": "2.0.0-alpha.0" },
+  "bin": {
+    "create-calmapi": "index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "dependencies": {
+    "calmapi": "2.0.0-alpha.0"
+  },
+  "author": "Sunil Kumar Samanta",
   "license": "MIT",
   "homepage": "https://calmapi.dev",
-  "repository": { "type": "git", "url": "git+https://github.com/sunilksamanta/calmapi.git", "directory": "v2/packages/create-calmapi" }
+  "bugs": {
+    "url": "https://github.com/sunilksamanta/calmapi/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sunilksamanta/calmapi.git",
+    "directory": "v2/packages/create-calmapi"
+  }
 }

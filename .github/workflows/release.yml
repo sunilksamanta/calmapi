@@ -1,0 +1,137 @@
+name: Release CalmAPI 2
+
+# Push a tag to release:
+#   v2.0.0-alpha.1    tests, then publishes calmapi, @calmapi/devtools and create-calmapi to npm
+#   release-check-*   the same run as a dry run: tests, then `npm publish --dry-run` (nothing is published)
+#
+# Authentication: npm trusted publishing (OIDC) when it is configured for the packages on
+# npmjs.com, otherwise the NPM_TOKEN repository secret. See v2/RELEASING.md.
+
+on:
+  push:
+    tags: ['v2.*', 'release-check-*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Test before publishing
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:8.0
+        ports: ['27017:27017']
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    defaults:
+      run:
+        working-directory: v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: v2/package-lock.json
+      - name: Check versions, tag and changelog
+        run: |
+          if [[ "$GITHUB_REF_NAME" == v2.* ]]; then node scripts/check-release.js "$GITHUB_REF_NAME"; else node scripts/check-release.js; fi
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build:registry
+      - run: npm test
+        env:
+          MONGODB_TEST_URI: mongodb://127.0.0.1:27017
+      - name: Create and test a project from the packed tarballs
+        env:
+          MONGODB_TEST_URI: mongodb://127.0.0.1:27017
+        run: |
+          set -euo pipefail
+          npm pack --pack-destination /tmp
+          (cd packages/devtools && npm pack --pack-destination /tmp)
+          cd /tmp
+          npm install -g /tmp/calmapi-[0-9]*.tgz
+          calm create smoke-api --yes --no-install --no-git
+          cd smoke-api
+          test -f calm/index.js && test -f calm.lock
+          npm install --no-audit --no-fund /tmp/calmapi-[0-9]*.tgz /tmp/calmapi-devtools-*.tgz
+          npm test
+          npx calm audit --ci
+          npx calm add --list | grep -q totp
+
+  publish:
+    name: Publish to npm
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # GitHub release
+      id-token: write # npm provenance and trusted publishing
+    defaults:
+      run:
+        working-directory: v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+          cache-dependency-path: v2/package-lock.json
+      - name: Use npm 11 (trusted publishing needs 11.5.1 or newer)
+        run: npm install -g npm@^11.15.0 && npm --version
+      - run: npm ci
+      - id: meta
+        name: Release metadata
+        run: |
+          if [[ "$GITHUB_REF_NAME" == v2.* ]]; then node scripts/check-release.js "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"; else node scripts/check-release.js >> "$GITHUB_OUTPUT"; fi
+          cat "$GITHUB_OUTPUT"
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          CALMAPI_TAG: ${{ steps.meta.outputs.calmapi_tag }}
+        run: |
+          set -euo pipefail
+          DRY=""
+          if [[ "$GITHUB_REF_NAME" != v2.* ]]; then DRY="--dry-run"; echo "Dry run: nothing will be published."; fi
+          publish() { # <dir> <dist-tag>
+            local name version
+            name=$(node -p "require('./$1/package.json').name")
+            version=$(node -p "require('./$1/package.json').version")
+            if [[ -z "$DRY" ]] && npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already on npm, skipping."
+              return
+            fi
+            echo "Publishing $name@$version with tag $2"
+            (cd "$1" && npm publish --provenance --access public --tag "$2" $DRY)
+          }
+          # Order matters: projects depend on @calmapi/devtools, create-calmapi depends on calmapi.
+          publish packages/devtools latest
+          publish . "$CALMAPI_TAG"
+          publish packages/create-calmapi latest
+      - name: Check the registry
+        if: startsWith(github.ref_name, 'v2.')
+        run: |
+          sleep 10
+          npm view calmapi dist-tags
+          npm view create-calmapi dist-tags
+          npm view @calmapi/devtools dist-tags
+      - name: GitHub release
+        if: startsWith(github.ref_name, 'v2.')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          # Release notes: this version's CHANGELOG section.
+          awk -v v="## $VERSION" '$0==v{on=1;next} /^## /{on=0} on' CHANGELOG.md > /tmp/notes.md
+          printf '\nInstall: `npm create calmapi@latest my-api`\n' >> /tmp/notes.md
+          flags=(); if [[ "$PRERELEASE" == "true" ]]; then flags+=(--prerelease); fi
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then echo "Release exists"; exit 0; fi
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "CalmAPI $VERSION" --notes-file /tmp/notes.md "${flags[@]}"
