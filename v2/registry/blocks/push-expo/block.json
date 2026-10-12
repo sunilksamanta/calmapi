@@ -3,6 +3,7 @@
   "title": "Push notifications via Expo",
   "description": "Deliver app.push notifications to Expo and React Native apps through the Expo push service. No SDK, just fetch. Tokens that stopped working are removed for you.",
   "version": "1.0.0",
+  "minVersion": "2.0.0-alpha.1",
   "categories": ["push", "notifications"],
   "conflicts": ["push-fcm"],
   "envVars": { "EXPO_ACCESS_TOKEN": "" },

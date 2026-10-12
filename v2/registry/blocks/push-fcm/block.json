@@ -3,6 +3,7 @@
   "title": "Push notifications via Firebase Cloud Messaging",
   "description": "Deliver app.push notifications to Android, iOS and web through the FCM HTTP v1 API, signed with your service account using node:crypto. No SDK. Tokens that stopped working are removed for you.",
   "version": "1.0.0",
+  "minVersion": "2.0.0-alpha.1",
   "categories": ["push", "notifications"],
   "conflicts": ["push-expo"],
   "envVars": { "FCM_SERVICE_ACCOUNT": "" },

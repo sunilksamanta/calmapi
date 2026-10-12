@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.0-alpha.1
 
 ### Push notifications
 - `app.push.send({ to, title, body, data, ... })` (also `ctx.push` and `calm.push`): one message format for
