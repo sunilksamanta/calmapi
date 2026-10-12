@@ -18,8 +18,8 @@ export default {
 const PLATFORM = { ios: 'iPhone', android: 'Android', web: 'Web' };
 const STATUS = {
   captured: { label: 'Captured', tone: null, note: 'Shown here, not delivered' },
-  sent: { label: 'Delivered', tone: 'green', note: 'Accepted by the provider for every device' },
-  partial: { label: 'Partly delivered', tone: 'amber', note: 'Some devices failed, see the delivery log' },
+  sent: { label: 'Sent', tone: 'green', note: 'The provider accepted it for every device' },
+  partial: { label: 'Partly sent', tone: 'amber', note: 'Some devices failed, see the delivery log' },
   failed: { label: 'Failed', tone: 'red', note: 'No device received it, see the delivery log' },
   'no-devices': { label: 'No devices', tone: 'amber', note: 'Nobody to send to' },
   pending: { label: 'Sending', tone: null, note: 'Waiting for the transport' },
@@ -63,6 +63,17 @@ const who = (p) => {
   return p.to.tokens ? plural(p.to.tokens, 'token') : 'nobody';
 };
 const isHttps = (url) => /^https:\/\//i.test(url ?? '');
+// Where a device's notifications go: a transport (expo, fcm...), 'simulated', 'dev-capture' or null.
+const viaText = (via) =>
+  via === 'simulated' ? 'Simulated: shown in devtools, never delivered'
+    : via === 'dev-capture' ? 'No transport installed: captured in devtools'
+      : via ? `Sent through ${via}`
+        : 'No installed transport takes this token, so it is not delivered';
+const viaBadge = (via) =>
+  via === 'simulated' ? h('span', { class: 'badge' }, 'simulated')
+    : via === 'dev-capture' ? h('span', { class: 'badge' }, 'captured')
+      : via ? h('span', { class: 'badge b-green' }, via)
+        : h('span', { class: 'badge b-red' }, 'no transport');
 
 // ---- notification previews ----------------------------------------------------------
 
@@ -375,7 +386,7 @@ function mountPush(root, params) {
                 'li',
                 { class: ['np-log-row', `lv-${l.level}`] },
                 h('span', { class: 'muted num' }, clock(l.time, true)),
-                h('span', { class: ['dot', l.level === 'error' ? 'dot-red' : l.level === 'warn' ? 'dot-amber' : l.providerId !== undefined || /^Delivered/.test(l.text) ? 'dot-green' : null] }),
+                h('span', { class: ['dot', l.level === 'error' ? 'dot-red' : l.level === 'warn' ? 'dot-amber' : l.ok || l.receipt ? 'dot-green' : null] }),
                 h('span', { class: 'np-log-dev ellipsis', title: d ? `${PLATFORM[d.platform]} · ${d.token}` : null }, d ? d.name ?? PLATFORM[d.platform] : 'All devices'),
                 h('span', { class: 'np-log-text' }, l.text),
               );
@@ -545,7 +556,7 @@ function mountPush(root, params) {
             else draft.picked.delete(d.id);
             paintPreview();
           });
-          return h('label', { class: 'np-dev' }, box, h('span', { class: 'np-plat' }, PLATFORM[d.platform]), h('span', { class: 'ellipsis' }, d.name ?? 'Unnamed device'), d.simulated ? h('span', { class: 'badge' }, 'simulated') : h('span', { class: 'mono muted' }, d.token));
+          return h('label', { class: 'np-dev', title: d.simulated ? 'Simulated: shown here, never delivered' : `${d.token} · ${viaText(d.via)}` }, box, h('span', { class: 'np-plat' }, PLATFORM[d.platform]), h('span', { class: 'ellipsis' }, d.name ?? 'Unnamed device'), viaBadge(d.via));
         }),
         sim,
       );
@@ -723,7 +734,8 @@ function mountPush(root, params) {
         h('td', null, h('div', { class: 'ellipsis' }, d.user.name ?? d.user.id), d.user.email ? h('div', { class: 'muted ellipsis' }, d.user.email) : null),
         h('td', null, d.name ?? h('span', { class: 'muted' }, 'Unnamed')),
         h('td', null, PLATFORM[d.platform]),
-        h('td', null, d.simulated ? h('span', { class: 'badge' }, 'simulated') : h('span', { class: 'mono' }, d.token)),
+        h('td', null, d.simulated ? h('span', { class: 'muted' }, 'none') : h('span', { class: 'mono' }, d.token)),
+        h('td', { title: viaText(d.via) }, viaBadge(d.via)),
         h('td', { class: 'muted', title: d.lastSeenAt ? fullDate(d.lastSeenAt) : '' }, d.lastSeenAt ? relTime(d.lastSeenAt) : ''),
         h(
           'td',
@@ -768,7 +780,7 @@ function mountPush(root, params) {
         { class: 'np-devlist scroll' },
         h('div', { class: 'np-tools' }, h('span', { class: 'muted' }, devices.length ? `${plural(devices.length, 'device')}. Simulated devices receive previews only and never reach a real provider.` : 'No devices registered.'), h('span', { class: 'spacer' }), addBtn),
         devices.length
-          ? h('table', { class: 'tbl np-dev-tbl' }, h('thead', null, h('tr', null, ['User', 'Device', 'Platform', 'Token', 'Last seen', ''].map((t) => h('th', null, t)))), h('tbody', null, rows))
+          ? h('table', { class: 'tbl np-dev-tbl' }, h('thead', null, h('tr', null, ['User', 'Device', 'Platform', 'Token', 'Sent through', 'Last seen', ''].map((t) => h('th', null, t)))), h('tbody', null, rows))
           : empty('Apps register a device with POST /api/auth/devices { token, platform }. Or add a simulated one to preview notifications without a phone.'),
       ),
     );

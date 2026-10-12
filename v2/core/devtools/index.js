@@ -296,6 +296,7 @@ export function setupDevtools(app, ex) {
     name: d.name ?? null,
     token: maskToken(d.token),
     simulated: Boolean(d.simulated),
+    via: app.push.routeFor(d), // the transport that would deliver to it
     appVersion: d.appVersion ?? null,
     lastSeenAt: d.lastSeenAt ?? null,
     createdAt: d.createdAt,

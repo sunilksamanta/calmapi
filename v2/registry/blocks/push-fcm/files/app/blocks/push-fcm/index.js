@@ -77,6 +77,8 @@ export default definePlugin({
 
     calm.push.use({
       name: 'fcm',
+      // Native FCM tokens. Expo push tokens belong to push-expo (they can be installed together).
+      accepts: (device) => !/^Expo(nent)?PushToken\[/.test(device.token),
       async send(message, devices) {
         const token = await accessToken();
         const results = new Array(devices.length);

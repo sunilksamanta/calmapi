@@ -1,11 +1,15 @@
 {
   "name": "push-expo",
   "title": "Push notifications via Expo",
-  "description": "Deliver app.push notifications to Expo and React Native apps through the Expo push service. No SDK, just fetch. Tokens that stopped working are removed for you.",
+  "description": "Deliver app.push notifications to Expo push tokens (Expo and React Native apps) through the Expo push service, as Expo documents it: batching, throttling, retries and push receipts. Works next to push-fcm.",
   "version": "1.0.0",
   "minVersion": "2.0.0-alpha.1",
-  "categories": ["push", "notifications"],
-  "conflicts": ["push-fcm"],
-  "envVars": { "EXPO_ACCESS_TOKEN": "" },
-  "docs": "Your app gets a token with getExpoPushTokenAsync() from expo-notifications and registers it: POST /api/auth/devices { token, platform }. Then send from anywhere: await ctx.push.send({ to: userId, title, body }).\nEXPO_ACCESS_TOKEN is optional but recommended: turn on enhanced push security in your Expo project so only your server can send to your users. In development without the block's transport, notifications land in the devtools Push panel."
+  "categories": [
+    "push",
+    "notifications"
+  ],
+  "envVars": {
+    "EXPO_ACCESS_TOKEN": ""
+  },
+  "docs": "Your app gets a token with Notifications.getExpoPushTokenAsync({ projectId }) from expo-notifications and registers it: POST /api/auth/devices { token, platform }. Then send from anywhere: await ctx.push.send({ to: userId, title, body }).\nSet EXPO_ACCESS_TOKEN if enhanced push security is on for your Expo project (recommended). Receipts are checked every few minutes; devices whose app was uninstalled are removed.\nInstall push-fcm too if some devices register native FCM tokens: each token goes to the right service."
 }

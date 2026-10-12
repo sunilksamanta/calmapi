@@ -56,6 +56,7 @@ export function normalizeMessage(input = {}) {
     channel: str('channel', 100),
     category: str('category', 100),
     group: str('group', 100),
+    collapseId: str('collapseId', 64),
     badge: input.badge,
     data: input.data,
     priority: input.priority ?? 'high',
@@ -97,10 +98,10 @@ export function providerPayloads(message, token = '<device token>') {
       android: compact({
         priority: message.priority === 'high' ? 'HIGH' : 'NORMAL',
         ttl: message.ttl !== undefined ? `${message.ttl}s` : undefined,
-        collapse_key: message.group,
-        notification: message.silent ? undefined : compact({ channel_id: message.channel, sound: message.sound ?? undefined, tag: message.group, icon: message.icon }),
+        collapse_key: message.collapseId,
+        notification: message.silent ? undefined : compact({ channel_id: message.channel, sound: message.sound ?? undefined, tag: message.collapseId, icon: message.icon }),
       }),
-      apns: { headers: compact({ 'apns-push-type': message.silent ? 'background' : 'alert', 'apns-priority': message.silent ? '5' : message.priority === 'high' ? '10' : '5' }), payload: { aps } },
+      apns: { headers: compact({ 'apns-push-type': message.silent ? 'background' : 'alert', 'apns-priority': message.silent ? '5' : message.priority === 'high' ? '10' : '5', 'apns-collapse-id': message.collapseId }), payload: { aps } },
       webpush: message.url ? { fcm_options: { link: message.url } } : undefined,
     }),
   };
@@ -117,8 +118,12 @@ export function providerPayloads(message, token = '<device token>') {
     categoryId: message.category,
     priority: message.priority === 'high' ? 'high' : 'normal',
     ttl: message.ttl,
-    mutableContent: message.image ? true : undefined,
-    _contentAvailable: message.silent || undefined,
+    threadId: message.group,
+    collapseId: message.collapseId,
+    tag: message.collapseId, // Android: also replace a notification already on screen
+    richContent: message.image ? { image: message.image } : undefined,
+    mutableContent: message.image ? true : undefined, // iOS shows images through a notification service extension
+    contentAvailable: message.silent || undefined,
   });
 
   const web = compact({
@@ -126,7 +131,7 @@ export function providerPayloads(message, token = '<device token>') {
     body: message.body,
     icon: message.icon,
     image: message.image,
-    tag: message.group,
+    tag: message.collapseId,
     data: { ...data, ...(message.url ? { url: message.url } : {}) },
     silent: message.silent || undefined,
   });
@@ -182,7 +187,9 @@ export function compileDeviceModel(mongoose) {
 }
 
 export function createPush({ log, mode, events }) {
-  let transport = null;
+  // Several transports can be active (push-expo next to push-fcm). Each device goes to the
+  // first transport whose accepts(device) says yes, otherwise to one without accepts().
+  let transports = [];
   let Device = null;
   const observers = [];
   const notify = (record, event) => {
@@ -194,6 +201,14 @@ export function createPush({ log, mode, events }) {
       }
     }
   };
+  // Recent records, so a receipt that arrives later (push-expo) lands in the right delivery log.
+  const recent = new Map();
+  const remember = (record) => {
+    if (!observers.length) return;
+    recent.set(record.id, record);
+    if (recent.size > 200) recent.delete(recent.keys().next().value);
+  };
+  const route = (device) => transports.find((t) => typeof t.accepts === 'function' && t.accepts(device)) ?? transports.find((t) => typeof t.accepts !== 'function') ?? null;
 
   async function resolveDevices(input) {
     const devices = [];
@@ -217,11 +232,27 @@ export function createPush({ log, mode, events }) {
   }
 
   const push = {
+    /**
+     * Add a transport: { name, send(message, devices), accepts?(device) }. A transport with the
+     * same name replaces the old one; use(null) removes them all.
+     */
     use(t) {
-      transport = t;
+      if (t === null || t === undefined) {
+        transports = [];
+        return;
+      }
+      transports = [...transports.filter((x) => x.name !== t.name), t];
     },
+    /** Names of the active transports ('expo + fcm'), 'dev-capture' without one, null in production. */
     get transport() {
-      return transport?.name ?? (mode === 'production' ? null : 'dev-capture');
+      if (transports.length) return transports.map((t) => t.name).join(' + ');
+      return mode === 'production' ? null : 'dev-capture';
+    },
+    /** Which transport a device would go through: a transport name, 'simulated', 'dev-capture' or null. */
+    routeFor(device) {
+      if (device.simulated || String(device.token ?? '').startsWith('sim_')) return 'simulated';
+      if (!transports.length) return mode === 'production' ? null : 'dev-capture';
+      return route(device)?.name ?? null;
     },
     /** Called by auth with the device model, so send({ to: userId }) can find devices. */
     useDevices(model) {
@@ -253,7 +284,7 @@ export function createPush({ log, mode, events }) {
           tokens: [input.tokens ?? []].flat().length,
         },
         message,
-        devices: devices.map(({ token, ...d }) => ({ ...d, token: maskToken(token) })),
+        devices: devices.map(({ token, ...d }) => ({ ...d, token: maskToken(token), via: push.routeFor({ ...d, token }) })),
         payloads,
         warnings: messageWarnings(message, payloads, devices),
         status: 'pending',
@@ -269,48 +300,103 @@ export function createPush({ log, mode, events }) {
           ? 'No registered devices for this user. Apps register them with POST /api/auth/devices; in devtools you can add a simulated device.'
           : record.to.devices ? 'None of the given devices exist.' : 'No device tokens given.');
       }
+      remember(record);
       notify(record, 'created');
 
-      const real = transport ? devices.map((d, i) => [d, i]).filter(([d]) => !d.simulated) : [];
-      const unsendable = !transport && mode === 'production';
+      // Group real devices by the transport that takes them.
+      const groups = new Map(); // transport -> [[device, index]]
+      const unsendable = !transports.length && mode === 'production';
       for (const [i, d] of devices.entries()) {
-        if (d.simulated) entry(i, 'info', 'Simulated device: captured, not delivered.');
-        else if (unsendable) entry(i, 'error', 'Not sent: no push transport is configured.');
-        else if (!transport) entry(i, 'info', 'Development: captured, not delivered.');
+        if (d.simulated) {
+          entry(i, 'info', 'Simulated device: captured, not delivered.');
+          continue;
+        }
+        if (!transports.length) {
+          if (unsendable) entry(i, 'error', 'Not sent: no push transport is configured.');
+          else entry(i, 'info', 'Development: captured, not delivered.');
+          continue;
+        }
+        const t = route(d);
+        if (!t) {
+          entry(i, 'error', `Not sent: none of the installed transports (${push.transport}) takes this token.${/^Expo(nent)?PushToken\[/.test(d.token) ? ' It is an Expo push token: add the push-expo block.' : ''}`);
+          continue;
+        }
+        if (!groups.has(t)) groups.set(t, []);
+        groups.get(t).push([d, i]);
       }
 
-      let results = [];
-      if (real.length) {
-        try {
-          results = (await transport.send(message, real.map(([d]) => d))) ?? [];
-        } catch (err) {
-          results = real.map(() => ({ ok: false, error: err.message }));
-        }
-        const unregistered = [];
-        real.forEach(([d, i], n) => {
-          const r = results[n] ?? { ok: false, error: 'The transport returned no result' };
-          if (r.ok) entry(i, 'info', `Delivered to ${transport.name}${r.id ? ` (${r.id})` : ''}.`, { providerId: r.id });
-          else entry(i, 'error', `${transport.name}: ${r.error ?? 'failed'}${r.unregistered ? ' (token no longer valid, device removed)' : ''}`);
-          if (r.unregistered && d.id) unregistered.push(d.id);
-        });
-        if (unregistered.length && Device) await Device.deleteMany({ _id: { $in: unregistered } });
-      } else if (unsendable && devices.some((d) => !d.simulated)) {
+      const results = new Array(devices.length).fill(null);
+      const unregistered = [];
+      await Promise.all(
+        [...groups].map(async ([t, list]) => {
+          let out;
+          try {
+            out = (await t.send(message, list.map(([d]) => d), { id: record.id })) ?? [];
+          } catch (err) {
+            out = list.map(() => ({ ok: false, error: err.message }));
+          }
+          list.forEach(([d, i], n) => {
+            const r = out[n] ?? { ok: false, error: 'The transport returned no result' };
+            results[i] = { transport: t.name, ...r };
+            // "Accepted": the provider took it. Whether it reached the phone is the provider's job.
+            if (r.ok) entry(i, 'info', `Accepted by ${t.name}${r.id ? ` (${r.id})` : ''}.`, { ok: true, providerId: r.id, transport: t.name });
+            else entry(i, 'error', `${t.name}: ${r.error ?? 'failed'}${r.unregistered ? ' (token no longer valid, device removed)' : ''}`, { transport: t.name });
+            if (r.unregistered && d.id) unregistered.push(d.id);
+          });
+        }),
+      );
+      if (unregistered.length && Device) await Device.deleteMany({ _id: { $in: unregistered } });
+      if (unsendable && devices.some((d) => !d.simulated)) {
         log.error('Push not sent: no push transport configured. Add one with `calm add push-fcm` or `calm add push-expo`.', { title: message.title });
       }
 
       const failed = record.log.filter((l) => l.level === 'error').length;
-      const delivered = record.log.filter((l) => l.providerId !== undefined || /^Delivered/.test(l.text)).length;
-      if (record.status !== 'no-devices') {
-        record.status = failed && !delivered ? 'failed' : !real.length ? 'captured' : failed === 0 ? 'sent' : 'partial';
-      }
+      if (record.status !== 'no-devices') record.status = statusOf(record);
       if (record.status === 'captured' && mode !== 'production') {
         log.info(`Push "${message.title ?? message.body ?? '(silent)'}" to ${devices.length} device(s) (dev capture, open /_calm to see it)`);
       }
-      if (failed) log.warn(`Push ${record.id}: ${failed} of ${real.length} deliveries failed`, { id: record.id });
+      if (failed) log.warn(`Push ${record.id}: ${failed} of ${devices.length} deliveries failed`, { id: record.id });
       notify(record, 'updated');
       events?.emit(`push.${record.status === 'failed' ? 'failed' : 'sent'}`, { id: record.id, status: record.status, devices: devices.length });
-      return { id: record.id, status: record.status, devices: devices.length, results };
+      return { id: record.id, status: record.status, devices: devices.length, results: results.filter(Boolean) };
+    },
+
+    /**
+     * A later delivery report for one device (push-expo checks Expo receipts with it).
+     * { ok, error?, unregistered?, transport? }. Unregistered devices are removed.
+     */
+    async receipt(pushId, deviceId, { ok, error, unregistered = false, transport = 'provider' } = {}) {
+      if (unregistered && deviceId && Device) await Device.deleteOne({ _id: deviceId }).catch(() => {});
+      const record = recent.get(pushId);
+      if (record) {
+        record.log.push({
+          time: new Date(),
+          device: deviceId,
+          level: ok ? 'info' : 'error',
+          text: ok ? `Receipt from ${transport}: handed to Apple or Google.` : `Receipt from ${transport}: ${error ?? 'failed'}${unregistered ? ' (token no longer valid, device removed)' : ''}`,
+          receipt: true,
+          transport,
+        });
+        if (record.status !== 'no-devices') record.status = statusOf(record);
+        notify(record, 'updated');
+      }
+      events?.emit('push.receipt', { id: pushId, device: deviceId, ok: Boolean(ok), error: error ?? null, unregistered });
     },
   };
   return push;
+}
+
+/** A device failed if any entry about it is an error; it was sent if a provider accepted it. */
+function statusOf(record) {
+  const keys = record.devices.map((d, i) => d.id ?? i);
+  let sent = 0;
+  let failed = 0;
+  for (const key of keys) {
+    const entries = record.log.filter((l) => l.device === key);
+    if (entries.some((l) => l.level === 'error')) failed += 1;
+    else if (entries.some((l) => l.ok)) sent += 1;
+  }
+  if (failed && !sent) return 'failed';
+  if (failed) return 'partial';
+  return sent ? 'sent' : 'captured';
 }
