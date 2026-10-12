@@ -1,0 +1,10 @@
+{
+  "name": "notifications",
+  "title": "Notifications (inbox, push, email)",
+  "description": "One call, every channel: ctx.notify(user, 'order-shipped', { order }) writes the in-app inbox, sends a push and an email, following each user's preferences and quiet hours. Types are small files in app/notifications/.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-alpha.1",
+  "categories": ["notifications", "push", "email"],
+  "envVars": {},
+  "docs": "Send: await ctx.notify(userId, 'welcome', { name }) (types live in app/notifications/<type>.js), or ctx.notify(userId, { title, body, url }).\nInbox: GET /api/notifications, GET /api/notifications/unread-count, POST /api/notifications/:id/read, POST /api/notifications/read-all.\nPreferences: GET and PATCH /api/notifications/preferences (channels per type, quiet hours). The GET lists every type, so a settings screen can be built from it.\nPush needs devices (POST /api/auth/devices); in development, simulated devices in devtools show it on a lock screen."
+}
