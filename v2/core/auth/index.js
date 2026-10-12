@@ -47,6 +47,8 @@ export function setupAuth(app) {
     createdAt: d.createdAt,
   });
   const lockout = { maxAttempts: 5, windowMinutes: 15, lockMinutes: 15, ...(app.config.auth.lockout ?? {}) };
+  // Accounts that cannot sign in or use a session (the privacy block marks 'deleting').
+  const inactive = (user) => user?.status === 'disabled' || user?.status === 'deleting';
   const security = (name, data) => app.events.emit(`security.${name}`, data);
   const mask = (email) => String(email).replace(/^(.)[^@]*(@.*)$/, '$1***$2');
   const attemptKey = (email) => hashToken(`login:${String(email).toLowerCase()}`);
@@ -133,7 +135,7 @@ export function setupAuth(app) {
         return next(err);
       }
       if (!found) continue;
-      if (!found.user || found.user.status === 'disabled') return next(unauthorized('Credentials are invalid or have expired'));
+      if (!found.user || inactive(found.user)) return next(unauthorized('Credentials are invalid or have expired'));
       req.user = toAuthUser(found.user);
       req.auth = { via: found.via ?? 'token', scopes: found.scopes ?? ['*'], id: found.id ?? null };
       return next();
@@ -145,7 +147,7 @@ export function setupAuth(app) {
       return next(unauthorized('Session is invalid or has expired'));
     }
     const user = await User.findById(session.user).lean();
-    if (!user || user.status === 'disabled') return next(unauthorized('Session is invalid or has expired'));
+    if (!user || inactive(user)) return next(unauthorized('Session is invalid or has expired'));
 
     req.user = toAuthUser(user);
     req.session = { id: String(session._id), expiresAt: session.expiresAt };
@@ -163,6 +165,11 @@ export function setupAuth(app) {
     createSession,
     authenticate,
     endSessions,
+    /** Account lockout, shared with sign-in blocks so every way in counts the same failures. */
+    lockedUntil,
+    recordFailure,
+    clearFailures,
+    inactive,
 
     async register(body, ctx) {
       if (!cfg.register) throw forbidden('Registration is disabled');
@@ -199,17 +206,25 @@ export function setupAuth(app) {
         throw unauthorized('Invalid email or password');
       }
       await clearFailures(input.email);
-      if (user.status === 'disabled') throw forbidden('This account is disabled');
+      if (inactive(user)) throw forbidden('This account is disabled');
 
       if (needsRehash(user[passwordField], cfg.password)) {
         await User.updateOne({ _id: user._id }, { $set: { [passwordField]: await hashPassword(input.password, cfg.password) } });
       }
       const { [passwordField]: _hash, ...safeUser } = user;
+      return service.completeLogin(safeUser, ctx);
+    },
+
+    /**
+     * After the user proved who they are (password, magic link, passkey...): run the login
+     * challenges (second factor) and create the session. Sign-in blocks call this.
+     */
+    async completeLogin(user, ctx) {
       for (const challenge of app.hooks.login) {
-        const answer = await challenge(safeUser, ctx);
+        const answer = await challenge(user, ctx);
         if (answer) return answer; // e.g. second factor required
       }
-      return service.finishLogin(safeUser, ctx.req);
+      return service.finishLogin(user, ctx.req);
     },
 
     /** Create the session and the login response (also used by second-factor blocks). */
@@ -262,7 +277,7 @@ export function setupAuth(app) {
       // whether or not the account exists.
       app.background(async () => {
         const user = await User.findOne({ email: input.email }).lean();
-        if (!user || user.status === 'disabled') return;
+        if (!user || inactive(user)) return;
         const token = createToken('reset');
         await PasswordReset.create({
           tokenHash: hashToken(token),

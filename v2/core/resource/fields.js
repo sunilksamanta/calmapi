@@ -66,6 +66,11 @@ export class Field {
   visibleTo(policy) { return this.#with({ visibleTo: policy }); }
   /** Encrypted at rest with AES-256-GCM (CALM_ENCRYPTION_KEYS). Cannot be queried. */
   encrypted() { return this.#with({ encrypted: true }); }
+  /**
+   * Personal data (a phone number, an address...). calm doctor warns when it is readable by
+   * everyone, and the privacy block blanks it when an account is anonymized.
+   */
+  pii() { return this.#with({ pii: true }); }
 
   // ---- querying ------------------------------------------------------------------
   filterable(ops) { return this.#with({ filterable: ops ?? true }); }

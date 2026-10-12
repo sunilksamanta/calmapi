@@ -91,7 +91,7 @@ export async function exposureMatrix(app) {
         name,
         type: field.type,
         encrypted: Boolean(field.opts.encrypted),
-        pii: PII.test(name),
+        pii: Boolean(field.opts.pii) || PII.test(name),
         read,
         write,
       });

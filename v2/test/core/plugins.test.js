@@ -19,6 +19,7 @@ export default definePlugin({
   },
   options: { greeting: 'Hello', punctuation: '!' },
   setup(calm, options) {
+    let counted = 0;
     calm.authenticate(async (token) => {
       const m = /^demo_([a-f0-9]{24})$/.exec(token);
       if (!m) return null;
@@ -27,16 +28,30 @@ export default definePlugin({
     });
     calm.guard((ctx) => {
       if (ctx.req.get('x-maintenance')) throw forbidden('Down for maintenance');
+      ctx.res.append('x-guards', 'default');
     });
+    // Registered later with a lower order, so it runs first.
+    calm.guard((ctx) => { ctx.res.append('x-guards', 'early'); }, { order: -10 });
+    // A guard can answer the request itself: the route handler does not run.
+    calm.guard((ctx) => {
+      if (ctx.req.get('x-cached')) return ctx.reply({ cached: true }, { status: 203 });
+    }, { order: 50 });
     calm.policy('vip', (ctx) => Boolean(ctx.user?.name?.startsWith('VIP')));
     calm.routes((r) => {
       r.get('/demo/greet', { policy: 'public' }, () => ({ text: options.greeting + options.punctuation, same: calm.options === options }));
+      r.post('/demo/count', { policy: 'public' }, () => ({ count: ++counted }));
       r.get('/demo/whoami', { policy: 'authenticated' }, (ctx) => ({ id: ctx.user.id, auth: ctx.auth }));
       r.get('/demo/vip', { policy: 'vip | admin' }, () => ({ ok: true }));
       r.get('/demo/env', { policy: 'public' }, () => ({ optional: calm.env('DEMO_OPTIONAL', 'fallback') }));
       r.get('/demo/undeclared', { policy: 'public' }, () => calm.env('NOT_DECLARED'));
     });
   },
+});
+`,
+  'app/resources/patient/patient.resource.js': `import { resource, f } from '#calm';
+export default resource('patient', {
+  fields: { name: f.string(), allergies: f.string().pii(), notes: f.string() },
+  policy: { list: 'public', read: 'public', create: 'authenticated', update: 'owner', delete: 'owner' },
 });
 `,
 };
@@ -85,6 +100,24 @@ test('guard: runs before every route and can stop it', async () => {
   const res = await fetch(`${t.origin}/api/demo/greet`, { headers: { 'x-maintenance': '1' } });
   assert.equal(res.status, 403);
   assert.equal((await res.json()).error.message, 'Down for maintenance');
+});
+
+test('guard: order decides who runs first, and a guard can answer instead of the route', async () => {
+  const res = await fetch(`${t.origin}/api/demo/greet`);
+  assert.equal(res.headers.get('x-guards'), 'early, default');
+
+  const cached = await fetch(`${t.origin}/api/demo/count`, { method: 'POST', headers: { 'x-cached': '1' } });
+  assert.equal(cached.status, 203);
+  assert.deepEqual((await cached.json()).data, { cached: true });
+  const real = await fetch(`${t.origin}/api/demo/count`, { method: 'POST' });
+  assert.deepEqual((await real.json()).data, { count: 1 }, 'the answered request never reached the handler');
+});
+
+test('.pii() marks a field as personal data for calm audit and the doctor', async () => {
+  const findings = await t.app.doctor();
+  const pii = findings.filter((f) => f.id === 'pii-public').map((f) => f.title);
+  assert.ok(pii.some((title) => title.startsWith('patient.allergies ')), 'the marked field is reported');
+  assert.ok(!pii.some((title) => title.startsWith('patient.notes ')), 'unmarked fields with ordinary names are not');
 });
 
 test('named policies combine with built-in ones', async () => {

@@ -114,18 +114,13 @@ export default definePlugin({
       }
     }
 
-    // Same key and rules as calm/auth, so an account locked by password guessing cannot
-    // be opened with a magic link either.
-    async function lockedUntil(email) {
-      const lockout = { maxAttempts: 5, ...(calm.config.auth.lockout ?? {}) };
-      if (!lockout.maxAttempts) return null;
-      const doc = await calm.app.auth.service.LoginAttempt.findById(sha(`login:${email.toLowerCase()}`)).lean();
-      return doc?.lockedUntil && doc.lockedUntil > new Date() ? doc.lockedUntil : null;
-    }
+    // The lockout of calm/auth, so an account locked by password guessing cannot be opened
+    // with a magic link either.
+    const lockedUntil = (email) => calm.app.auth.service.lockedUntil(email);
 
     async function sendLink({ email, name, redirect, requestId, ip, userAgent }) {
       const user = await users().findOne({ email }).lean();
-      if (user?.status === 'disabled') return;
+      if (calm.app.auth.service.inactive(user)) return;
       const signup = !user;
       if (signup && !canSignUp()) return;
 
@@ -257,14 +252,11 @@ export default definePlugin({
 
             const { user, created } = link.user ? { user: await users().findById(link.user).lean(), created: false } : await newAccount(link, ctx);
             if (!user) throw refuse('unknown_user');
-            if (user.status === 'disabled') throw forbidden('This account is disabled');
+            if (calm.app.auth.service.inactive(user)) throw forbidden('This account is disabled');
 
             const extra = { ...(link.redirect ? { redirect: link.redirect } : {}), ...(created ? { created: true } : {}) };
-            for (const challenge of calm.app.hooks.login) {
-              const answer = await challenge(user, ctx);
-              if (answer) return { ...answer, ...extra }; // e.g. second factor required
-            }
-            return { ...(await calm.app.auth.service.finishLogin(user, ctx.req)), ...extra };
+            // Login challenges (a second factor from the totp block) apply here too.
+            return { ...(await calm.app.auth.service.completeLogin(user, ctx)), ...extra };
           },
         );
       },

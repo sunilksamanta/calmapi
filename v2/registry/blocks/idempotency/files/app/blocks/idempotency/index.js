@@ -217,9 +217,7 @@ export default definePlugin({
       for (const [name, value] of Object.entries(stored.headers ?? {})) {
         if (!(stored.omitted && name === 'content-type')) res.setHeader(name, value);
       }
-      res.setHeader('Idempotent-Replayed', 'true');
-      const exposed = res.getHeader('Access-Control-Expose-Headers');
-      if (exposed && !/idempotent-replayed/i.test(String(exposed))) res.setHeader('Access-Control-Expose-Headers', `${exposed}, Idempotent-Replayed`);
+      res.setHeader('Idempotent-Replayed', 'true'); // calm/http exposes it to browsers through CORS
       const body = stored.body === null || stored.body === undefined ? null : Buffer.from(stored.body, stored.encoding ?? 'utf8');
       if (body) res.setHeader('Content-Length', body.length);
       res.end(body ?? undefined);
@@ -266,10 +264,8 @@ export default definePlugin({
       }
       replay(res, existing.response);
       calm.log.debug('idempotency: replayed', { key, method: req.method, path });
-      // Stops the route here (the handler must not run again). The response is already sent,
-      // so the error handler only ends the request.
-      throw new CalmError(existing.response.status, 'IDEMPOTENT_REPLAY', 'Replayed the stored response for this Idempotency-Key');
-    });
+      // The response is sent, so calm stops the route here: the handler does not run again.
+    }, { order: 100 }); // after other guards (API key scopes, maintenance...), so a refused request is never stored
 
     calm.doctor((app) => {
       const findings = [];

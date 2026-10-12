@@ -126,6 +126,23 @@ export function policyPreCheck(route) {
   };
 }
 
+/**
+ * Run calm.guard() hooks. A guard stops the request by throwing, by returning a Reply
+ * (ctx.reply(data, { status })), or by sending the response itself (res.end()). Resolves to
+ * true when the request has been answered.
+ */
+async function runGuards(app, ctx, route) {
+  for (const guard of app.hooks.guards) {
+    const out = await guard(ctx, route);
+    if (out instanceof Reply) {
+      send(ctx.res, out, out.status ?? 200);
+      return true;
+    }
+    if (ctx.res.headersSent || ctx.res.writableEnded) return true;
+  }
+  return false;
+}
+
 const routeContext = (app, route, req, res) => {
   const entry = route.resource ? app.registry.get(route.resource) : null;
   return createContext(app, req, res, { route, resource: entry?.def ?? null, service: entry?.service ?? null });
@@ -139,7 +156,7 @@ export function guardsFirst(app, route) {
   return async (req, res, next) => {
     req.calmRoute = route;
     const ctx = routeContext(app, route, req, res);
-    for (const guard of app.hooks.guards) await guard(ctx, route);
+    if (await runGuards(app, ctx, route)) return;
     req.calmCtx = ctx;
     next();
   };
@@ -154,7 +171,7 @@ export function toExpressHandler(app, route) {
     if (ctx) Object.assign(ctx, { body: req.body, params: req.params, query: req.query }); // after middleware such as multer
     else {
       ctx = routeContext(app, route, req, res);
-      for (const guard of app.hooks.guards) await guard(ctx, route);
+      if (await runGuards(app, ctx, route)) return;
     }
     if (entry && req.params.id !== undefined) {
       ctx.doc = await authorizeItem(entry, route.policy, route.action, ctx, req.params.id);

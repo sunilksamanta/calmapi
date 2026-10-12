@@ -31,7 +31,10 @@ export function securityHeaders({ production }) {
 }
 
 /** CORS. config.cors.origins: '*' or a list of allowed origins (CORS_ORIGINS env). */
-export function cors({ origins = [], credentials = false, maxAge = 600 } = {}) {
+const EXPOSED = ['X-Request-Id', 'RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset', 'Retry-After', 'Idempotent-Replayed'];
+
+export function cors({ origins = [], credentials = false, maxAge = 600, exposeHeaders = [] } = {}) {
+  const exposed = [...new Set([...EXPOSED, ...exposeHeaders])].join(', ');
   const allowAll = origins === '*';
   const allowed = new Set(Array.isArray(origins) ? origins : []);
   return (req, res, next) => {
@@ -40,7 +43,7 @@ export function cors({ origins = [], credentials = false, maxAge = 600 } = {}) {
       res.setHeader('Access-Control-Allow-Origin', allowAll && !credentials ? '*' : origin);
       res.vary('Origin');
       if (credentials) res.setHeader('Access-Control-Allow-Credentials', 'true');
-      res.setHeader('Access-Control-Expose-Headers', 'X-Request-Id, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset, Retry-After');
+      res.setHeader('Access-Control-Expose-Headers', exposed);
       if (req.method === 'OPTIONS' && req.get('access-control-request-method')) {
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', req.get('access-control-request-headers') || 'Content-Type, Authorization');

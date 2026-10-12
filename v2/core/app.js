@@ -260,10 +260,15 @@ function pluginApi(app, plugin, options = {}) {
      */
     authenticate: (fn) => app.hooks.authenticators.push(fn),
     /**
-     * Run before every route's policy check: fn(ctx, route). Throw (forbidden(), tooManyRequests()...)
-     * to stop the request. For API key scopes, maintenance mode, tenancy...
+     * Run before every route's policy check: fn(ctx, route). Stop the request by throwing
+     * (forbidden(), tooManyRequests()...) or by returning ctx.reply(data, { status }). For API
+     * key scopes, maintenance mode, tenancy... Guards run by `order` (default 0, lower first).
      */
-    guard: (fn) => app.hooks.guards.push(fn),
+    guard: (fn, { order = 0 } = {}) => {
+      Object.defineProperty(fn, 'calmOrder', { value: order, configurable: true });
+      app.hooks.guards.push(fn);
+      app.hooks.guards.sort((a, b) => (a.calmOrder ?? 0) - (b.calmOrder ?? 0));
+    },
     /** A named policy usable in resources and routes: calm.policy('member', (ctx) => ...). */
     policy: (name, fn) => registerPolicy(name, fn),
     routes: (fn, options = {}) => app.hooks.routes.push({ fn, options: { source: `block:${plugin.name}`, file: plugin.file, ...options } }),
