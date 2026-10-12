@@ -422,6 +422,17 @@ export function setupDevtools(app, ex) {
     }
   });
 
+  // Sample data from the field definitions (calm/seed.js), created through the services.
+  api.post('/seed', async (req, res) => {
+    const { resource, count = 10 } = req.body ?? {};
+    try {
+      const { seed } = await import('../seed.js');
+      res.status(201).json(await seed(app, { resource, count: Math.min(Math.max(Number(count) || 10, 1), 200) }));
+    } catch (err) {
+      res.status(err.status ?? 400).json({ error: err.message, details: err.details });
+    }
+  });
+
   api.get('/resources/:name/docs', async (req, res) => {
     const entry = app.registry.get(kebab(req.params.name));
     if (!entry) return res.status(404).json({ error: 'Unknown resource' });

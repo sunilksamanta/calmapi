@@ -16,6 +16,7 @@ const COMMANDS = {
   keygen: () => import('./commands/keygen.js'),
   mcp: () => import('./commands/mcp.js'),
   block: () => import('./commands/block.js'),
+  seed: () => import('./commands/seed.js'),
   blocks: () => import('./commands/block.js'),
 };
 const ALIASES = { new: 'create', init: 'create', generate: 'make', g: 'make', m: 'make' };
@@ -34,6 +35,7 @@ const HELP = `
     make block <name>            start your own block (share it with calm block pack)
     add <block...>               add a block: jobs, push-expo, webhooks... or gh:user/repo/name (--list)
     block list|check|pack        your blocks: what changed, a safety review, sharing
+    seed [resource...]           sample records that look real (--count, --seed)
 
   ${c.bold('Inspect')}
     routes                       every route with its access policy

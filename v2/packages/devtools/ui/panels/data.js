@@ -1,7 +1,7 @@
 // Data: browse documents. The privacy lens puts what MongoDB stores next to what the
 // API returns to a given viewer, so you can see exactly what never leaves the server.
 
-import { h, icon, mount, api, inlineValue, jsonViewer, empty, loading, errorBox, segmented, bar, popover, pickerList, userOption, relTime, copy, plural, closePopover, fullDate } from '../lib.js';
+import { h, icon, mount, api, inlineValue, jsonViewer, empty, loading, errorBox, segmented, bar, popover, pickerList, userOption, relTime, copy, plural, closePopover, fullDate, toast } from '../lib.js';
 import { store } from '../store.js';
 
 const PAGE = 10;
@@ -62,6 +62,23 @@ function mountData(root, params) {
     );
   }
 
+  async function sampleData(e) {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const out = await api('/seed', { method: 'POST', body: { resource: state.resource, count: 10 } });
+      const made = Object.entries(out.created).map(([n, k]) => `${k} ${n}`).join(', ');
+      toast(out.users.length ? `Added ${made}. Demo users sign in with ${out.users[0].email} / ${out.users[0].password}` : `Added ${made}`, { timeout: out.users.length ? 9000 : undefined });
+      state.skip = 0;
+      last = null;
+      load();
+    } catch (err) {
+      toast(err.message, { tone: 'error' });
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   async function load() {
     if (!state.resource) return;
     const mine = ++seq;
@@ -96,7 +113,8 @@ function mountData(root, params) {
       const route = ov.routes.find((r) => r.resource === res.name && r.action === 'create');
       return mount(
         body,
-        empty(`No ${res.name} documents yet.`, {
+        empty(`No ${res.name} documents yet. Use **Sample data** above, or from a terminal:`, {
+          code: `npx calm seed ${res.name}`,
           action: route ? { label: `Create one with POST ${route.path}`, run: () => ((store.prefill = { method: 'POST', path: route.path, body: sampleBody(res) }), (location.hash = '#/playground')) } : null,
         }),
       );
@@ -212,6 +230,7 @@ function mountData(root, params) {
                 'View',
               ),
               h('span', { class: 'spacer' }),
+              h('button', { class: 'btn ghost', type: 'button', title: 'Create 10 records that look real, from the field definitions, through the service (hooks and validation run)', onclick: sampleData }, 'Sample data'),
               pager,
               h('button', { class: 'btn ghost', type: 'button', onclick: () => load(), title: 'Reload documents' }, 'Reload'),
             ]
