@@ -1,0 +1,11 @@
+{
+  "name": "magic-link",
+  "title": "Magic link sign-in",
+  "description": "Passwordless sign-in by email: single use links stored hashed, 15 minute expiry, per email cooldown, redirect allowlist, links bound to the browser that asked. Lockout, disabled accounts and 2FA (totp) still apply.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-alpha.1",
+  "categories": ["auth", "security"],
+  "envVars": {},
+  "dependencies": [],
+  "docs": "1. POST /api/auth/magic-link { email, redirect? } -> 202 { message, requestId, expiresIn } (same answer whether or not the account exists). Keep requestId in localStorage.\n2. The email links to APP_URL/auth/magic?token=... (option linkUrl). That page calls POST /api/auth/magic-link/verify { token, requestId } -> { token, user, expiresAt, redirect? }, or { mfaRequired, mfaToken } when 2FA is on.\nOptions (calm.config.js blocks['magic-link']): createAccount, requireSameDevice, allowedRedirects, ttlMinutes, cooldownSeconds, linkUrl."
+}

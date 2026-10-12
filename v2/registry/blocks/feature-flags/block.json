@@ -1,0 +1,11 @@
+{
+  "name": "feature-flags",
+  "title": "Feature flags",
+  "description": "Feature flags in MongoDB: kill switches, deterministic gradual rollouts, per user and per role targeting, weighted variants, ctx.flags in code, route gates, an admin API, a frontend endpoint and a devtools panel.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-alpha.1",
+  "categories": ["flags", "rollout", "experiments"],
+  "envVars": {},
+  "dependencies": [],
+  "docs": "In code: ctx.flags.enabled('new-checkout'), ctx.flags.variant('pricing-page'). Outside requests: await ctx.app.ext.flags.isEnabled(key, { user }).\nGate a route: import { requireFlag } from '#app/blocks/feature-flags/index.js' and set policy: [requireFlag('beta'), 'authenticated'] (404 while the flag is off for the caller).\nAdmin API: GET|POST /api/admin/flags, GET|PATCH|DELETE /api/admin/flags/:key. Frontends: GET /api/flags (clientVisible flags, send X-Anonymous-Id for visitors).\nDeclare the flags your code needs in calm.config.js: blocks: { 'feature-flags': { flags: { 'new-checkout': { description: '...', rollout: 0 } } } }."
+}
