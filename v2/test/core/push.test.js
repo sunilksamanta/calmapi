@@ -260,3 +260,20 @@ test('apps can unregister by token, and a password reset ends devices with the s
   const device = await t.app.push.devices.findOne({ token: 'reset-ends-me-token' }).lean();
   assert.equal(device, null, 'a password reset signs out everywhere, so no phone keeps getting notifications');
 });
+
+test('auth.devicesFollowSessions: false keeps devices after their session ends', async () => {
+  const other = await makeProject();
+  const t2 = await other.testApp({ auth: { devicesFollowSessions: false } });
+  try {
+    const u = await t2.signup();
+    await t2.post('/auth/devices', { token: 'stays-after-logout-token', platform: 'ios' }, u);
+    assert.equal((await t2.post('/auth/logout', {}, u)).status, 204);
+    await t2.app.auth.service.Session.deleteMany({ user: u.id });
+    const res = await t2.app.push.send({ to: u.id, title: 'Still here?' });
+    assert.notEqual(res.status, 'no-devices', 'the device is still a target');
+    assert.ok(await t2.app.push.devices.findOne({ token: 'stays-after-logout-token' }).lean());
+  } finally {
+    await t2.close();
+    other.cleanup();
+  }
+});

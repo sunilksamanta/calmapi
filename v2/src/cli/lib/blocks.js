@@ -11,6 +11,9 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { readJson, readText, walk, isDir } from './files.js';
 
+/** The block name of a calm.lock entry: stored since 2.0.0-alpha.1, else from its key (@calmapi/jobs, a URL, a file). */
+export const lockName = (key, entry) => entry?.name ?? key.split('/').pop().replace(/\.json$/, '');
+
 export const ITEM_SCHEMA = 'https://ui.shadcn.com/schema/registry-item.json';
 const SKIP = new Set(['block.json', 'docs.md', '.DS_Store']);
 

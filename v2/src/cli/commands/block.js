@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { requireProject, readLock } from '../lib/project.js';
 import { readJson, writeJson, readText, sha256, isDir } from '../lib/files.js';
-import { readProjectBlock, toRegistryItem, checkItem, review } from '../lib/blocks.js';
+import { readProjectBlock, toRegistryItem, checkItem, review, lockName } from '../lib/blocks.js';
 import { fetchItem } from '../lib/registry.js';
 import { c, out, ok, warn, info } from '../lib/ui.js';
 
@@ -52,11 +52,11 @@ function list() {
   const root = requireProject();
   const lock = readLock(root);
   const installed = lock.blocks ?? {};
-  const names = new Set([...localBlocks(root), ...Object.keys(installed).map((k) => k.split('/').pop())]);
+  const names = new Set([...localBlocks(root), ...Object.entries(installed).map(([k, e]) => lockName(k, e))]);
   if (!names.size) return info('No blocks yet. `calm add --list` shows the official ones, `calm make block <name>` starts your own.');
   out('');
   for (const name of [...names].sort()) {
-    const key = Object.keys(installed).find((k) => k.split('/').pop() === name);
+    const key = Object.keys(installed).find((k) => lockName(k, installed[k]) === name);
     const entry = key ? installed[key] : null;
     const changed = entry ? Object.entries(entry.files).filter(([f, hash]) => !existsSync(join(root, f)) || sha256(readText(join(root, f))) !== hash).map(([f]) => f) : [];
     const meta = readJson(join(root, 'app', 'blocks', name, 'block.json'));

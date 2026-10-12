@@ -135,7 +135,9 @@ function order(app, names) {
 
 /**
  * Create sample records. Options: { resource | resources, count = 10, users = 3, seed }.
- * Demo users (demo1@example.test...) are created when none exist, and own the records.
+ * Demo users (demo.ada.<stamp>@example.test, password calm-demo-password-1) are created when
+ * none exist, and own the records. With a seed the values repeat; unique values such as
+ * emails get a per-run suffix so a second run does not collide.
  */
 export async function seed(app, { resource, resources, count = 10, users = 3, seed: seedValue } = {}) {
   const r = rng(seedValue ?? Date.now());

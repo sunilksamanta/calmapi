@@ -89,7 +89,7 @@ export default resource('note', {
 });
 ```
 
-Why a helper and not a route option: CalmAPI keeps only the route options it knows, so `{ flag: 'beta' }` would be dropped, and named policies cannot contain a colon (`flag:beta`). A policy list also means "any of", so an ordinary policy function could only widen access. `requireFlag()` returns a policy function marked as a gate: the block's guard finds gates in the route's policy and enforces them before the policy runs, and inside the policy a gate never grants access on its own. Routes show it as `flag:new-checkout` in `calm routes` and devtools. Gates are for route and resource action policies; in field rules (`visibleTo`, `writableBy`) they are always false.
+Why a helper and not a route option: a gate has to work in resource action policies too, where routes have no options (route `meta` exists, but only custom routes have it), and named policies cannot contain a colon (`flag:beta`). A policy list also means "any of", so an ordinary policy function could only widen access. `requireFlag()` returns a policy function marked as a gate: the block's guard finds gates in the route's policy and enforces them before the policy runs, and inside the policy a gate never grants access on its own. Routes show it as `flag:new-checkout` in `calm routes` and devtools. Gates are for route and resource action policies; in field rules (`visibleTo`, `writableBy`) they are always false.
 
 ## Declaring flags in code
 

@@ -321,14 +321,17 @@ export function createPush({ log, mode, events }) {
       }
       return shown.length;
     },
-    /** Simulate a tap on a notification: emits push.opened, the event your app would report. */
-    open(deviceId, pushId, name = 'the simulated device') {
+    /**
+     * Simulate a tap on a notification: emits push.opened, the event a real app reports with
+     * POST /api/auth/devices/opened. `user` is the device owner.
+     */
+    open(deviceId, pushId, name = 'the simulated device', user = null) {
       const item = (inboxes.get(String(deviceId)) ?? []).find((x) => x.pushId === pushId);
       if (!item || item.state !== 'shown') return null;
       item.openedAt = new Date();
       const record = recent.get(pushId);
       if (record) note(record, String(deviceId), 'info', `Opened on ${name}${item.message.url ? `: the app opens ${item.message.url}` : ''}.`, { phone: true, opened: true });
-      events?.emit('push.opened', { id: pushId, device: String(deviceId), url: item.message.url ?? null, data: item.message.data ?? null, simulated: true });
+      events?.emit('push.opened', { id: pushId, user: user ? String(user) : null, device: String(deviceId), url: item.message.url ?? null, data: item.message.data ?? null, simulated: true });
       return item;
     },
   };

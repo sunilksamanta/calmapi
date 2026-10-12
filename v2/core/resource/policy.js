@@ -45,6 +45,12 @@ export function parsePolicy(expr) {
   return tokens;
 }
 
+/**
+ * Resource files load before blocks register their policies, so a name such as 'member'
+ * in resource() is still a plain string there. createApp resolves it once blocks are set up.
+ */
+export const resolveNamed = (tokens) => tokens?.map((t) => (typeof t === 'string' && named.has(t) ? named.get(t) : t)) ?? tokens;
+
 export const describePolicy = (tokens) =>
   tokens ? tokens.map((t) => (typeof t === 'function' ? t.name || 'custom' : t)).join(' | ') : 'unset';
 
@@ -62,8 +68,8 @@ export async function evaluatePolicy(tokens, ctx) {
   for (const t of tokens) {
     if (t === 'public') return { allow: true };
     if (t === 'none') continue;
-    if (typeof t === 'function') {
-      if (await t(ctx)) return { allow: true };
+    if (typeof t === 'function' || named.has(t)) {
+      if (await (typeof t === 'function' ? t : named.get(t))(ctx)) return { allow: true };
       continue;
     }
     if (!user) continue;

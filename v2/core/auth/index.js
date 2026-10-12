@@ -33,7 +33,8 @@ export function setupAuth(app) {
 
   const { Session, PasswordReset, LoginAttempt } = compileAuthModels(app.mongoose);
   const Device = compileDeviceModel(app.mongoose);
-  app.push.useDevices(Device, Session);
+  // Without Session, push keeps devices whose session ended (auth.devicesFollowSessions: false).
+  app.push.useDevices(Device, app.config.auth.devicesFollowSessions !== false ? Session : null);
   const deviceView = (d) => ({
     id: String(d._id),
     platform: d.platform,
@@ -359,6 +360,14 @@ export function setupAuth(app) {
       await Device.deleteOne({ token, user: ctx.user._id });
     },
 
+    /**
+     * The app reports that its user opened a notification. Emits push.opened with the signed-in
+     * user; `data` comes from the client, so listeners only act on that user's own records.
+     */
+    reportOpened({ pushId = null, data = null }, ctx) {
+      app.events.emit('push.opened', { id: pushId, user: String(ctx.user._id), device: null, url: null, data, simulated: false });
+    },
+
     async listDevices(ctx) {
       const devices = await Device.find({ user: ctx.user._id }).sort({ lastSeenAt: -1 }).lean();
       return devices.map(deviceView);
@@ -396,6 +405,7 @@ export function setupAuth(app) {
   r.post('/devices', { policy: 'authenticated', status: 201, summary: 'Register this device for push notifications', input: deviceInput, tags: ['auth'] }, (ctx) => service.registerDevice(ctx.body, ctx));
   r.get('/devices', { policy: 'authenticated', summary: 'Your devices registered for push notifications', tags: ['auth'] }, (ctx) => service.listDevices(ctx));
   r.delete('/devices/:deviceId', { policy: 'authenticated', summary: 'Stop push notifications to a device', tags: ['auth'] }, (ctx) => service.removeDevice(ctx.params.deviceId, ctx));
+  r.post('/devices/opened', { policy: 'authenticated', status: 204, summary: 'Report that the user opened a push notification (emits push.opened)', input: { pushId: f.string().max(200), data: f.json() }, tags: ['auth'] }, (ctx) => service.reportOpened(ctx.body, ctx));
   r.post('/devices/unregister', { policy: 'authenticated', status: 204, summary: 'Stop push notifications to the device holding this token', input: { token: f.string().required().max(4096) }, tags: ['auth'] }, (ctx) => service.unregisterDevice(ctx.body.token, ctx));
 
   return { service, routes: r.routes };

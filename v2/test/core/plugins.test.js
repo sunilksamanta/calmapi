@@ -48,6 +48,13 @@ export default definePlugin({
   },
 });
 `,
+  // Resource files load before blocks run setup(): the 'vip' policy must still apply.
+  'app/resources/lounge/lounge.resource.js': `import { resource, f } from '#calm';
+export default resource('lounge', {
+  fields: { name: f.string() },
+  policy: { list: 'vip | admin', read: 'vip | admin', create: 'admin', update: 'admin', delete: 'admin' },
+});
+`,
   'app/resources/patient/patient.resource.js': `import { resource, f } from '#calm';
 export default resource('patient', {
   fields: { name: f.string(), allergies: f.string().pii(), notes: f.string() },
@@ -135,4 +142,6 @@ test('named policies combine with built-in ones', async () => {
   assert.equal((await t.get('/demo/vip', vip)).status, 200);
   assert.equal((await t.get('/demo/vip', admin)).status, 200);
   assert.equal(t.app.routes.find((r) => r.path.endsWith('/demo/vip')).policyLabel, 'vip | admin', 'routes list the named policy');
+  assert.equal((await t.get('/lounges', regular)).status, 403, 'named policies apply in resource files too');
+  assert.equal((await t.get('/lounges', vip)).status, 200);
 });

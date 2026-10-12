@@ -9,6 +9,8 @@
 - Device registry: `POST|GET /api/auth/devices`, `DELETE /api/auth/devices/:deviceId`,
   `POST /api/auth/devices/unregister` (by token, for sign out on a phone). Tokens are never returned in
   full, and tokens a provider reports as gone are removed.
+- `POST /api/auth/devices/opened { pushId, data }`: the app reports a tap and `push.opened` fires with the
+  signed-in user (the simulator emits the same event).
 - Devices belong to the session that registered them: signing out, signing out everywhere, changing or
   resetting the password removes them (`auth.devicesFollowSessions`, on by default).
 - Several transports at once: `push.use({ name, accepts, send })` routes each device to the right one.
@@ -48,7 +50,8 @@
 - Extension points: `definePlugin({ env, options })` with `calm.options` (overridable in
   `calm.config.js` under `blocks.<name>`) and `calm.env(key)`; `calm.authenticate(fn)` for other
   credentials with `ctx.auth { via, scopes, id }`; `calm.guard(fn, { order })`, which can stop a request
-  or answer it with `ctx.reply()`; `calm.policy(name, fn)` for named policies; route `scope` and `meta`.
+  or answer it with `ctx.reply()`; `calm.policy(name, fn)` for named policies, usable in resource files,
+  routes and field rules; route `scope` and `meta`; `calm.doctor(fn)` checks may be async.
 - `app.canRead(resource, doc, user)`: the read rules of the API for work outside a request.
 - The auth service shares `completeLogin`, `lockedUntil`, `recordFailure` and `clearFailures`, so every
   way to sign in applies the same lockout and second factor.

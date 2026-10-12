@@ -165,11 +165,12 @@ export default definePlugin({
       ctx.notify = notify;
     });
 
-    // Opening a push (reported by the app, or a tap on a simulated phone in devtools) marks the
-    // inbox entry as read, so the unread count stays honest across devices.
-    calm.on('push.opened', async ({ data }) => {
-      if (!data?.notificationId || !inbox()) return;
-      await inbox().model.updateOne({ _id: data.notificationId, readAt: null }, { $set: { readAt: new Date() } }).catch(() => {});
+    // Opening a push (reported by the app with POST /api/auth/devices/opened, or a tap on a
+    // simulated phone in devtools) marks the inbox entry as read, so the unread count stays
+    // honest across devices. The data comes from the client: only the user's own entries.
+    calm.on('push.opened', async ({ data, user }) => {
+      if (!data?.notificationId || !user || !inbox()) return;
+      await inbox().model.updateOne({ _id: data.notificationId, user, readAt: null }, { $set: { readAt: new Date() } }).catch(() => {});
     });
 
     // ---- preferences --------------------------------------------------------------------

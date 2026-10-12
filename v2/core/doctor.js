@@ -49,11 +49,17 @@ export function runtimeChecks(app) {
     }
   }
 
+  return findings;
+}
+
+/** Findings from calm.doctor(fn) checks. They may be async (count records, call a service...). */
+export async function hookFindings(app) {
+  const findings = [];
   for (const fn of app.hooks.doctor) {
     try {
-      for (const f of fn(app) ?? []) findings.push(f);
+      for (const f of (await fn(app)) ?? []) findings.push(f);
     } catch (err) {
-      add('warn', 'doctor-hook', 'A block doctor check crashed', err.message);
+      findings.push({ level: 'warn', id: 'doctor-hook', title: 'A block doctor check crashed', detail: err.message });
     }
   }
   return findings;

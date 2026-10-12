@@ -84,8 +84,9 @@ curl -i -X POST http://localhost:5001/api/orders \
 ```
 
 "Same request" means the same SHA-256 fingerprint of the JSON body (object keys sorted, so key
-order does not matter) and the query string. Uploaded file contents (multipart) are not part of the
-fingerprint, the other form fields are.
+order does not matter) and the query string. Multipart uploads are not parsed yet when the key is
+checked (guards run before upload middleware), so their form fields and files are not part of the
+fingerprint: give each upload its own key.
 
 ## Who can see a stored response
 

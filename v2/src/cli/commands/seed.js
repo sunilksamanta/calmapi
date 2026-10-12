@@ -47,7 +47,7 @@ export async function run(argv) {
   });
   if (values.help) return out(help);
   const root = requireProject();
-  const opts = { count: Math.min(Math.max(Number(values.count) || 10, 1), 10_000), users: Number(values.users) || 3, ...(positionals.length ? { resources: positionals } : {}), ...(values.seed ? { seed: Number(values.seed) } : {}) };
+  const opts = { count: Math.min(Math.max(Number(values.count) || 10, 1), 10_000), users: Number.isInteger(Number(values.users)) && Number(values.users) >= 0 ? Number(values.users) : 3, ...(positionals.length ? { resources: positionals } : {}), ...(values.seed ? { seed: Number(values.seed) } : {}) };
   const res = await capture(process.execPath, ['--input-type=module', '-e', SCRIPT], { cwd: root, env: { CALM_SEED_OPTIONS: JSON.stringify(opts) } });
   const marker = res.stdout.lastIndexOf('@@CALM@@');
   if (marker === -1) throw new Error(`Could not run in the project:\n${res.stderr || res.stdout}`);

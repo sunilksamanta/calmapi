@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { requireProject, readLock, writeLock, detectPackageManager, run as runCmd } from '../lib/project.js';
 import { resolveAll, splitDep, OFFICIAL, OFFICIAL_URL } from '../lib/registry.js';
-import { review } from '../lib/blocks.js';
+import { review, lockName } from '../lib/blocks.js';
 import { compareVersions } from '../lib/semver.js';
 import { PKG_ROOT, readJson, writeJson, writeFile, readText, sha256 } from '../lib/files.js';
 import { c, out, ok, warn, info, confirm } from '../lib/ui.js';
@@ -60,7 +60,7 @@ export async function run(argv) {
       throw new Error(`${key} needs CalmAPI ${min} or newer in calm/ (yours is ${lock0.calmapi}). Run \`calm upgrade\` first.`);
     }
   }
-  const installed = Object.keys(lock0.blocks ?? {}).map((k) => k.split('/').pop());
+  const installed = Object.entries(lock0.blocks ?? {}).map(([k, e]) => lockName(k, e));
   for (const { key, item } of items) {
     const clash = (item.meta?.calmapi?.conflicts ?? []).find((n) => installed.includes(n) || items.some((i) => i.item.name === n));
     if (clash) throw new Error(`${key} cannot be installed together with ${clash} (they do the same job; pick one).`);
@@ -123,6 +123,7 @@ export async function run(argv) {
   lock.blocks ??= {};
   for (const { key, item, source } of items) {
     lock.blocks[key] = {
+      name: item.name,
       version: item.version ?? '0.0.0',
       source,
       files: Object.fromEntries(item.files.map((f) => [f.target ?? f.path, sha256(f.content)])),

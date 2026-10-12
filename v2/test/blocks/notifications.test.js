@@ -115,6 +115,22 @@ test('tapping the push on a simulated phone marks the inbox entry read', async (
   assert.ok(entry.readAt, 'push.opened marked it read');
 });
 
+test('a real app reports opens with POST /auth/devices/opened, only for its own entries', async () => {
+  const owner = await t.signup();
+  const stranger = await t.signup();
+  const sent = await t.app.ext.notify(owner.id, { title: 'Hello' });
+
+  const sneaky = await t.post('/auth/devices/opened', { data: { notificationId: sent.id } }, stranger);
+  assert.equal(sneaky.status, 204);
+  await t.idle();
+  assert.ok(!(await t.get(`/notifications/${sent.id}`, owner)).body.data.readAt, 'another user cannot mark it read');
+
+  assert.equal((await t.post('/auth/devices/opened', { pushId: 'abc', data: { notificationId: sent.id } }, owner)).status, 204);
+  await t.idle();
+  assert.ok((await t.get(`/notifications/${sent.id}`, owner)).body.data.readAt, 'the owner opening it marks it read');
+  assert.equal((await t.post('/auth/devices/opened', {})).status, 401);
+});
+
 test('unknown types are a clear error', async () => {
   const u = await t.signup();
   await assert.rejects(() => t.app.ext.notify(u.id, 'does-not-exist'), /Create app\/notifications\/does-not-exist\.js/);

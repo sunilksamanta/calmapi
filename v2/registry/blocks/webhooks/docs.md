@@ -8,7 +8,7 @@ npx calm add webhooks
 
 | Adds | |
 | --- | --- |
-| Files | `app/blocks/webhooks/index.js` (plugin, API, events), `delivery.js` (queue and sender), `signing.js` (signatures, `verifyWebhook`), `ssrf.js` (URL safety), `visibility.js` (who may see a record) |
+| Files | `app/blocks/webhooks/index.js` (plugin, API, events), `delivery.js` (queue and sender), `signing.js` (signatures, `verifyWebhook`), `ssrf.js` (URL safety). Who may see a record comes from the core: `app.canRead()` and `app.inScope()` |
 | Environment | `WEBHOOKS_WORKER=on` (set `off` on instances that should not send webhooks) |
 
 Collections: `calm_webhooks` (endpoints) and `calm_webhook_deliveries` (queue and delivery log, cleaned up by a TTL index).

@@ -11,11 +11,11 @@ import { loadResources, loadBlocks, loadAppRoutes } from './loader.js';
 import { compileResource } from './resource/resource.js';
 import { crudRoutes } from './resource/routes.js';
 import { RouteBuilder, toExpressHandler, servicesProxy, policyPreCheck, guardsFirst } from './http/router.js';
-import { registerPolicy } from './resource/policy.js';
+import { registerPolicy, resolveNamed } from './resource/policy.js';
 import { requestContext, securityHeaders, cors, rateLimit, createMemoryStore, accessLog, jsonGuard } from './http/middleware.js';
 import { setupAuth } from './auth/index.js';
 import { buildOpenAPI } from './openapi.js';
-import { runtimeChecks } from './doctor.js';
+import { runtimeChecks, hookFindings } from './doctor.js';
 import { exposureMatrix, exposureFindings } from './security/exposure.js';
 import { canRead, inScope } from './resource/visibility.js';
 import { toHttpError, notFound } from './errors.js';
@@ -83,7 +83,7 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
     model: (name) => services.get(name).model,
     service: (name) => services.get(name),
     openapi: () => buildOpenAPI(app),
-    doctor: async () => [...runtimeChecks(app), ...exposureFindings(await exposureMatrix(app))],
+    doctor: async () => [...runtimeChecks(app), ...(await hookFindings(app)), ...exposureFindings(await exposureMatrix(app))],
     exposure: () => exposureMatrix(app),
     /**
      * May `user` read `doc`, by the rules of GET /api/<resource>/:id (read policy, owner,
@@ -172,7 +172,8 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
 
   // 3. Compile resources
   for (const item of loaded) {
-    let def = item.def;
+    // Named policies from blocks (calm.policy) exist now: resolve them in resource policies.
+    let def = Object.freeze({ ...item.def, policy: Object.fromEntries(Object.entries(item.def.policy).map(([action, tokens]) => [action, resolveNamed(tokens)])) });
     for (const hook of hooks.resource) {
       const copy = { ...def, fields: { ...def.fields }, options: { ...def.options } };
       def = Object.freeze((await hook(copy)) ?? copy);

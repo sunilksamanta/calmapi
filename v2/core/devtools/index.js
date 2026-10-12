@@ -390,7 +390,7 @@ export function setupDevtools(app, ex) {
   api.post('/devices/:id/inbox/:pushId/open', async (req, res) => {
     const d = await findDevice(req.params.id);
     if (!d) return res.status(404).json({ error: 'Unknown device' });
-    const item = app.push.simulator.open(String(d._id), req.params.pushId, d.name ?? undefined);
+    const item = app.push.simulator.open(String(d._id), req.params.pushId, d.name ?? undefined, d.user ?? null);
     if (!item) return res.status(404).json({ error: 'Not on this lock screen' });
     res.json(item);
   });
@@ -597,7 +597,8 @@ function describeBlocks(app) {
     }
   };
   return app.plugins.map((p) => {
-    const [key, entry] = Object.entries(lock.blocks ?? {}).find(([k]) => k === p.name || k.split('/').pop() === p.name) ?? [null, null];
+    // entry.name since 2.0.0-alpha.1; older entries by key (@calmapi/jobs, a URL, a file).
+    const [key, entry] = Object.entries(lock.blocks ?? {}).find(([k, e]) => (e.name ?? k.split('/').pop().replace(/\.json$/, '')) === p.name) ?? [null, null];
     const files = entry ? Object.entries(entry.files ?? {}) : [];
     const routes = app.routes.filter((r) => r.source === `block:${p.name}`);
     return {
