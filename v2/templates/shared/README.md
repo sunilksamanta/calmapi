@@ -1,6 +1,7 @@
 # {{title}}
 
 Built with [CalmAPI](https://calmapi.dev): the framework code lives in `calm/` and is yours.
+Documentation: https://docs.calmapi.dev
 
 ## Run it
 

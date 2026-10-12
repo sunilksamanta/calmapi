@@ -20,6 +20,8 @@ npm run dev
 > **Status: 2.0.0-alpha.** APIs may still change before 2.0. CalmAPI 1.x users: run
 > `npx calmapi@next doctor` inside your project (see [Security](#security)).
 
+Documentation: **https://docs.calmapi.dev**
+
 ## Why CalmAPI
 
 - **Nothing hidden in node_modules.** The framework is copied into `calm/` when you create a project.
@@ -34,7 +36,8 @@ npm run dev
   production. `.encrypted()` fields are AES-256-GCM at rest. `calm audit` attacks your own API as every
   role on a throwaway database and proves the policies hold.
 - **Devtools.** A local dashboard at `/_calm`: every request with its MongoDB queries and timings,
-  explain plans, a privacy lens on your data, a mail catcher, "act as" any user, and doctor findings.
+  explain plans, a privacy lens on your data, a mail catcher, push notification previews on simulated
+  phones, "act as" any user, and doctor findings.
 - **Agent native, human visible.** Projects ship with `AGENTS.md`; `calm mcp` gives coding agents tools to
   scaffold, call the API as any user, run tests, doctor and the security audit. Everything an agent does
   (tool calls, file diffs, restarts, crashes, requests) streams live into devtools, so you watch it work.
@@ -146,6 +149,7 @@ calm mcp                                MCP server for coding agents (claude mcp
 | `totp` | two-factor authentication with authenticator apps |
 | `api-docs` | interactive reference at `/docs` |
 | `mail-resend` / `mail-smtp` | email delivery |
+| `push-expo` / `push-fcm` | push notification delivery through Expo or Firebase Cloud Messaging |
 | `rate-limit-mongo` | shared rate limits across instances |
 
 Blocks use the [shadcn registry item format](https://ui.shadcn.com/docs/registry), so anyone can
@@ -169,7 +173,19 @@ publish them: add `"calm": { "registries": { "@acme": "https://acme.dev/r/{name}
 `POST /api/auth/register · login · logout · logout-all · password · password/forgot · password/reset`,
 `GET|PATCH /api/auth/me`, `GET|DELETE /api/auth/sessions`. Opaque session tokens (SHA-256 at rest),
 scrypt password hashing from `node:crypto`, no account enumeration, single-use reset tokens that
-revoke every session, rate limited.
+revoke every session, rate limited. Apps register push tokens with `POST|GET /api/auth/devices`.
+
+## Push notifications
+
+```js
+await ctx.push.send({ to: order.customer, title: 'Your order shipped', body: 'Arrives Thursday', url: `/orders/${order.id}` });
+```
+
+In development nothing is delivered: devtools shows each notification on an iPhone lock screen, an
+Android notification shade and a desktop browser, with the APNs, FCM, Expo and Web Push payloads, size
+and content warnings and a delivery log. Add simulated devices to any user to preview without a phone.
+`calm add push-expo` or `calm add push-fcm` delivers for real. Tests get `t.pushes`.
+[Push notifications](https://docs.calmapi.dev/push-notifications)
 
 ## Testing
 

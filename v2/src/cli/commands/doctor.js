@@ -47,7 +47,7 @@ export async function run(argv) {
       level: 'info',
       id: 'v1-eol',
       title: 'CalmAPI 1.x is no longer developed',
-      detail: 'CalmAPI 2 fixes these issues by design. Migration guide: https://calmapi.dev/docs/migrate-v1',
+      detail: 'CalmAPI 2 fixes these issues by design. Migration guide: https://docs.calmapi.dev/migrate-v1',
     });
   } else {
     const lock = readLock(root);

@@ -31,7 +31,7 @@ export function requireProject() {
     const v1 = findV1Root();
     const err = new Error(
       v1
-        ? 'This is a CalmAPI 1.x project. Run `npx calmapi@next doctor` for security advisories, and see the migration guide: https://calmapi.dev/docs/migrate-v1'
+        ? 'This is a CalmAPI 1.x project. Run `npx calmapi@next doctor` for security advisories, and see the migration guide: https://docs.calmapi.dev/migrate-v1'
         : 'Not inside a CalmAPI project (no calm.lock found). Create one with `npm create calmapi@latest`.',
     );
     err.code = 'CALM_NO_PROJECT';

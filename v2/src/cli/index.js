@@ -43,7 +43,7 @@ const HELP = `
     upgrade                      merge framework updates into calm/, keeping your edits
     mcp                          MCP server for AI coding agents
 
-  ${c.dim('calm <command> --help for details · https://calmapi.dev')}
+  ${c.dim('calm <command> --help for details · https://docs.calmapi.dev')}
 `;
 
 export async function main(argv) {

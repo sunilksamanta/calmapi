@@ -21,6 +21,7 @@ page explaining how to add it.
 | **Activity** | What happened in the project, newest first: tool calls from AI agents (`calm mcp`), file changes with an inline diff, restarts and crashes (`calm dev`). Agent and human edits are told apart by a marker; the latest crash opens with its stderr. The sidebar counts new events since you last looked. |
 | **Logs** | Live tail with level toggles and a text filter. Request ids link to the request. |
 | **Mail** | An inbox for everything sent through the development transport. Nothing is delivered for real. |
+| **Push** | Every push notification the app sent with `ctx.push.send()`, live. See it as it would appear on an iPhone lock screen, in the Android notification shade and as a desktop browser notification, closed or expanded, with the text cut off where a real phone cuts it. The exact payload APNs, FCM, Expo and Web Push receive, with its size against the 4 KB limit, warnings (text cut off, data that looks sensitive, payloads a provider would reject), the delivery log per device and the request that sent it. **New notification** composes one with a live preview; **Devices** lists registered devices and adds simulated iPhones, Android phones and browsers to any user, so you can preview notifications without a phone. Simulated devices never reach a real provider. |
 | **Routes** | Every endpoint grouped by resource or source, with its policy (policies that were defaulted instead of written out are flagged), summary and a link that opens the file in VS Code. **Try it** sends it to the Playground. |
 | **Resources** | A relationship diagram built from `f.ref()` fields, then each resource with its policies per action and its fields: type, refs, enum values, defaults, flags and who can see or write them. |
 | **Data** | Documents, paginated. The **privacy lens** puts the raw stored document next to exactly what the API returns to a given viewer, with every withheld field struck through and labeled (hidden, write only, password, `visibleTo`). Use **View as** to switch viewers. |
@@ -35,6 +36,7 @@ page explaining how to add it.
 | --- | --- |
 | `/` | Focus the filter |
 | `j` / `k` | Next / previous item |
+| `n` | New notification (Push) |
 | `Enter` | Open the selected request |
 | `Esc` | Close the detail view |
 | `1` to `9` | Switch panel |
@@ -66,7 +68,8 @@ export default definePlugin({
 - Devtools only exists in development. `calm/config.js` forces it off in production.
 - Every `/_calm` request must come from this machine (loopback socket, localhost `Host`,
   no proxy headers), and the page is served with a strict Content-Security-Policy
-  (no inline scripts, no third party origins, no framing).
+  (no inline scripts, no third party scripts or connections, no framing; https images are
+  allowed so notification previews can show their image).
 - Every write (`POST` or `DELETE` to `/_calm/api/*`) needs the `X-Calm-Devtools: 1` header,
   which a cross-site page cannot send.
 - Recorded requests redact `Authorization`, cookies and fields that look secret.

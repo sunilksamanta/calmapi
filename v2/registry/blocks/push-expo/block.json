@@ -1,0 +1,10 @@
+{
+  "name": "push-expo",
+  "title": "Push notifications via Expo",
+  "description": "Deliver app.push notifications to Expo and React Native apps through the Expo push service. No SDK, just fetch. Tokens that stopped working are removed for you.",
+  "version": "1.0.0",
+  "categories": ["push", "notifications"],
+  "conflicts": ["push-fcm"],
+  "envVars": { "EXPO_ACCESS_TOKEN": "" },
+  "docs": "Your app gets a token with getExpoPushTokenAsync() from expo-notifications and registers it: POST /api/auth/devices { token, platform }. Then send from anywhere: await ctx.push.send({ to: userId, title, body }).\nEXPO_ACCESS_TOKEN is optional but recommended: turn on enhanced push security in your Expo project so only your server can send to your users. In development without the block's transport, notifications land in the devtools Push panel."
+}

@@ -143,6 +143,12 @@ const TOOLS = [
     description: 'Emails the dev server would have sent (e.g. password reset links), newest first.',
     inputSchema: { type: 'object', properties: { limit: { type: 'integer' } } },
   },
+  {
+    name: 'calm_pushes',
+    description:
+      'Push notifications the dev server sent or captured (app.push.send), newest first: title, body, data, target devices and platforms, warnings (payload too large, text cut off on iOS or Android, sensitive data in the payload) and the delivery log. Use it to check notifications your code sends.',
+    inputSchema: { type: 'object', properties: { limit: { type: 'integer' } } },
+  },
 ];
 
 export async function run(argv) {
@@ -350,6 +356,12 @@ async function callTool(root, name, args) {
     }
     case 'calm_mails':
       return (await devtools(root, '/mails')).slice(0, args.limit ?? 10);
+    case 'calm_pushes':
+      // Payload bodies are large; agents get sizes and warnings, the full payloads stay in devtools.
+      return (await devtools(root, '/pushes')).slice(0, args.limit ?? 10).map(({ payloads, ...p }) => ({
+        ...p,
+        sizes: Object.fromEntries(Object.entries(payloads).map(([k, v]) => [k, `${v.bytes}/${v.limit} bytes`])),
+      }));
     case 'calm_http': {
       const token = await tokenFor(root, args.as);
       const path = args.path.startsWith('/') ? args.path : `/${args.path}`;

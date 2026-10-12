@@ -2,7 +2,7 @@
 // Vanilla ES modules, no build step. Every panel lives in ./panels/.
 
 import { h, icon, mount, clear, fmtUptime, storage, closePopover, toast } from './lib.js';
-import { store, on, connect, loadOverview, loadRequests, loadLogs, loadMails, loadDoctor, loadActivity, stopActAs } from './store.js';
+import { store, on, connect, loadOverview, loadRequests, loadLogs, loadMails, loadPushes, loadDoctor, loadActivity, stopActAs } from './store.js';
 import requests from './panels/requests.js';
 import activity from './panels/activity.js';
 import security from './panels/security.js';
@@ -11,13 +11,14 @@ import resources from './panels/resources.js';
 import data from './panels/data.js';
 import playground from './panels/playground.js';
 import mail from './panels/mail.js';
+import push from './panels/push.js';
 import logs from './panels/logs.js';
 import doctor from './panels/doctor.js';
 import { blockPanel } from './panels/block.js';
 
-const CORE = [requests, activity, logs, mail, routes, resources, data, playground, doctor, security];
+const CORE = [requests, activity, logs, mail, push, routes, resources, data, playground, doctor, security];
 const GROUPS = [
-  { label: 'Observe', ids: ['requests', 'activity', 'logs', 'mail'] },
+  { label: 'Observe', ids: ['requests', 'activity', 'logs', 'mail', 'push'] },
   { label: 'Explore', ids: ['routes', 'resources', 'data'] },
   { label: 'Tools', ids: ['playground', 'doctor', 'security'] },
 ];
@@ -170,7 +171,7 @@ function renderActAs() {
 
 function renderLive() {
   mount(el.live, h('span', { class: ['dot', store.live ? 'dot-green' : 'dot-amber'] }), h('span', null, store.live ? 'Live' : 'Reconnecting'));
-  el.live.title = store.live ? 'Streaming requests, logs and mail from the server' : 'Lost the event stream. Retrying every 2 seconds.';
+  el.live.title = store.live ? 'Streaming requests, logs, mail and push notifications from the server' : 'Lost the event stream. Retrying every 2 seconds.';
 }
 
 // ---- routing -----------------------------------------------------------------------
@@ -241,7 +242,8 @@ function showHelp() {
     ['Enter', 'Open the selected item'],
     ['Esc', 'Close the detail view'],
     ['1 to 9', 'Switch panel'],
-    ['Ctrl + Enter', 'Send (Playground)'],
+    ['Ctrl + Enter', 'Send (Playground, Push)'],
+    ['n', 'New notification (Push)'],
     ['?', 'This help'],
   ];
   const dlg = h(
@@ -270,7 +272,7 @@ async function boot() {
     renderNav();
     if (changed && current) current.instance?.refresh?.();
   });
-  for (const ev of ['request', 'requests:reset', 'log', 'logs:reset', 'mails:reset', 'mails:seen', 'doctor', 'actas', 'activity', 'activity:reset', 'activity:seen', 'audit', 'audit:start']) on(ev, () => renderNav());
+  for (const ev of ['request', 'requests:reset', 'log', 'logs:reset', 'mails:reset', 'mails:seen', 'pushes:reset', 'pushes:seen', 'doctor', 'actas', 'activity', 'activity:reset', 'activity:seen', 'audit', 'audit:start']) on(ev, () => renderNav());
   on('actas', renderActAs);
   on('live', renderLive);
 
@@ -288,7 +290,7 @@ async function boot() {
     });
   }
   if (store.overview) {
-    await Promise.allSettled([loadRequests(), loadLogs(), loadMails(), loadDoctor(), loadActivity()]);
+    await Promise.allSettled([loadRequests(), loadLogs(), loadMails(), loadPushes(), loadDoctor(), loadActivity()]);
     route();
   }
 

@@ -93,6 +93,7 @@ export function createContext(app, req, res, extra = {}) {
     config: app.config,
     log: app.log,
     events: app.events,
+    push: app.push,
     services: app.services.proxy,
     reply: (data, opts) => new Reply(data, opts),
     /** Serialize a stored document with a resource's visibility rules (defaults to this route's resource). */

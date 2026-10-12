@@ -1,7 +1,7 @@
 {
   "name": "@calmapi/devtools",
   "version": "2.0.0-alpha.0",
-  "description": "CalmAPI devtools UI: requests, queries, routes, data, mail and doctor for your local CalmAPI app. Development only.",
+  "description": "CalmAPI devtools UI: requests, queries, routes, data, mail, push notifications and doctor for your local CalmAPI app. Development only.",
   "keywords": [
     "calmapi",
     "devtools",

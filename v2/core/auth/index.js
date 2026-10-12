@@ -19,6 +19,7 @@ import { validateInput, serialize } from '../resource/resource.js';
 import { f } from '../resource/fields.js';
 import { CalmError, unauthorized, validationError, forbidden, notFound, tooManyRequests } from '../errors.js';
 import { passwordContextProblem } from './password-policy.js';
+import { compileDeviceModel, maskToken, PLATFORMS } from '../push.js';
 
 const SESSION_TOUCH_MS = 5 * 60_000;
 
@@ -31,6 +32,19 @@ export function setupAuth(app) {
   }
 
   const { Session, PasswordReset, LoginAttempt } = compileAuthModels(app.mongoose);
+  const Device = compileDeviceModel(app.mongoose);
+  app.push.useDevices(Device);
+  const deviceView = (d) => ({
+    id: String(d._id),
+    platform: d.platform,
+    name: d.name,
+    appVersion: d.appVersion,
+    locale: d.locale,
+    token: maskToken(d.token), // never echoed back in full
+    simulated: d.simulated,
+    lastSeenAt: d.lastSeenAt,
+    createdAt: d.createdAt,
+  });
   const lockout = { maxAttempts: 5, windowMinutes: 15, lockMinutes: 15, ...(app.config.auth.lockout ?? {}) };
   const security = (name, data) => app.events.emit(`security.${name}`, data);
   const mask = (email) => String(email).replace(/^(.)[^@]*(@.*)$/, '$1***$2');
@@ -283,6 +297,30 @@ export function setupAuth(app) {
       const res = await Session.deleteOne({ _id: id, user: ctx.user._id });
       if (!res.deletedCount) throw notFound('Session not found');
     },
+
+    /**
+     * Register (or refresh) this device's push token. A token belongs to one user at a time:
+     * registering it again, for example after another sign-in on the same phone, moves it.
+     */
+    async registerDevice(input, ctx) {
+      if (input.token.startsWith('sim_')) throw validationError({ token: 'Tokens starting with sim_ are reserved for simulated devices' });
+      const doc = await Device.findOneAndUpdate(
+        { token: input.token },
+        { $set: { ...input, user: ctx.user._id, simulated: false, lastSeenAt: new Date() } },
+        { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
+      ).lean();
+      return deviceView(doc);
+    },
+
+    async listDevices(ctx) {
+      const devices = await Device.find({ user: ctx.user._id }).sort({ lastSeenAt: -1 }).lean();
+      return devices.map(deviceView);
+    },
+
+    async removeDevice(id, ctx) {
+      const res = await Device.deleteOne({ _id: id, user: ctx.user._id }).catch(() => ({ deletedCount: 0 }));
+      if (!res.deletedCount) throw notFound('Device not found');
+    },
   };
 
   const r = new RouteBuilder({ app, prefix: '/auth', source: 'auth', file: 'calm/auth/index.js' });
@@ -301,6 +339,16 @@ export function setupAuth(app) {
   r.post('/password/reset', { policy: 'public', summary: 'Set a new password with a reset token', ...limited, tags: ['auth'] }, (ctx) => service.resetPassword(ctx.req.body));
   r.get('/sessions', { policy: 'authenticated', summary: 'Your active sessions', tags: ['auth'] }, (ctx) => service.listSessions(ctx));
   r.delete('/sessions/:sessionId', { policy: 'authenticated', summary: 'Revoke one session', tags: ['auth'] }, (ctx) => service.revokeSession(ctx.params.sessionId, ctx));
+  const deviceInput = {
+    token: f.string().required().max(4096),
+    platform: f.enum(PLATFORMS).required(),
+    name: f.string().max(100),
+    appVersion: f.string().max(50),
+    locale: f.string().max(20),
+  };
+  r.post('/devices', { policy: 'authenticated', status: 201, summary: 'Register this device for push notifications', input: deviceInput, tags: ['auth'] }, (ctx) => service.registerDevice(ctx.body, ctx));
+  r.get('/devices', { policy: 'authenticated', summary: 'Your devices registered for push notifications', tags: ['auth'] }, (ctx) => service.listDevices(ctx));
+  r.delete('/devices/:deviceId', { policy: 'authenticated', summary: 'Stop push notifications to a device', tags: ['auth'] }, (ctx) => service.removeDevice(ctx.params.deviceId, ctx));
 
   return { service, routes: r.routes };
 }

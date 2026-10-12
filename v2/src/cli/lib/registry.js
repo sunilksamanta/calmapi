@@ -3,7 +3,7 @@
 // registry or tool can host and read CalmAPI blocks.
 //
 // Addresses:
-//   jobs | @calmapi/jobs        official registry (bundled with this CLI, or https://calmapi.dev/r)
+//   jobs | @calmapi/jobs        official registry (bundled with this CLI, or https://docs.calmapi.dev/r)
 //   @acme/billing                namespace from package.json "calm.registries"
 //   https://example.com/x.json   any URL
 //   ./blocks/x.json              a local file
@@ -13,7 +13,7 @@ import { join, resolve } from 'node:path';
 import { PKG_ROOT, readJson } from './files.js';
 
 export const OFFICIAL = '@calmapi';
-export const OFFICIAL_URL = 'https://calmapi.dev/r/{name}.json';
+export const OFFICIAL_URL = 'https://docs.calmapi.dev/r/{name}.json';
 
 export function parseAddress(address) {
   if (/^https?:\/\//.test(address)) return { kind: 'url', url: address, key: address };

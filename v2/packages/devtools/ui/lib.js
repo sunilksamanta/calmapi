@@ -103,6 +103,7 @@ export async function api(path, { method = 'GET', body } = {}) {
   if (!res.ok) {
     const err = new ApiError(data?.error ?? `Request failed with ${res.status}`);
     err.status = res.status;
+    err.details = data?.details ?? null;
     throw err;
   }
   return data;

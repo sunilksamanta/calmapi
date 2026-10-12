@@ -21,7 +21,7 @@ ${c.bold('calm add <block...>')}
     --dry-run       show what would change, write nothing
     --overwrite     replace files that already exist with different content
     --no-install    do not run the package manager
-    --remote        fetch official blocks from calmapi.dev instead of the bundled copy
+    --remote        fetch official blocks from docs.calmapi.dev instead of the bundled copy
     -y, --yes       do not ask for confirmation
 
   ${c.dim('calm add --list')}   list official blocks
@@ -56,7 +56,7 @@ export async function run(argv) {
   const installed = Object.keys(lock0.blocks ?? {}).map((k) => k.split('/').pop());
   for (const { key, item } of items) {
     const clash = (item.meta?.calmapi?.conflicts ?? []).find((n) => installed.includes(n) || items.some((i) => i.item.name === n));
-    if (clash) throw new Error(`${key} cannot be installed together with ${clash} (they provide the same resource).`);
+    if (clash) throw new Error(`${key} cannot be installed together with ${clash} (they do the same job; pick one).`);
   }
   const plan = planChanges(root, items, values);
 

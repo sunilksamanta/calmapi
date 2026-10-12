@@ -13,11 +13,13 @@ export const store = {
   requests: [],
   logs: [],
   mails: [],
+  pushes: [], // push notifications, newest first
   doctor: null,
   live: false,
   actAs: null, // { token, expiresAt, user } from POST /act-as, memory only
   prefill: null, // playground prefill from "Try it" buttons
   seenMail: new Set(),
+  seenPush: new Set(),
   records: new Map(), // full request records by id
   activity: [], // project activity, newest first (calm dev + calm mcp)
   activitySeen: storage.get('activity-seen', null), // ISO time of the newest event seen in the panel
@@ -71,6 +73,11 @@ export async function loadLogs() {
 export async function loadMails() {
   store.mails = await api('/mails');
   emit('mails:reset');
+}
+
+export async function loadPushes() {
+  store.pushes = await api('/pushes');
+  emit('pushes:reset');
 }
 
 export async function loadActivity() {
@@ -158,7 +165,7 @@ export function connect() {
     if (wasDown) {
       // The server restarted (or the connection dropped): resync everything.
       wasDown = false;
-      Promise.allSettled([loadOverview(), loadRequests(), loadLogs(), loadMails(), loadDoctor(), loadActivity()]);
+      Promise.allSettled([loadOverview(), loadRequests(), loadLogs(), loadMails(), loadPushes(), loadDoctor(), loadActivity()]);
     }
   });
   es.addEventListener('error', () => {
@@ -201,6 +208,23 @@ export function connect() {
     if (store.auditRunning) return;
     store.audit = { summary: JSON.parse(e.data), elsewhere: true };
     emit('audit');
+  });
+  // Sent on create and again when delivery finishes: refetch so the record carries its log.
+  let pushTimer;
+  let freshPush = null;
+  es.addEventListener('push', (e) => {
+    const { id, event } = JSON.parse(e.data);
+    if (event === 'created') freshPush = id;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(async () => {
+      try {
+        store.pushes = await api('/pushes');
+      } catch {
+        return;
+      }
+      emit('pushes:reset', { fresh: freshPush });
+      freshPush = null;
+    }, 60);
   });
   es.addEventListener('mail', async () => {
     try {

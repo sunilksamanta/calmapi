@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Push notifications
+- `app.push.send({ to, title, body, data, ... })` (also `ctx.push` and `calm.push`): one message format for
+  iOS, Android and the web, validated, with the APNs, FCM, Expo and Web Push payloads built for you.
+- Device registry: `POST|GET /api/auth/devices`, `DELETE /api/auth/devices/:deviceId`. Tokens are never
+  returned in full, and tokens a provider reports as gone are removed.
+- Devtools **Push** panel: every notification on an iPhone lock screen, an Android notification shade and
+  a desktop browser (closed or expanded, cut off where a phone cuts it), the provider payloads with their
+  size, warnings (cut off text, sensitive data, oversized payloads), the delivery log per device, a composer
+  with a live preview, and simulated devices for any user.
+- Blocks: `push-expo` (Expo push service) and `push-fcm` (FCM HTTP v1, service account signed with
+  `node:crypto`, no SDK). Production without a transport reports `failed` and logs an error.
+- Tests: `t.pushes` and `t.mails`. MCP: `calm_pushes` (18 tools).
+
+### Docs
+- The documentation moved to https://docs.calmapi.dev. The CLI, the registry (`calm add --remote`) and
+  new projects link there.
+
 ## 2.0.0-alpha.0
 
 A rewrite. The framework is still copied into your project, and now it can be upgraded.

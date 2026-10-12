@@ -41,8 +41,13 @@ across resources; use `this.service('name')` inside services or `ctx.services.na
 6. **Never return raw documents from non-resource routes**; use `ctx.serialize(doc, 'resource')`.
 7. Sensitive data: `.visibleTo('owner | admin')` for personal fields, `.encrypted()` for secrets at rest
    (needs `CALM_ENCRYPTION_KEYS`, see `npx calm keygen --write`). Never log secrets.
-8. Before finishing: `npm test`, `npx calm doctor` (fix every `error`) and, after changing policies or
+8. Email and push go through `ctx.app.mailer.send()` and `ctx.push.send({ to: userId, title, body, data })`.
+   Put ids in push `data`, never secrets or personal details. In tests assert on `t.mails` and `t.pushes`.
+9. Before finishing: `npm test`, `npx calm doctor` (fix every `error`) and, after changing policies or
    fields, `npx calm audit` (it calls every route as every role and must pass).
+
+Docs: https://docs.calmapi.dev (each page also as markdown at its URL plus `.md`, and
+https://docs.calmapi.dev/llms.txt).
 
 ## Useful commands
 
@@ -59,5 +64,5 @@ npm test                    run tests (needs MongoDB; MONGODB_TEST_URI to overri
 An MCP server is available for agents that support it: `npx calm mcp`. Useful loop:
 `calm_make_resource` or edit files, then `calm_activity` (did the dev server restart or crash?),
 `calm_http` (call the API as anonymous, admin or a user email), `calm_test`, `calm_doctor`,
-`calm_audit`. Your tool calls, diffs and requests appear live in devtools (/_calm) for the human
+`calm_audit`. `calm_mails` and `calm_pushes` show the emails and push notifications the dev server sent. Your tool calls, diffs and requests appear live in devtools (/_calm) for the human
 you are working with.

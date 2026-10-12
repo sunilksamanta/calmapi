@@ -3,7 +3,7 @@
 //   registry/blocks/<name>/block.json   metadata (no file contents)
 //   registry/blocks/<name>/files/...    files, mirrored to the same path in the project
 //
-// Output is bundled with the CLI and published to https://calmapi.dev/r/<name>.json
+// Output is bundled with the CLI and published to https://docs.calmapi.dev/r/<name>.json
 
 import { readdirSync, readFileSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { join, dirname, relative, sep } from 'node:path';
@@ -54,6 +54,6 @@ for (const name of readdirSync(SRC).sort()) {
 
 writeFileSync(
   join(OUT, 'index.json'),
-  `${JSON.stringify({ $schema: 'https://ui.shadcn.com/schema/registry.json', name: 'calmapi', homepage: 'https://calmapi.dev', items: index }, null, 2)}\n`,
+  `${JSON.stringify({ $schema: 'https://ui.shadcn.com/schema/registry.json', name: 'calmapi', homepage: 'https://docs.calmapi.dev/blocks', items: index }, null, 2)}\n`,
 );
 process.stderr.write(`registry: built ${index.length} blocks -> ${relative(ROOT, OUT)}\n`);

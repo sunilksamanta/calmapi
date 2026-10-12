@@ -17,6 +17,6 @@ npm create calmapi@latest my-api -- --template minimal   # api (default) or mini
 npm create calmapi@latest my-api -- --yes                # accept the defaults
 ```
 
-Needs Node.js 22.12 or newer and a MongoDB server. Read the [getting started guide](https://calmapi.dev/docs/getting-started).
+Needs Node.js 22.12 or newer and a MongoDB server. Read the [getting started guide](https://docs.calmapi.dev/getting-started).
 
 MIT licensed.

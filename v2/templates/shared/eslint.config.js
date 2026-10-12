@@ -7,9 +7,9 @@ export default [
       ecmaVersion: 'latest',
       sourceType: 'module',
       globals: {
-        process: 'readonly', console: 'readonly', Buffer: 'readonly', URL: 'readonly', fetch: 'readonly',
+        process: 'readonly', console: 'readonly', Buffer: 'readonly', URL: 'readonly', URLSearchParams: 'readonly', fetch: 'readonly',
         setTimeout: 'readonly', clearTimeout: 'readonly', setInterval: 'readonly', clearInterval: 'readonly',
-        setImmediate: 'readonly', structuredClone: 'readonly', performance: 'readonly', AbortController: 'readonly',
+        setImmediate: 'readonly', structuredClone: 'readonly', performance: 'readonly', AbortController: 'readonly', AbortSignal: 'readonly',
         TextEncoder: 'readonly', TextDecoder: 'readonly', Response: 'readonly', Request: 'readonly', Headers: 'readonly',
       },
     },

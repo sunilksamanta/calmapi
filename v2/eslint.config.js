@@ -4,7 +4,7 @@ const node = {
   process: 'readonly', console: 'readonly', Buffer: 'readonly', URL: 'readonly', URLSearchParams: 'readonly',
   fetch: 'readonly', FormData: 'readonly', Blob: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly',
   setInterval: 'readonly', clearInterval: 'readonly', setImmediate: 'readonly', structuredClone: 'readonly',
-  performance: 'readonly', AbortController: 'readonly', TextEncoder: 'readonly', TextDecoder: 'readonly',
+  performance: 'readonly', AbortController: 'readonly', AbortSignal: 'readonly', TextEncoder: 'readonly', TextDecoder: 'readonly',
   Response: 'readonly', Request: 'readonly', Headers: 'readonly',
 };
 const browser = {

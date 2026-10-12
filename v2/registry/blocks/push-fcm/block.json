@@ -1,0 +1,10 @@
+{
+  "name": "push-fcm",
+  "title": "Push notifications via Firebase Cloud Messaging",
+  "description": "Deliver app.push notifications to Android, iOS and web through the FCM HTTP v1 API, signed with your service account using node:crypto. No SDK. Tokens that stopped working are removed for you.",
+  "version": "1.0.0",
+  "categories": ["push", "notifications"],
+  "conflicts": ["push-expo"],
+  "envVars": { "FCM_SERVICE_ACCOUNT": "" },
+  "docs": "In the Firebase console: Project settings, Service accounts, Generate new private key. Put the path of that JSON file (or the JSON itself) in FCM_SERVICE_ACCOUNT, and keep it out of git. GOOGLE_APPLICATION_CREDENTIALS works too.\nYour app gets a token from the Firebase SDK (getToken) and registers it: POST /api/auth/devices { token, platform }. iOS delivery goes through FCM too: upload your APNs key in Project settings, Cloud Messaging.\nThen send from anywhere: await ctx.push.send({ to: userId, title, body })."
+}

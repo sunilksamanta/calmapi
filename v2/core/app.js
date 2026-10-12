@@ -6,6 +6,7 @@ import { loadConfig } from './config.js';
 import { createLogger } from './logger.js';
 import { createEvents } from './events.js';
 import { createMailer } from './mail.js';
+import { createPush } from './push.js';
 import { loadResources, loadBlocks, loadAppRoutes } from './loader.js';
 import { compileResource } from './resource/resource.js';
 import { crudRoutes } from './resource/routes.js';
@@ -65,6 +66,7 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
     rateStore,
     cipher,
     mailer: createMailer({ log, mode: config.mode, from: config.mail?.from ?? `${config.app.name} <no-reply@localhost>` }),
+    push: createPush({ log, mode: config.mode, events }),
     express: null,
     server: null,
     auth: null,
@@ -202,6 +204,7 @@ function pluginApi(app, plugin) {
     events: app.events,
     mongoose: app.mongoose,
     mailer: app.mailer,
+    push: app.push,
     on: (pattern, fn) => app.events.on(pattern, fn),
     onResource: (fn) => app.hooks.resource.push(fn),
     /** Called with { def, model, service } for every resource once services exist. */

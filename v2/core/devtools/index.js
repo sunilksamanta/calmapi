@@ -9,12 +9,14 @@
 // page cannot send.
 
 import express from 'express';
+import { randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { existsSync, readFileSync, statSync, watchFile, unwatchFile, openSync, readSync, closeSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { currentRequest } from '../context.js';
 import { serialize } from '../resource/resource.js';
 import { kebab } from '../utils/strings.js';
+import { maskToken } from '../push.js';
 
 const SKIP_COMMANDS = new Set(['hello', 'ismaster', 'isMaster', 'ping', 'endSessions', 'saslStart', 'saslContinue', 'buildInfo', 'getParameter', 'listIndexes', 'createIndexes']);
 const EXPLAINABLE = new Set(['find', 'aggregate', 'count', 'distinct', 'update', 'delete', 'findAndModify']);
@@ -40,6 +42,7 @@ export function setupDevtools(app, ex) {
   const orphanQueries = ring(200);
   const logs = ring(1000);
   const mails = ring(100);
+  const pushes = ring(100);
   const activity = ring(500);
   const securityEvents = ring(300);
   const clients = new Set();
@@ -99,6 +102,11 @@ export function setupDevtools(app, ex) {
   readNewActivity(true);
   watchFile(activityPath, { interval: 400 }, () => readNewActivity(false));
   app.hooks.shutdown.push(() => unwatchFile(activityPath));
+
+  app.push.observe((record, event) => {
+    if (event === 'created') pushes.push(record);
+    broadcast('push', { id: record.id, event, status: record.status, title: record.message.title ?? record.message.body ?? null, createdAt: record.createdAt });
+  });
 
   app.mailer.observe((msg) => {
     const mail = { id: ++seq, to: msg.to, from: msg.from, subject: msg.subject, text: msg.text, html: msg.html, sentAt: msg.sentAt, meta: msg.meta };
@@ -266,6 +274,89 @@ export function setupDevtools(app, ex) {
   });
   api.get('/mails', (_req, res) => res.json(mails.list().slice().reverse()));
 
+  // ---- push notifications --------------------------------------------------------
+  api.get('/pushes', async (_req, res) => {
+    const list = pushes.list().slice().reverse();
+    // Recipients by name, so the inbox reads "Grace Hopper" instead of an ObjectId.
+    const ids = [...new Set(list.flatMap((p) => [...p.to.users, ...p.devices.map((d) => d.user)]).filter((id) => id && /^[a-f\d]{24}$/i.test(id)))];
+    let users = new Map();
+    if (ids.length && app.registry.has('user')) {
+      const docs = await app.model('user').find({ _id: { $in: ids } }).select('name email').lean().catch(() => []);
+      users = new Map(docs.map((u) => [String(u._id), { id: String(u._id), name: u.name, email: u.email }]));
+    }
+    const people = (p) => [...new Set([...p.to.users, ...p.devices.map((d) => d.user)].filter(Boolean))].map((id) => users.get(id) ?? { id });
+    res.json(list.map((p) => ({ ...p, people: people(p) })));
+  });
+
+  const Device = () => app.push.devices;
+  const deviceRow = (d, users) => ({
+    id: String(d._id),
+    user: users.get(String(d.user)) ?? { id: String(d.user) },
+    platform: d.platform,
+    name: d.name ?? null,
+    token: maskToken(d.token),
+    simulated: Boolean(d.simulated),
+    appVersion: d.appVersion ?? null,
+    lastSeenAt: d.lastSeenAt ?? null,
+    createdAt: d.createdAt,
+  });
+  async function listDevices(filter = {}) {
+    if (!Device()) return [];
+    const docs = await Device().find(filter).sort({ updatedAt: -1 }).limit(200).lean();
+    const ids = [...new Set(docs.map((d) => String(d.user)))];
+    const users = new Map(
+      (await app.model('user').find({ _id: { $in: ids } }).select('name email').lean()).map((u) => [String(u._id), { id: String(u._id), name: u.name, email: u.email }]),
+    );
+    return docs.map((d) => deviceRow(d, users));
+  }
+
+  api.get('/devices', async (req, res) => {
+    const filter = typeof req.query.user === 'string' && /^[a-f\d]{24}$/i.test(req.query.user) ? { user: req.query.user } : {};
+    res.json(await listDevices(filter));
+  });
+
+  // A simulated device lets you send to a user who has no real phone registered yet.
+  api.post('/devices/simulate', async (req, res) => {
+    if (!Device()) return res.status(400).json({ error: 'Push devices need auth and a user resource' });
+    const { userId, platform = 'ios', name } = req.body ?? {};
+    if (!['ios', 'android', 'web'].includes(platform)) return res.status(400).json({ error: 'platform must be ios, android or web' });
+    const user = await app.model('user').findById(userId).lean().catch(() => null);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const label = { ios: 'iPhone', android: 'Android phone', web: 'Browser' }[platform];
+    const doc = await Device().create({
+      user: user._id,
+      platform,
+      token: `sim_${platform}_${randomBytes(12).toString('hex')}`,
+      name: typeof name === 'string' && name.trim() ? name.trim().slice(0, 100) : `Simulated ${label}`,
+      simulated: true,
+      lastSeenAt: new Date(),
+    });
+    const [row] = await listDevices({ _id: doc._id });
+    res.status(201).json(row);
+  });
+
+  api.delete('/devices/:id', async (req, res) => {
+    if (!Device()) return res.status(404).json({ error: 'Unknown device' });
+    const result = await Device().deleteOne({ _id: req.params.id }).catch(() => ({ deletedCount: 0 }));
+    if (!result.deletedCount) return res.status(404).json({ error: 'Unknown device' });
+    res.status(204).end();
+  });
+
+  // Send a test notification through the app's real push path (dev capture, or the
+  // configured transport for real devices).
+  api.post('/push/test', async (req, res) => {
+    const { userId, deviceIds, ...message } = req.body ?? {};
+    try {
+      let target;
+      if (Array.isArray(deviceIds) && deviceIds.length) target = { deviceIds };
+      else if (userId) target = { to: userId };
+      else return res.status(400).json({ error: 'Choose a user or devices to send to' });
+      res.status(201).json(await app.push.send({ ...message, ...target }));
+    } catch (err) {
+      res.status(err.status ?? 500).json({ error: err.message, details: err.details });
+    }
+  });
+
   api.get('/resources/:name/docs', async (req, res) => {
     const entry = app.registry.get(kebab(req.params.name));
     if (!entry) return res.status(404).json({ error: 'Unknown resource' });
@@ -337,7 +428,8 @@ export function setupDevtools(app, ex) {
   const router = express.Router();
   router.use((req, res, next) => (isLocal(req) ? next() : res.status(404).end()));
   router.use((_req, res, next) => {
-    res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'");
+    // https images: push notification previews show the image a real phone would load.
+    res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'");
     res.setHeader('X-Frame-Options', 'DENY');
     next();
   });
@@ -380,6 +472,7 @@ function overview(app) {
     },
     auth: Boolean(app.auth),
     mail: app.mailer.transport,
+    push: app.push.transport,
     openapi: config.openapi.enabled ? `${config.apiPrefix}${config.openapi.path}` : null,
     resources: [...app.registry.values()].map(({ def, files }) => ({
       name: def.name,

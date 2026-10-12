@@ -31,6 +31,11 @@ export async function createTestApp({ root = process.cwd(), config = {}, baseUri
     ),
   });
   await app.start();
+  // Everything the app sends, for assertions: t.mails[0].subject, t.pushes[0].message.title
+  const mails = [];
+  const pushes = [];
+  app.mailer.observe((msg) => mails.push(msg));
+  app.push.observe((record, event) => event === 'created' && pushes.push(record));
   const server = app.express.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
@@ -76,6 +81,11 @@ export async function createTestApp({ root = process.cwd(), config = {}, baseUri
       if (roles) await app.model('user').updateOne({ _id: user.id }, { $set: { roles } });
       return { token, user, id: user.id, email: mail, password };
     },
+
+    /** Emails the app sent (captured, never delivered). */
+    mails,
+    /** Push notifications the app sent: { message, devices, payloads, warnings, status, log }. */
+    pushes,
 
     /** Wait for background work (emails, event listeners) to finish. */
     idle: () => app.idle(),
