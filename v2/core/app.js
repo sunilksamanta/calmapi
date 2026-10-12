@@ -17,6 +17,7 @@ import { setupAuth } from './auth/index.js';
 import { buildOpenAPI } from './openapi.js';
 import { runtimeChecks } from './doctor.js';
 import { exposureMatrix, exposureFindings } from './security/exposure.js';
+import { canRead, inScope } from './resource/visibility.js';
 import { toHttpError, notFound } from './errors.js';
 import { parseKeys, createCipher } from './security/encryption.js';
 
@@ -52,6 +53,12 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
   const hooks = { start: [], shutdown: [], resource: [], service: [], middleware: [], routes: [], doctor: [], login: [], authenticators: [], guards: [], devtools: {} };
   const rateStore = createMemoryStore();
 
+  const entryOf = (resource) => {
+    const entry = typeof resource === 'string' ? registry.get(resource) : resource;
+    if (!entry?.def) throw new Error(`Unknown resource "${resource}"`);
+    return entry;
+  };
+
   const app = {
     root,
     config,
@@ -78,6 +85,14 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
     openapi: () => buildOpenAPI(app),
     doctor: async () => [...runtimeChecks(app), ...exposureFindings(await exposureMatrix(app))],
     exposure: () => exposureMatrix(app),
+    /**
+     * May `user` read `doc`, by the rules of GET /api/<resource>/:id (read policy, owner,
+     * service scope())? For work outside a request: webhooks, streams, notifications.
+     * Pass { deleted: true } for a record that is gone (judged on the copy you hold).
+     */
+    canRead: async (resource, doc, user, opts) => canRead(entryOf(resource), doc, user, opts),
+    /** Is `doc` inside the service scope() for `user`? Skips the read policy (admin feeds). */
+    inScope: async (resource, doc, user, opts) => inScope(entryOf(resource), doc, user, opts),
 
     /** Run work after the response, tracked so tests and shutdown can wait for it. */
     background(fn) {

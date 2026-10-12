@@ -1,6 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { definePlugin, badRequest, unauthorized, serialize, isOwner } from '#calm';
-import { evaluatePolicy } from '#calm/resource/policy.js';
+import { definePlugin, badRequest, unauthorized, serialize } from '#calm';
 
 // Server-Sent Events for resource changes. Every event is checked per subscriber:
 // read policy, owner scoping, the service scope() and field visibility, so the stream
@@ -67,7 +66,7 @@ export default definePlugin({
       for (const sub of subscribers) {
         if (!sub.names.has(m[1])) continue;
         try {
-          if (!(await canSee(entry, payload.doc, sub.user, m[2] === 'deleted'))) continue;
+          if (!(await calm.app.canRead(entry, payload.doc, sub.user, { deleted: m[2] === 'deleted' }))) continue;
           const data = m[2] === 'deleted' ? { id: String(payload.doc._id) } : await serialize(entry.def, payload.doc, { user: sub.user, registry: calm.app.registry });
           sub.res.write(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
         } catch (err) {
@@ -85,16 +84,5 @@ export default definePlugin({
       subscribers: [...subscribers].map((s) => ({ user: s.user?.id ?? 'anonymous', resources: [...s.names] })),
       pendingTickets: tickets.size,
     }));
-
-    /** Same rules as GET /<resource>/:id for this user. */
-    async function canSee(entry, doc, user, deleted) {
-      const decision = await evaluatePolicy(entry.def.policy.read, { user, action: 'read', doc });
-      if (!decision.allow) return false;
-      if (decision.scope === 'owner' && !isOwner(entry.def, doc, user)) return false;
-      if (deleted) return true; // the record is gone, only its id is sent
-      const scope = entry.service.scope({ user });
-      if (!scope || !Object.keys(scope).length) return true;
-      return Boolean(await entry.model.exists({ $and: [scope, { _id: doc._id }] }));
-    }
   },
 });

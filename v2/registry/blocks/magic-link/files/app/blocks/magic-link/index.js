@@ -1,6 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { definePlugin, f, validateInput, CalmError, forbidden, tooManyRequests, validationError } from '#calm';
-import { createToken, hashToken } from '#calm/auth/tokens.js';
+import { definePlugin, f, validateInput, createToken, hashToken, CalmError, forbidden, tooManyRequests, validationError } from '#calm';
 
 // Passwordless sign-in: post an email address, get a link, open it, you are signed in.
 //

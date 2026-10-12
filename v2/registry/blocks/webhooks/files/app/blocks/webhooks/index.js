@@ -1,9 +1,6 @@
-import { definePlugin, f, serialize, CalmError, badRequest, unauthorized, forbidden, notFound, conflict, validationError } from '#calm';
-import { evaluatePolicy, parsePolicy } from '#calm/resource/policy.js';
-import { isEncrypted } from '#calm/security/encryption.js';
+import { definePlugin, f, serialize, evaluatePolicy, parsePolicy, isEncrypted, CalmError, badRequest, unauthorized, forbidden, notFound, conflict, validationError } from '#calm';
 import { newSecret, newMessageId, verifyWebhook } from './signing.js';
 import { urlProblem } from './ssrf.js';
-import { canRead, inScope } from './visibility.js';
 import { createDeliveries } from './delivery.js';
 
 // Outgoing webhooks. Users subscribe a URL to resource events ('order.created', 'order.*')
@@ -310,8 +307,8 @@ export default definePlugin({
       try {
         // Global: every record, whatever its read policy, but still inside the owner's scope().
         const allowed = scope === 'global'
-          ? (await mayGoGlobal(user)) && (await inScope(entry, doc, user, { deleted: event.deleted }))
-          : await canRead(entry, doc, user, { deleted: event.deleted });
+          ? (await mayGoGlobal(user)) && (await calm.app.inScope(entry, doc, user, { deleted: event.deleted }))
+          : await calm.app.canRead(entry, doc, user, { deleted: event.deleted });
         if (!allowed) return null;
         // Serialized for this user: hidden fields never, visibleTo() fields only if they may.
         const data = await serialize(entry.def, doc, { user, registry: calm.app.registry });

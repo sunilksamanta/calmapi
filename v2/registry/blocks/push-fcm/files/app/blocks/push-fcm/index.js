@@ -1,7 +1,6 @@
 import { createSign } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { definePlugin } from '#calm';
-import { providerPayloads } from '#calm/push.js';
+import { definePlugin, providerPayloads } from '#calm';
 
 // Sends app.push notifications through Firebase Cloud Messaging HTTP v1
 // (https://firebase.google.com/docs/cloud-messaging/send-message). Authenticates with a

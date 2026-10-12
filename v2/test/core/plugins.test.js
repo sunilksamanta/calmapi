@@ -120,6 +120,13 @@ test('.pii() marks a field as personal data for calm audit and the doctor', asyn
   assert.ok(!pii.some((title) => title.startsWith('patient.notes ')), 'unmarked fields with ordinary names are not');
 });
 
+test('app.canRead follows the read policy of the resource, for work outside a request', async () => {
+  const doc = { _id: new t.app.mongoose.Types.ObjectId(), name: 'Ada' };
+  assert.equal(await t.app.canRead('patient', doc, null), true, 'read: public');
+  assert.equal(await t.app.canRead('user', { _id: doc._id, email: 'a@b.c' }, null), false, 'users are not public');
+  await assert.rejects(() => t.app.canRead('nope', doc, null), /Unknown resource "nope"/);
+});
+
 test('named policies combine with built-in ones', async () => {
   const regular = await t.signup({ name: 'Regular Joe' });
   const vip = await t.signup({ name: 'VIP Ada' });

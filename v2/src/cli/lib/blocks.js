@@ -94,6 +94,10 @@ export function checkItem(item) {
   }
   const min = item.meta?.calmapi?.minVersion;
   if (min && !SEMVER.test(min)) add('error', `minVersion "${min}" is not semver`);
+  for (const f of item.files ?? []) {
+    const deep = /from\s+['"]#calm\/([^'"]+)['"]/.exec(String(f.content ?? ''));
+    if (deep) add('info', `${f.target ?? f.path} imports #calm/${deep[1]}: internal modules can change between versions, prefer what '#calm' exports`);
+  }
   for (const r of review(item.files ?? [])) {
     if (r.risk === 'high') add('warn', `${r.file}:${r.line} ${r.what}`);
     if (r.kind === 'secret') add('error', `${r.file}:${r.line} ${r.what}`);

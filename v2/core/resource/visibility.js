@@ -1,5 +1,7 @@
-import { isOwner } from '#calm';
-import { evaluatePolicy } from '#calm/resource/policy.js';
+import { evaluatePolicy, isOwner } from './policy.js';
+
+// Record visibility outside a request: webhooks, realtime streams, notifications... use
+// app.canRead(resource, doc, user) so they follow the rules of GET /api/<resource>/:id.
 
 /**
  * May `user` read this record, by the same rules as GET /api/<resource>/:id?

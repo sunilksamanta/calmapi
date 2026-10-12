@@ -288,8 +288,8 @@ test('visibility: subscribers only get records they may read, serialized for the
   assert.equal((await t.get('/webhooks')).status, 401);
 });
 
-test('visibility rules: scope() filters are judged on the event copy, and global endpoints stay inside scope()', async () => {
-  const { matchesFilter, inScope } = await project.load('app/blocks/webhooks/visibility.js');
+test('visibility rules (calm/resource/visibility.js): scope() filters are judged on the event copy, and global endpoints stay inside scope()', async () => {
+  const { matchesFilter, inScope } = await project.load('calm/resource/visibility.js');
   const { Types } = t.app.mongoose;
   const author = new Types.ObjectId();
   const doc = { _id: new Types.ObjectId(), status: 'draft', author, tags: ['a', 'b'], org: 'acme' };

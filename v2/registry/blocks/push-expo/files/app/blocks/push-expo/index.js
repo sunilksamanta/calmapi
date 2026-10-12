@@ -1,6 +1,5 @@
 import { gzipSync } from 'node:zlib';
-import { definePlugin } from '#calm';
-import { providerPayloads } from '#calm/push.js';
+import { definePlugin, providerPayloads } from '#calm';
 
 // Sends app.push notifications to Expo push tokens through the Expo push service, following
 // https://docs.expo.dev/push-notifications/sending-notifications/ and what Expo's own Node SDK

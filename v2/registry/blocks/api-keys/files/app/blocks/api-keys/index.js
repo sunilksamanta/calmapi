@@ -1,5 +1,4 @@
-import { definePlugin, f, CalmError, unauthorized, forbidden, notFound, validationError, validateInput } from '#calm';
-import { hashToken } from '#calm/auth/tokens.js';
+import { definePlugin, f, hashToken, CalmError, unauthorized, forbidden, notFound, validationError, validateInput } from '#calm';
 import { generateKey, isKeyShaped, hasValidChecksum, displayPrefix } from './keys.js';
 import { CUSTOM_SCOPE, routeKey, requiredScope, grants, catalog } from './scopes.js';
 

@@ -1,5 +1,4 @@
-import { serialize } from '#calm';
-import { maskToken } from '#calm/push.js';
+import { serialize, maskToken } from '#calm';
 import { decrypt, ownedBy } from './erase.js';
 
 // Data export ("right to data portability"): one JSON file with everything a user owns.

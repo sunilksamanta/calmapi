@@ -8,7 +8,12 @@ export { f, Field } from './resource/fields.js';
 export { ResourceService } from './resource/service.js';
 export { definePlugin } from './loader.js';
 export { Reply } from './http/router.js';
-export { hasRole, isOwner } from './resource/policy.js';
+export { hasRole, isOwner, evaluatePolicy, parsePolicy } from './resource/policy.js';
+export { matchesFilter } from './resource/visibility.js';
+export { createToken, hashToken } from './auth/tokens.js';
+export { isEncrypted } from './security/encryption.js';
+export { maskToken, providerPayloads } from './push.js';
+export { resourceJSONSchema } from './resource/resource.js';
 export { hashPassword, verifyPassword } from './auth/password.js';
 export { currentRequest } from './context.js';
 export {

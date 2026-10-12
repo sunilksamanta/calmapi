@@ -2,7 +2,8 @@
   "name": "realtime-sse",
   "title": "Realtime (SSE)",
   "description": "Live resource changes over Server-Sent Events, filtered per subscriber with the same policies, scopes and field visibility as the REST API.",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "minVersion": "2.0.0-alpha.1",
   "categories": [
     "realtime"
   ],
