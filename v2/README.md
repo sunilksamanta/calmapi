@@ -36,13 +36,14 @@ Documentation: **https://docs.calmapi.dev**
   production. `.encrypted()` fields are AES-256-GCM at rest. `calm audit` attacks your own API as every
   role on a throwaway database and proves the policies hold.
 - **Devtools.** A local dashboard at `/_calm`: every request with its MongoDB queries and timings,
-  explain plans, a privacy lens on your data, a mail catcher, push notification previews on simulated
-  phones, "act as" any user, and doctor findings.
+  explain plans, a privacy lens on your data, sample data, a mail catcher, push notifications on
+  simulated phones, "act as" any user, what each block adds, and doctor findings.
 - **Agent native, human visible.** Projects ship with `AGENTS.md`; `calm mcp` gives coding agents tools to
   scaffold, call the API as any user, run tests, doctor and the security audit. Everything an agent does
   (tool calls, file diffs, restarts, crashes, requests) streams live into devtools, so you watch it work.
-- **Blocks, shadcn style.** `calm add jobs` copies production code (a MongoDB job queue, file storage,
-  realtime, audit log, an MCP server for your API...) into your project. You own that code too.
+- **Blocks, shadcn style.** `calm add notifications` copies production code (in-app inbox plus push plus
+  email, webhooks, API keys, feature flags, a job queue, file storage, realtime...) into your project. You
+  own that code too, and building and sharing your own block takes one command.
 
 ## A resource
 
@@ -125,7 +126,10 @@ visibility, realtime events and MCP tool calls alike.
 calm create [dir]                       new project (npm create calmapi@latest)
 calm dev                                watch mode + devtools
 calm make resource <name> [fields...]   e.g. product name:string! price:number status:enum:draft,live=draft category:ref:category
-calm add <block...>                     copy blocks into your project (calm add --list)
+calm add <block...>                     copy blocks into your project (calm add --list, gh:user/repo/name)
+calm make block <name>                  start your own block
+calm block list|check|pack              your blocks: what changed, a safety review, a file to share
+calm seed [resource...]                 sample records that look real (--count, --seed)
 calm routes                             every route with its policy and source file
 calm openapi                            write openapi.json
 calm doctor [--prod] [--ci] [--audit]   security and correctness checks
@@ -140,6 +144,13 @@ calm mcp                                MCP server for coding agents (claude mcp
 
 | Block | What you get |
 |---|---|
+| `notifications` | `ctx.notify(user, 'order-shipped', { order })`: in-app inbox, push and email in one call, with preferences and quiet hours |
+| `webhooks` | outgoing webhooks for resource events: signed (Standard Webhooks), retried, logged, SSRF safe |
+| `api-keys` | personal and service API keys with scopes, hashed at rest, expiry and revoke |
+| `magic-link` | passwordless sign-in by email, bound to the browser that asked |
+| `feature-flags` | kill switches, gradual rollouts, targeting, variants, route gates |
+| `privacy` | users export their data and delete their account (delete, anonymize or keep per resource) |
+| `idempotency` | the `Idempotency-Key` header: safe retries for payments and other writes |
 | `jobs` | MongoDB job queue and cron (no Redis): retries, schedules, event triggers, admin API |
 | `storage-local` / `storage-s3` | uploads with type/size allowlists and safe downloads; S3/R2/MinIO via presigned URLs |
 | `realtime-sse` | live resource events, filtered per subscriber by the same policies |
@@ -152,9 +163,30 @@ calm mcp                                MCP server for coding agents (claude mcp
 | `push-expo` / `push-fcm` | push notification delivery through Expo or Firebase Cloud Messaging |
 | `rate-limit-mongo` | shared rate limits across instances |
 
-Blocks use the [shadcn registry item format](https://ui.shadcn.com/docs/registry), so anyone can
-publish them: add `"calm": { "registries": { "@acme": "https://acme.dev/r/{name}.json" } }` to
-`package.json` and run `calm add @acme/thing`.
+### Your own blocks
+
+```js
+// app/blocks/maintenance/index.js   (npx calm make block maintenance)
+import { definePlugin, CalmError } from '#calm';
+
+export default definePlugin({
+  name: 'maintenance',
+  env: { MAINTENANCE: 'Set to "on" to answer 503 on every route' },
+  setup(calm) {
+    calm.guard(() => {
+      if (calm.env('MAINTENANCE') === 'on') throw new CalmError(503, 'MAINTENANCE', 'Back soon');
+    });
+  },
+});
+```
+
+Blocks can add routes, resources, guards (`calm.guard`, which can stop or answer a request), other
+credentials (`calm.authenticate`), named policies (`calm.policy`), login challenges, push and mail
+transports, doctor checks and devtools panels. `calm block pack` turns a block into a registry file; others
+install it with `calm add gh:you/repo/maintenance`, after a plain-language review of what its code does.
+Blocks use the [shadcn registry item format](https://ui.shadcn.com/docs/registry), and private registries
+work too: add `"calm": { "registries": { "@acme": "https://acme.dev/r/{name}.json" } }` to `package.json`
+and run `calm add @acme/thing`. [Building blocks](https://docs.calmapi.dev/building-blocks)
 
 ## Security toolkit
 
@@ -183,8 +215,10 @@ await ctx.push.send({ to: order.customer, title: 'Your order shipped', body: 'Ar
 
 In development nothing is delivered: devtools shows each notification on an iPhone lock screen, an
 Android notification shade and a desktop browser, with the APNs, FCM, Expo and Web Push payloads, size
-and content warnings and a delivery log. Add simulated devices to any user to preview without a phone.
-`calm add push-expo` or `calm add push-fcm` delivers for real. Tests get `t.pushes`.
+and content warnings and a delivery log. Give any user simulated devices that behave like real ones
+(offline, muted, uninstalled, invalid token, rate limited), rotate or revoke their tokens, and open each
+one as a phone with its own inbox. `calm add push-expo` and `calm add push-fcm` deliver for real, together
+if you like. Tests get `t.pushes`.
 [Push notifications](https://docs.calmapi.dev/push-notifications)
 
 ## Testing
