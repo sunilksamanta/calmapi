@@ -1,0 +1,11 @@
+{
+  "name": "idempotency",
+  "title": "Idempotency keys",
+  "description": "Safe retries for POST, PATCH, PUT and DELETE: the Idempotency-Key header (IETF draft) replays the stored response instead of running an operation twice. Per user keys, 409 while running, 422 on reuse, 5xx never stored.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-alpha.1",
+  "categories": ["http", "reliability", "payments"],
+  "envVars": {},
+  "dependencies": [],
+  "docs": "Clients send a unique key per operation: Idempotency-Key: \"8e03978e-40d5-43e8-bc93-6894a57f9324\" (quotes optional).\nA retry with the same key and body returns the stored response with Idempotent-Replayed: true. Keys are kept 24 hours (calm_idempotency, TTL index).\nMake the header mandatory on some routes in calm.config.js: blocks: { idempotency: { required: ['POST /api/orders'] } }"
+}

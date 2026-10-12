@@ -1,0 +1,11 @@
+{
+  "name": "privacy",
+  "title": "Privacy: export and delete",
+  "description": "Data portability and the right to be forgotten: users download everything they own as JSON and delete their account; per resource delete, anonymize or keep; admin routes for support requests; optional grace period.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-alpha.1",
+  "categories": ["privacy", "compliance", "auth"],
+  "envVars": {},
+  "dependencies": [],
+  "docs": "Export: GET /api/auth/me/export (a JSON download). Delete: DELETE /api/auth/me { password }.\nAdmins: POST /api/admin/users/:id/export, DELETE /api/admin/users/:id, POST /api/admin/users/:id/cancel-deletion.\nPer resource on account deletion (default 'delete'): resource('post', { onOwnerDelete: 'anonymize', personalFields: ['authorName'], fields })\nor in calm.config.js: blocks: { privacy: { resources: { invoice: 'keep' }, graceDays: 14 } }. Run `calm doctor` to see the plan."
+}
