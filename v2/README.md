@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://docs.calmapi.dev/brand/calmapi-banner-dark.png">
+    <img src="https://docs.calmapi.dev/brand/calmapi-banner.png" alt="Calm API: Keep Calm &amp; REST. The backend framework you own, for Node.js and MongoDB" width="100%">
+  </picture>
+</p>
+
 # CalmAPI 2
 
 **The backend framework you own.** Resources, policies, auth, devtools and an upgrade path for

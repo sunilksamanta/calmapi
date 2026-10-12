@@ -23,6 +23,7 @@
   --text-4: #a3a3a3;
 
   --accent: #3466c8;
+  --logo: #002f80;
   --accent-bg: #3466c8;
   --accent-bg-hover: #2b58b0;
   --accent-tint: rgba(52, 102, 200, 0.09);
@@ -87,6 +88,8 @@
     --text-3: #8f8f95;
     --text-4: #5e5e64;
     --accent: #7ea3ea;
+  --logo: #dce5f5;
+    --logo: #dce5f5;
     --accent-bg: #3a68c4;
     --accent-bg-hover: #4775cf;
     --accent-tint: rgba(126, 163, 234, 0.1);
@@ -503,7 +506,9 @@ a.file:hover { color: var(--accent); }
 .collapsed .top { grid-template-columns: auto minmax(0, 1fr); }
 .top-id { display: flex; align-items: center; gap: 6px; padding: 0 10px 0 7px; border-right: 1px solid var(--line); min-width: 0; }
 .collapsed .top-id { border-right: 0; padding-right: 4px; }
-.app-link { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-link { display: inline-flex; align-items: center; gap: 7px; min-width: 0; font-weight: 600; color: var(--text); }
+.app-link .lotus { flex: none; color: var(--logo); }
+.app-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .app-link:hover { text-decoration: none; }
 .app-ver { font: var(--fs-2) var(--mono); color: var(--text-3); }
 .top-main { display: flex; align-items: center; gap: 14px; padding: 0 8px 0 16px; min-width: 0; font-size: var(--fs-2); }

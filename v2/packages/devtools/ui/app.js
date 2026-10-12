@@ -1,7 +1,7 @@
 // CalmAPI devtools: app shell, navigation, header and keyboard shortcuts.
 // Vanilla ES modules, no build step. Every panel lives in ./panels/.
 
-import { h, icon, mount, clear, fmtUptime, storage, closePopover, toast } from './lib.js';
+import { h, s, icon, mount, clear, fmtUptime, storage, closePopover, toast } from './lib.js';
 import { store, on, connect, loadOverview, loadRequests, loadLogs, loadMails, loadPushes, loadDoctor, loadActivity, stopActAs } from './store.js';
 import requests from './panels/requests.js';
 import activity from './panels/activity.js';
@@ -60,6 +60,17 @@ function themeButton() {
 
 // ---- shell -------------------------------------------------------------------------
 
+/** The Calm API lotus (solid, for small sizes), in the logo color of the theme. */
+function lotus() {
+  const el = s('svg', { viewBox: '0 0 64 64', width: 18, height: 18, class: 'lotus', 'aria-hidden': 'true' });
+  el.innerHTML =
+    '<mask id="calm-lotus-gap" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64"><rect width="64" height="64" fill="#fff"/>' +
+    '<path d="M32 8C39.5 17 39.5 35 32 46C24.5 35 24.5 17 32 8Z" fill="#000" stroke="#000" stroke-width="4.6" stroke-linejoin="round"/></mask>' +
+    '<g fill="currentColor"><g mask="url(#calm-lotus-gap)"><path d="M32 47C20.5 46 12.5 36 11 21C19 22.5 25.5 27.5 29 35Z"/><path d="M32 47C43.5 46 51.5 36 53 21C45 22.5 38.5 27.5 35 35Z"/></g>' +
+    '<path d="M32 8C39.5 17 39.5 35 32 46C24.5 35 24.5 17 32 8Z"/></g><path d="M12 54H52" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>';
+  return el;
+}
+
 const el = {};
 
 function setCollapsed(app, next) {
@@ -88,7 +99,7 @@ function shell() {
     h(
       'header',
       { class: 'top' },
-      h('div', { class: 'top-id' }, el.sideBtn, h('a', { class: 'app-link', href: '#/requests', title: 'CalmAPI devtools' }, el.appName), el.appVer),
+      h('div', { class: 'top-id' }, el.sideBtn, h('a', { class: 'app-link', href: '#/requests', title: 'CalmAPI devtools' }, lotus(), el.appName), el.appVer),
       h('div', { class: 'top-main' }, h('span', { class: 'spacer' }), el.actAs, el.mode, el.db, el.openapi, themeButton()),
     ),
     h(

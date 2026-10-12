@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://docs.calmapi.dev/brand/calmapi-logo-light.svg">
+  <img src="https://docs.calmapi.dev/brand/calmapi-logo.svg" alt="Calm API" height="44">
+</picture>
+
 # create-calmapi
 
 Create a [CalmAPI](https://calmapi.dev) project: a Node.js and MongoDB backend whose framework code lives in your repo.

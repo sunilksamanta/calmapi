@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://docs.calmapi.dev/brand/calmapi-logo-light.svg">
+  <img src="https://docs.calmapi.dev/brand/calmapi-logo.svg" alt="Calm API" height="44">
+</picture>
+
 # @calmapi/devtools
 
 The browser UI for CalmAPI devtools: a local dashboard for your CalmAPI 2 app, served at
