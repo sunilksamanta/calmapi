@@ -6,6 +6,7 @@
 //   jobs | @calmapi/jobs        official registry (bundled with this CLI, or https://docs.calmapi.dev/r)
 //   @acme/billing                namespace from package.json "calm.registries"
 //   https://example.com/x.json   any URL
+//   gh:user/repo/name[@ref]      r/<name>.json in a GitHub repository (what `calm block pack` writes)
 //   ./blocks/x.json              a local file
 
 import { existsSync } from 'node:fs';
@@ -16,6 +17,11 @@ export const OFFICIAL = '@calmapi';
 export const OFFICIAL_URL = 'https://docs.calmapi.dev/r/{name}.json';
 
 export function parseAddress(address) {
+  const gh = /^gh:([\w.-]+)\/([\w.-]+)\/([\w-]+)(?:@([\w./-]+))?$/.exec(address);
+  if (gh) {
+    const [, user, repo, name, ref = 'HEAD'] = gh;
+    return { kind: 'url', url: `https://raw.githubusercontent.com/${user}/${repo}/${ref}/r/${name}.json`, key: `gh:${user}/${repo}/${name}` };
+  }
   if (/^https?:\/\//.test(address)) return { kind: 'url', url: address, key: address };
   if (address.startsWith('.') || address.startsWith('/') || address.endsWith('.json')) return { kind: 'file', path: address, key: address };
   const m = /^(@[\w-]+)\/([\w-]+)$/.exec(address);

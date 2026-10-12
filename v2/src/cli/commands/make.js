@@ -2,13 +2,14 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { requireProject } from '../lib/project.js';
-import { writeFile } from '../lib/files.js';
+import { writeFile, PKG } from '../lib/files.js';
 import { parseFieldSpec, fieldCode } from '../lib/field-spec.js';
 import { kebab, pascal, pluralize } from '../lib/strings.js';
 import { c, ok, out, info } from '../lib/ui.js';
 
 export const help = `
 ${c.bold('calm make resource <name> [fields...]')}
+${c.bold('calm make block <name>')}
 
   Create app/resources/<name>/ with a resource definition (and optionally a
   service, custom routes and a test).
@@ -32,6 +33,9 @@ ${c.bold('calm make resource <name> [fields...]')}
 
   Example
     calm make resource product name:string!+searchable price:number! category:ref --service
+
+  ${c.bold('calm make block <name>')} creates app/blocks/<name>/ (index.js, block.json, README.md)
+  and test/blocks/<name>.test.js. Share it later with ${c.bold('calm block pack')}.
 `;
 
 export async function run(argv) {
@@ -49,7 +53,8 @@ export async function run(argv) {
   });
   const [kind, rawName, ...specs] = positionals;
   if (values.help || !kind) return out(help);
-  if (kind !== 'resource') throw new Error(`Unknown generator "${kind}". Available: resource`);
+  if (kind === 'block') return makeBlock(rawName, values);
+  if (kind !== 'resource') throw new Error(`Unknown generator "${kind}". Available: resource, block`);
   if (!rawName) throw new Error('Give the resource a name: calm make resource product');
 
   const root = requireProject();
@@ -190,4 +195,116 @@ test('${plural}: signed-out requests are refused', async () => {
   assert.equal((await t.get('/${plural}')).status, 401);
 });
 `;
+}
+
+// ---- blocks --------------------------------------------------------------------------------
+
+function makeBlock(rawName, values) {
+  if (!rawName) throw new Error('Give the block a name: calm make block stripe-billing');
+  const root = requireProject();
+  const name = kebab(rawName);
+  if (!/^[a-z][a-z0-9-]*$/.test(name)) throw new Error(`Invalid block name "${rawName}" (letters, digits and dashes)`);
+  const title = name.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
+  const env = name.replace(/-/g, '_').toUpperCase();
+  const written = [];
+  const put = (rel, content) => {
+    const file = join(root, rel);
+    if (existsSync(file) && !values.force) throw new Error(`${rel} already exists (use --force to overwrite)`);
+    writeFile(file, content);
+    written.push(rel);
+  };
+  put(`app/blocks/${name}/index.js`, `import { definePlugin } from '#calm';
+
+// ${title}: say in one sentence what this block adds to an app.
+// It is plain CalmAPI code: edit it freely. \`npx calm block check ${name}\` before sharing it.
+export default definePlugin({
+  name: '${name}',
+  // Environment variables this block reads. calm doctor reports missing ones, devtools never
+  // shows secret values. Read them with calm.env('${env}_API_KEY').
+  // env: {
+  //   ${env}_API_KEY: { required: 'production', secret: true, description: 'From the provider dashboard' },
+  // },
+
+  // Settings with defaults. Apps change them in calm.config.js: blocks: { '${name}': { greeting: 'Hi' } }
+  options: { greeting: 'Hello' },
+
+  setup(calm, options) {
+    // Routes, mounted under /api. Every route needs a policy: public, authenticated, admin...
+    calm.routes((r) => {
+      r.get('/${name}/hello', { policy: 'public', summary: 'Say hello' }, () => ({ message: \`\${options.greeting} from ${name}\` }));
+    });
+
+    // More ways to plug in (see https://docs.calmapi.dev/building-blocks):
+    //   calm.on('post.created', ({ doc, user }) => ...)        react to resource events
+    //   calm.onResource((def) => def)                           change resources before they compile
+    //   calm.onService(({ def, service }) => ...)               wrap services
+    //   calm.authenticate(async (token, req) => ...)            accept your own credentials
+    //   calm.guard((ctx, route) => ...)                         check every request
+    //   calm.policy('member', (ctx) => ...)                     a named policy for resources
+    //   calm.push.use({ name, send }) / calm.mailer.use(...)    deliver push or email
+    //   calm.onStart(...) / calm.onShutdown(...)                workers and timers
+    //   calm.doctor(() => [{ level: 'warn', id, title, detail }])
+    //   calm.devtools.panel('${name}', async () => ({ ... }))   a panel in /_calm
+  },
+});
+`);
+  put(`app/blocks/${name}/block.json`, `${JSON.stringify(
+    {
+      name,
+      title,
+      description: `What ${title} adds, in one sentence.`,
+      version: '0.1.0',
+      minVersion: PKG.version,
+      author: '',
+      license: 'MIT',
+      categories: [],
+      envVars: {},
+      dependencies: [],
+      files: [],
+      docs: `GET /api/${name}/hello says hello.\nSettings: blocks: { '${name}': { greeting } } in calm.config.js.`,
+    },
+    null,
+    2,
+  )}\n`);
+  put(`app/blocks/${name}/README.md`, `# ${title}
+
+A [CalmAPI](https://docs.calmapi.dev) block.
+
+\`\`\`bash
+npx calm add gh:<you>/<repo>/${name}
+\`\`\`
+
+## What it adds
+
+- \`GET /api/${name}/hello\`
+
+## Settings
+
+\`\`\`js
+// calm.config.js
+export default defineConfig({ blocks: { '${name}': { greeting: 'Hi' } } });
+\`\`\`
+`);
+  if (!values['no-test']) {
+    put(`test/blocks/${name}.test.js`, `import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { join } from 'node:path';
+import { createTestApp } from '#calm/testing.js';
+
+let t;
+before(async () => {
+  t = await createTestApp({ root: join(import.meta.dirname, '..', '..') });
+});
+after(() => t.close());
+
+test('${name} says hello', async () => {
+  const res = await t.get('/${name}/hello');
+  assert.equal(res.status, 200);
+  assert.match(res.body.data.message, /from ${name}/);
+});
+`);
+  }
+  ok(`Created block ${c.bold(name)}`);
+  for (const f of written) out(`  ${c.dim('+')} ${f}`);
+  out('', `  ${c.dim('Next')}`, `  npm test                          ${c.dim('the block is live in your app already')}`, `  npx calm block check ${name.padEnd(12)} ${c.dim('before sharing it')}`, `  npx calm block pack ${name.padEnd(13)} ${c.dim('writes r/ for GitHub or any static host')}`, '');
 }

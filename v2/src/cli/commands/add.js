@@ -2,7 +2,8 @@ import { existsSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { requireProject, readLock, writeLock, detectPackageManager, run as runCmd } from '../lib/project.js';
-import { resolveAll, splitDep } from '../lib/registry.js';
+import { resolveAll, splitDep, OFFICIAL, OFFICIAL_URL } from '../lib/registry.js';
+import { review } from '../lib/blocks.js';
 import { compareVersions } from '../lib/semver.js';
 import { PKG_ROOT, readJson, writeJson, writeFile, readText, sha256 } from '../lib/files.js';
 import { c, out, ok, warn, info, confirm } from '../lib/ui.js';
@@ -16,6 +17,10 @@ ${c.bold('calm add <block...>')}
     calm add jobs api-docs          official blocks (same as @calmapi/jobs)
     calm add @acme/billing          from a registry in package.json "calm.registries"
     calm add https://x.dev/r/y.json from any URL
+    calm add gh:user/repo/name      r/<name>.json in a GitHub repository (calm block pack)
+
+  Blocks from anyone but CalmAPI are reviewed first: what their code does (network,
+  files, child processes, request hooks, secrets) is listed before you confirm.
 
   Options
     --dry-run       show what would change, write nothing
@@ -23,6 +28,7 @@ ${c.bold('calm add <block...>')}
     --no-install    do not run the package manager
     --remote        fetch official blocks from docs.calmapi.dev instead of the bundled copy
     -y, --yes       do not ask for confirmation
+    --trust         with --yes, also add third-party blocks whose review found risky code
 
   ${c.dim('calm add --list')}   list official blocks
 `;
@@ -37,6 +43,7 @@ export async function run(argv) {
       'no-install': { type: 'boolean' },
       remote: { type: 'boolean' },
       yes: { type: 'boolean', short: 'y' },
+      trust: { type: 'boolean' },
       list: { type: 'boolean' },
       help: { type: 'boolean', short: 'h' },
     },
@@ -78,10 +85,23 @@ export async function run(argv) {
   }
   out('');
 
+  // Someone else's code is about to land in the project: say what it does.
+  let risky = false;
+  for (const { key, item, source } of items) {
+    if (source.startsWith(`${OFFICIAL} (bundled)`) || source.startsWith(OFFICIAL_URL.replace('{name}.json', ''))) continue;
+    const findings = review(item.files);
+    risky ||= findings.some((r) => r.risk === 'high');
+    out(`  ${c.bold('Review')} ${c.dim(`${key} is not an official block: read it before you trust it`)}`);
+    if (!findings.length) out(`  ${c.dim('- nothing notable: no network, files, child processes or request hooks')}`);
+    for (const r of findings) out(`  ${r.risk === 'high' ? c.yellow('!') : c.dim('-')} ${r.what} ${c.dim(r.line ? `${r.file}:${r.line}` : r.file)}`);
+    out('');
+  }
+  if (risky && values.yes && !values.trust && !values['dry-run']) throw new Error('The review found risky code in a third-party block. Read it, then add --trust to install it non-interactively.');
+
   const conflicts = plan.files.filter((f) => f.action === 'conflict');
   if (conflicts.length) warn(`${conflicts.length} file(s) already exist with different content and will be kept. Use --overwrite to replace them.`);
   if (values['dry-run']) return info('Dry run: nothing was written.');
-  if (!values.yes && !(await confirm('Apply these changes?'))) return info('Cancelled.');
+  if (!values.yes && !(await confirm(risky ? 'This block has code worth reading (marked !). Add it anyway?' : 'Apply these changes?'))) return info('Cancelled.');
 
   for (const f of plan.files) if (f.action === 'create' || f.action === 'overwrite') writeFile(join(root, f.target), f.content);
 

@@ -15,6 +15,8 @@ const COMMANDS = {
   audit: () => import('./commands/audit.js'),
   keygen: () => import('./commands/keygen.js'),
   mcp: () => import('./commands/mcp.js'),
+  block: () => import('./commands/block.js'),
+  blocks: () => import('./commands/block.js'),
 };
 const ALIASES = { new: 'create', init: 'create', generate: 'make', g: 'make', m: 'make' };
 
@@ -29,7 +31,9 @@ const HELP = `
 
   ${c.bold('Build')}
     make resource <name> [fields...]   scaffold a resource (calm make --help)
-    add <block...>               add a block: jobs, storage-local, realtime-sse... (--list)
+    make block <name>            start your own block (share it with calm block pack)
+    add <block...>               add a block: jobs, push-expo, webhooks... or gh:user/repo/name (--list)
+    block list|check|pack        your blocks: what changed, a safety review, sharing
 
   ${c.bold('Inspect')}
     routes                       every route with its access policy

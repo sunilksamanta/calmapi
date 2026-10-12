@@ -8,6 +8,7 @@
 import { readdirSync, readFileSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { join, dirname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { toRegistryItem } from '../src/cli/lib/blocks.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = join(ROOT, 'registry', 'blocks');
@@ -31,23 +32,7 @@ for (const name of readdirSync(SRC).sort()) {
         return { path: `registry/blocks/${name}/files/${target}`, type: 'registry:file', target, content: readFileSync(file, 'utf8') };
       })
     : [];
-  const item = {
-    $schema: 'https://ui.shadcn.com/schema/registry-item.json',
-    name,
-    type: 'registry:item',
-    title: meta.title,
-    description: meta.description,
-    version: meta.version,
-    author: meta.author ?? 'CalmAPI',
-    categories: meta.categories ?? [],
-    dependencies: meta.dependencies ?? [],
-    devDependencies: meta.devDependencies ?? [],
-    registryDependencies: meta.registryDependencies ?? [],
-    envVars: meta.envVars ?? {},
-    docs: meta.docs ?? '',
-    meta: { calmapi: { minVersion: meta.minVersion ?? '2.0.0-alpha.0', conflicts: meta.conflicts ?? [] } },
-    files,
-  };
+  const item = toRegistryItem({ author: 'CalmAPI', ...meta }, files.map((f) => ({ target: f.target, content: f.content })), { pathFor: (f) => `registry/blocks/${name}/files/${f.target}` });
   writeFileSync(join(OUT, `${name}.json`), `${JSON.stringify(item, null, 2)}\n`);
   index.push({ name, title: meta.title, description: meta.description, version: meta.version, categories: item.categories });
 }
