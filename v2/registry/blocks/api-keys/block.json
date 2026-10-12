@@ -1,0 +1,10 @@
+{
+  "name": "api-keys",
+  "title": "API keys",
+  "description": "Personal and service API keys with scopes for scripts and integrations: shown once, SHA-256 at rest, checksummed so secret scanners and typo checks work, expiry, last used, admin revoke, devtools panel. Zero dependencies.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-alpha.1",
+  "categories": ["security", "auth"],
+  "envVars": {},
+  "docs": "1. Signed in: POST /api/auth/api-keys { name, scopes: ['posts:read'], expiresInDays: 30 } -> { key } (shown once)\n2. Use it like a session: Authorization: Bearer calm_ak_...\nScopes: * | read | <area>:read | <area>:write | <area>:* (area = first URL segment after /api). GET /api/auth/api-keys/scopes lists them.\nList: GET /api/auth/api-keys, revoke: DELETE /api/auth/api-keys/:id, admins: GET|DELETE /api/admin/api-keys.\nKeys cannot call /auth/* (except GET /auth/me). Settings: calm.config.js blocks: { 'api-keys': { maxKeysPerUser, maxLifetimeDays, routeScopes } }"
+}
