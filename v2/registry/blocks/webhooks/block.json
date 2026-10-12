@@ -1,0 +1,16 @@
+{
+  "name": "webhooks",
+  "title": "Webhooks",
+  "description": "Outgoing webhooks for resource events: Standard Webhooks signatures, a MongoDB delivery queue with retries and a delivery log, per-user visibility, SSRF protection and secret rotation. Zero dependencies.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-alpha.1",
+  "categories": [
+    "webhooks",
+    "integrations",
+    "events"
+  ],
+  "envVars": {
+    "WEBHOOKS_WORKER": "on"
+  },
+  "docs": "1. POST /api/webhooks { url, events: ['post.created', 'post.*'] } -> { data: { id, secret, ... } }   (the secret is shown once)\n2. Each matching change is POSTed as { type, timestamp, data }, with webhook-id, webhook-timestamp and webhook-signature headers (Standard Webhooks).\n3. Receivers check them: verifyWebhook(secret, req.headers, rawBody) from app/blocks/webhooks/signing.js (copy the file) or any Standard Webhooks library.\nUsers only receive records they may read, serialized like the API returns them. Admins can pass scope: 'global'.\nAlso: POST /api/webhooks/:id/test, /rotate-secret, GET /api/webhooks/:id/deliveries, POST /api/webhooks/:id/deliveries/:deliveryId/retry.\nSet CALM_ENCRYPTION_KEYS (npx calm keygen --write) so signing secrets are encrypted at rest. Set WEBHOOKS_WORKER=off on instances that should not send."
+}
