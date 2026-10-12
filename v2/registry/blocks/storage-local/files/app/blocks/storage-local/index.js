@@ -5,6 +5,11 @@ import { settings } from './storage.js';
 // this plugin only reports its configuration to doctor and devtools.
 export default definePlugin({
   name: 'storage-local',
+  env: {
+    UPLOAD_DIR: 'Folder for uploaded files (default ./uploads)',
+    UPLOAD_MAX_MB: 'Largest upload in MB (default 10)',
+    UPLOAD_ALLOWED_TYPES: 'Comma separated MIME types (default: images and PDF)',
+  },
   setup(calm) {
     calm.doctor(() => {
       const findings = [];

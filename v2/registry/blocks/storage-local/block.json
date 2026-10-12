@@ -2,7 +2,7 @@
   "name": "storage-local",
   "title": "Local file storage",
   "description": "File uploads to local disk: a 'file' resource, type and size allowlists, magic-byte checks and safe downloads.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "categories": ["storage", "uploads"],
   "dependencies": ["multer@^2.4.0"],
   "conflicts": ["storage-s3"],

@@ -14,12 +14,13 @@ import mail from './panels/mail.js';
 import push from './panels/push.js';
 import logs from './panels/logs.js';
 import doctor from './panels/doctor.js';
+import blocks from './panels/blocks.js';
 import { blockPanel } from './panels/block.js';
 
-const CORE = [requests, activity, logs, mail, push, routes, resources, data, playground, doctor, security];
+const CORE = [requests, activity, logs, mail, push, routes, resources, data, blocks, playground, doctor, security];
 const GROUPS = [
   { label: 'Observe', ids: ['requests', 'activity', 'logs', 'mail', 'push'] },
-  { label: 'Explore', ids: ['routes', 'resources', 'data'] },
+  { label: 'Explore', ids: ['routes', 'resources', 'data', 'blocks'] },
   { label: 'Tools', ids: ['playground', 'doctor', 'security'] },
 ];
 

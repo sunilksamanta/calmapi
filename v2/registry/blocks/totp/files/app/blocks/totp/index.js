@@ -17,6 +17,9 @@ const sha = (s) => createHash('sha256').update(String(s)).digest('hex');
 
 export default definePlugin({
   name: 'totp',
+  env: {
+    TOTP_ISSUER: 'Name shown in authenticator apps (default: the app name)',
+  },
   setup(calm) {
     const encrypt = (field) => (calm.app.cipher ? field.encrypted() : field);
 

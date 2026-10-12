@@ -7,6 +7,9 @@ const SCALAR = 'https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.72.1';
 
 export default definePlugin({
   name: 'api-docs',
+  env: {
+    API_DOCS: 'Set to "on" to serve the API reference in production too',
+  },
   setup(calm) {
     const { config } = calm;
     const enabled = config.mode !== 'production' || process.env.API_DOCS === 'on';

@@ -162,9 +162,11 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
   // 2. Plugins set themselves up before models compile, so they can extend resources.
   for (const plugin of blocks) {
     const options = deepMerge(plugin.options ?? {}, config.blocks?.[plugin.name] ?? {});
-    const api = pluginApi(app, plugin, options);
+    // `uses` lists the extension points the block calls, for devtools (filled during setup and after).
+    const record = { name: plugin.name, file: plugin.file ?? null, env: describeEnv(plugin, config.mode), options, uses: [] };
+    const api = pluginApi(app, plugin, options, record.uses);
     await plugin.setup(api, options);
-    app.plugins.push({ name: plugin.name, file: plugin.file ?? null, env: describeEnv(plugin, config.mode), options });
+    app.plugins.push(record);
   }
   hooks.doctor.push(() => envFindings(app));
 
@@ -242,7 +244,22 @@ function envFindings(app) {
   return findings;
 }
 
-function pluginApi(app, plugin, options = {}) {
+// The same object, except that use(transport) is also noted.
+const noting = (target, onUse) =>
+  new Proxy(target, {
+    get(t, key) {
+      if (key !== 'use') return Reflect.get(t, key);
+      return (...args) => {
+        onUse(...args);
+        return t.use(...args);
+      };
+    },
+  });
+
+function pluginApi(app, plugin, options = {}, uses = []) {
+  const note = (kind, name = null) => {
+    if (!uses.some((u) => u.kind === kind && u.name === name)) uses.push({ kind, name });
+  };
   return {
     app,
     name: plugin.name,
@@ -258,43 +275,74 @@ function pluginApi(app, plugin, options = {}) {
     log: app.log,
     events: app.events,
     mongoose: app.mongoose,
-    mailer: app.mailer,
-    push: app.push,
-    on: (pattern, fn) => app.events.on(pattern, fn),
-    onResource: (fn) => app.hooks.resource.push(fn),
+    mailer: noting(app.mailer, () => note('mail transport')),
+    push: noting(app.push, (transport) => note('push transport', transport?.name ?? null)),
+    on: (pattern, fn) => {
+      note('event', String(pattern));
+      return app.events.on(pattern, fn);
+    },
+    onResource: (fn) => {
+      note('resource hook');
+      app.hooks.resource.push(fn);
+    },
     /** Called with { def, model, service } for every resource once services exist. */
-    onService: (fn) => app.hooks.service.push(fn),
+    onService: (fn) => {
+      note('service hook');
+      app.hooks.service.push(fn);
+    },
     /**
      * After a correct password, before a session is created. Return an object (e.g.
      * { mfaRequired: true, mfaToken }) to answer the login with a challenge instead.
      */
-    loginChallenge: (fn) => app.hooks.login.push(fn),
+    loginChallenge: (fn) => {
+      note('login challenge');
+      app.hooks.login.push(fn);
+    },
     /**
      * Accept another kind of credential in Authorization: Bearer <token> (API keys, service
      * tokens...). fn(token, req) returns null to pass, or { user, via, scopes, id }.
      */
-    authenticate: (fn) => app.hooks.authenticators.push(fn),
+    authenticate: (fn) => {
+      note('authenticator');
+      app.hooks.authenticators.push(fn);
+    },
     /**
      * Run before every route's policy check: fn(ctx, route). Stop the request by throwing
      * (forbidden(), tooManyRequests()...) or by returning ctx.reply(data, { status }). For API
      * key scopes, maintenance mode, tenancy... Guards run by `order` (default 0, lower first).
      */
     guard: (fn, { order = 0 } = {}) => {
+      note('guard', order ? `order ${order}` : null);
       Object.defineProperty(fn, 'calmOrder', { value: order, configurable: true });
       app.hooks.guards.push(fn);
       app.hooks.guards.sort((a, b) => (a.calmOrder ?? 0) - (b.calmOrder ?? 0));
     },
     /** A named policy usable in resources and routes: calm.policy('member', (ctx) => ...). */
-    policy: (name, fn) => registerPolicy(name, fn),
+    policy: (name, fn) => {
+      note('policy', name);
+      registerPolicy(name, fn);
+    },
     routes: (fn, options = {}) => app.hooks.routes.push({ fn, options: { source: `block:${plugin.name}`, file: plugin.file, ...options } }),
-    use: (fn) => app.hooks.middleware.push(fn),
+    use: (fn) => {
+      note('middleware');
+      app.hooks.middleware.push(fn);
+    },
     onStart: (fn) => app.hooks.start.push(fn),
     onShutdown: (fn) => app.hooks.shutdown.push(fn),
     provide: (key, value) => {
+      note('provide', key);
       app.ext[key] = value;
     },
-    doctor: (fn) => app.hooks.doctor.push(fn),
-    devtools: { panel: (name, fn) => (app.hooks.devtools[name] = fn) },
+    doctor: (fn) => {
+      note('doctor check');
+      app.hooks.doctor.push(fn);
+    },
+    devtools: {
+      panel: (name, fn) => {
+        note('devtools panel', name);
+        app.hooks.devtools[name] = fn;
+      },
+    },
   };
 }
 

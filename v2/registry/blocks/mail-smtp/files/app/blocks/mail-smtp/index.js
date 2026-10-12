@@ -3,6 +3,10 @@ import { definePlugin } from '#calm';
 
 export default definePlugin({
   name: 'mail-smtp',
+  env: {
+    SMTP_URL: { secret: true, description: 'smtp://user:password@host:587: without it, mail stays in devtools' },
+    MAIL_FROM: 'Sender address, for example "Acme <hello@acme.com>"',
+  },
   setup(calm) {
     const url = process.env.SMTP_URL;
     if (!url || url.includes('smtp.example.com')) {

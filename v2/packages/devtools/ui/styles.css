@@ -952,6 +952,22 @@ a.file:hover { color: var(--accent); }
 .fd-flags .badge { margin-right: 6px; }
 .fields .policy { font-size: var(--fs-2); }
 
+/* ---- blocks ------------------------------------------------------------------------- */
+
+.blk-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; gap: 14px 28px; margin-top: 10px; }
+.blk-grid.one { grid-template-columns: minmax(0, 1fr); }
+.blk-col { display: grid; align-content: start; gap: 16px; min-width: 0; }
+.blk .res-head { flex-wrap: wrap; row-gap: 4px; }
+.blk-env { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: var(--fs-2); }
+.blk-env-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.blk-env .muted:not(.mono) { margin-top: 1px; }
+@media (max-width: 1000px) { .blk-grid { grid-template-columns: minmax(0, 1fr); } }
+.blk-uses { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; }
+.blk-uses .badge .mono { color: var(--text); }
+.blk-method { width: 52px; }
+.blk-files { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; font-size: var(--fs-2); }
+.b-changed { color: var(--blue); }
+
 /* ---- data / privacy lens ------------------------------------------------------------ */
 
 .pager { display: inline-flex; align-items: center; gap: 2px; }

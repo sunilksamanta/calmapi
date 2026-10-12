@@ -46,6 +46,10 @@ const HINTS = {
 
 export default definePlugin({
   name: 'push-expo',
+  env: {
+    EXPO_ACCESS_TOKEN: { secret: true, description: 'Access token for Expo enhanced push security (recommended)' },
+    EXPO_API_URL: 'Expo push API base URL, for tests and proxies',
+  },
   setup(calm) {
     const accessToken = process.env.EXPO_ACCESS_TOKEN;
     const api = (process.env.EXPO_API_URL || 'https://exp.host/--/api/v2').replace(/\/$/, '');

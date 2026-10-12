@@ -9,7 +9,7 @@
 // page cannot send.
 
 import express from 'express';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { existsSync, readFileSync, statSync, watchFile, unwatchFile, openSync, readSync, closeSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -572,9 +572,47 @@ function overview(app) {
       file: r.file ?? null,
       hidden: r.hidden,
     })),
-    blocks: app.plugins,
+    blocks: describeBlocks(app),
     panels: Object.keys(app.hooks.devtools).filter((k) => k !== 'onConnect'),
   };
+}
+
+/**
+ * Installed blocks: where they came from (calm.lock), which files you changed since, the
+ * extension points they use, their env vars (set or missing, secret values never sent),
+ * options (secret-looking keys redacted) and routes.
+ */
+function describeBlocks(app) {
+  let lock = {};
+  try {
+    lock = JSON.parse(readFileSync(join(app.root, 'calm.lock'), 'utf8'));
+  } catch {
+    // not created with the CLI: every block counts as your own
+  }
+  const hash = (file) => {
+    try {
+      return `sha256:${createHash('sha256').update(readFileSync(join(app.root, file))).digest('hex')}`;
+    } catch {
+      return null;
+    }
+  };
+  return app.plugins.map((p) => {
+    const [key, entry] = Object.entries(lock.blocks ?? {}).find(([k]) => k === p.name || k.split('/').pop() === p.name) ?? [null, null];
+    const files = entry ? Object.entries(entry.files ?? {}) : [];
+    const routes = app.routes.filter((r) => r.source === `block:${p.name}`);
+    return {
+      name: p.name,
+      file: p.file,
+      installed: entry ? { key, version: entry.version ?? null, source: entry.source ?? null } : null,
+      files: files.map(([file]) => file),
+      changed: files.filter(([file, sum]) => hash(file) !== sum).map(([file]) => file),
+      uses: p.uses ?? [],
+      env: (p.env ?? []).map((v) => (v.secret ? { ...v, value: null } : v)),
+      options: redact(p.options ?? {}),
+      routes: routes.map((r) => ({ method: r.method, path: `${app.config.apiPrefix}${r.path}`, policy: r.policyLabel })),
+      panels: (p.uses ?? []).filter((u) => u.kind === 'devtools panel').map((u) => u.name),
+    };
+  });
 }
 
 function describeField(name, field) {

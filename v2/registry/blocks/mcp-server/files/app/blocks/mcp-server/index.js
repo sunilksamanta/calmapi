@@ -12,6 +12,9 @@ const DEFAULT_EXCLUDED = new Set(['user', 'file']);
 
 export default definePlugin({
   name: 'mcp-server',
+  env: {
+    MCP_RESOURCES: 'Comma separated resources the MCP tools may use (default: all)',
+  },
   setup(calm) {
     const { config } = calm;
 

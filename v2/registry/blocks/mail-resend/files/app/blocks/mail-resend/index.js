@@ -4,6 +4,10 @@ import { definePlugin } from '#calm';
 // development, the built-in dev transport (devtools Mail panel) keeps working.
 export default definePlugin({
   name: 'mail-resend',
+  env: {
+    RESEND_API_KEY: { secret: true, description: 'API key from resend.com: without it, mail stays in devtools' },
+    MAIL_FROM: 'Sender address, for example "Acme <hello@acme.com>"',
+  },
   setup(calm) {
     const key = process.env.RESEND_API_KEY;
     if (!key) {

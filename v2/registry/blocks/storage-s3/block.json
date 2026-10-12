@@ -2,7 +2,7 @@
   "name": "storage-s3",
   "title": "S3 file storage",
   "description": "Direct-to-S3 uploads with presigned URLs (AWS S3, Cloudflare R2, MinIO): a 'file' resource, type and size allowlists, verified completion and private downloads.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "categories": ["storage", "uploads"],
   "dependencies": ["@aws-sdk/client-s3@^3.1141.0", "@aws-sdk/s3-request-presigner@^3.1141.0"],
   "conflicts": ["storage-local"],

@@ -5,6 +5,9 @@ import { definePlugin, currentRequest } from '#calm';
 // never stored in the log, only the fact that they changed.
 export default definePlugin({
   name: 'audit-log',
+  env: {
+    AUDIT_RETENTION_DAYS: 'Days to keep audit entries (default 365)',
+  },
   setup(calm) {
     const { Schema } = calm.mongoose;
     const days = Number(process.env.AUDIT_RETENTION_DAYS || 365);

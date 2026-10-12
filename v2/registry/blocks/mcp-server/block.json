@@ -2,7 +2,7 @@
   "name": "mcp-server",
   "title": "MCP server",
   "description": "Expose your resources to AI agents as Model Context Protocol tools (Streamable HTTP at /mcp). Every call goes through the same policies, validation and serialization as the REST API.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "categories": ["ai", "mcp"],
   "envVars": { "MCP_RESOURCES": "" },
   "docs": "Endpoint: POST http://localhost:5001/mcp (MCP Streamable HTTP). Authenticate with the same header as the API: Authorization: Bearer <session token>.\nTools per resource: <name>_list, <name>_get, <name>_create, <name>_update, <name>_delete (only actions the resource exposes).\nMCP_RESOURCES=post,product limits which resources are exposed (default: all except user and file).\nTry it: npx @modelcontextprotocol/inspector, or add it to Claude: claude mcp add --transport http my-api http://localhost:5001/mcp --header 'Authorization: Bearer <token>'"

@@ -2,7 +2,7 @@
   "name": "api-docs",
   "title": "API docs",
   "description": "Interactive API reference at /docs, generated from your OpenAPI document (Scalar).",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "categories": [
     "docs"
   ],

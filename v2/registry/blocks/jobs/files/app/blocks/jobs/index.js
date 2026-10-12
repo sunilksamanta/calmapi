@@ -9,6 +9,10 @@ export const defineJob = (def) => ({ kind: 'calm.job', ...def });
 
 export default definePlugin({
   name: 'jobs',
+  env: {
+    JOBS_WORKER: 'Set to "off" on instances that should not run jobs',
+    JOBS_CONCURRENCY: 'Jobs run at the same time per instance (default 4)',
+  },
   async setup(calm) {
     const queue = createQueue(calm.app, { concurrency: Number(process.env.JOBS_CONCURRENCY || 4) });
     calm.provide('jobs', queue);

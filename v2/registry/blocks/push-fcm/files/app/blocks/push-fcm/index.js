@@ -26,6 +26,11 @@ const base64url = (value) => Buffer.from(typeof value === 'string' ? value : JSO
 
 export default definePlugin({
   name: 'push-fcm',
+  env: {
+    FCM_SERVICE_ACCOUNT: { secret: true, description: 'Firebase service account: the JSON, or a path to the file' },
+    GOOGLE_APPLICATION_CREDENTIALS: 'Path to a service account file, used when FCM_SERVICE_ACCOUNT is not set',
+    FCM_API_URL: 'FCM API base URL, for tests and proxies',
+  },
   setup(calm) {
     const { account, missing, error } = loadServiceAccount();
     calm.doctor(() => {
