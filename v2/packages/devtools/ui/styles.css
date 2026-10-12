@@ -958,6 +958,7 @@ a.file:hover { color: var(--accent); }
 .blk-grid.one { grid-template-columns: minmax(0, 1fr); }
 .blk-col { display: grid; align-content: start; gap: 16px; min-width: 0; }
 .blk .res-head { flex-wrap: wrap; row-gap: 4px; }
+.blk .sect-title { flex-wrap: wrap; row-gap: 2px; }
 .blk-env { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: var(--fs-2); }
 .blk-env-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .blk-env .muted:not(.mono) { margin-top: 1px; }
