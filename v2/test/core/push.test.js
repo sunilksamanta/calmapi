@@ -126,7 +126,7 @@ test('a real transport gets real devices only, and unregistered tokens are remov
     assert.equal(left.length, 2, 'the dead token was removed, the good one and the simulated one stay');
     const record = t.pushes.at(-1);
     assert.ok(record.log.some((l) => l.level === 'error' && /device removed/.test(l.text)));
-    assert.ok(record.log.some((l) => /Simulated device/.test(l.text)));
+    assert.ok(record.log.some((l) => /^Accepted by simulator/.test(l.text)), 'the simulated device went to the simulator');
   } finally {
     t.app.push.use(null);
   }
@@ -164,4 +164,99 @@ test('production without a transport fails loudly instead of pretending to send'
   assert.match(errors[0], /no push transport configured/);
   const sim = await prod.send({ tokens: ['sim_ios_abc'], title: 'Hi' });
   assert.equal(sim.status, 'captured', 'simulated devices are never an error');
+});
+
+test('device simulator: each behavior answers like a real phone', async () => {
+  const u = await t.signup({ name: 'Sim User' });
+  const add = async (behavior, platform = 'ios') => (await devtools('/devices', { method: 'POST', body: JSON.stringify({ userId: u.id, platform, behavior, name: `Phone ${behavior}` }) })).json();
+  const phones = {};
+  for (const b of ['deliver', 'offline', 'muted', 'uninstalled', 'invalid', 'rate-limited']) phones[b] = await add(b, b === 'muted' ? 'android' : 'ios');
+  assert.equal(phones.offline.behavior, 'offline');
+  assert.equal(phones.deliver.via, 'simulator');
+
+  const opened = [];
+  const off = t.app.events.on('push.opened', (payload) => opened.push(payload));
+  const res = await t.app.push.send({ to: u.id, title: 'Table ready', url: '/tables/7' });
+  assert.equal(res.status, 'partial', 'three devices failed like real ones would');
+  const record = t.pushes.at(-1);
+  const about = (b) => record.log.filter((l) => l.device === phones[b].id).map((l) => l.text).join(' | ');
+  assert.match(about('deliver'), /Accepted by simulator.*Receipt from simulator.*Shown on Phone deliver/);
+  assert.match(about('muted'), /Not shown on Phone muted: notifications are turned off/);
+  assert.match(about('offline'), /Waiting: Phone offline is offline/);
+  assert.match(about('uninstalled'), /DeviceNotRegistered.*device removed/);
+  assert.match(about('invalid'), /InvalidRegistration.*device removed/);
+  assert.match(about('rate-limited'), /MessageRateExceeded/);
+
+  const left = (await (await devtools(`/devices?user=${u.id}`)).json()).map((d) => d.behavior).sort();
+  assert.deepEqual(left, ['deliver', 'muted', 'offline', 'rate-limited'], 'uninstalled and invalid devices were removed');
+
+  const inbox = await (await devtools(`/devices/${phones.offline.id}/inbox`)).json();
+  assert.equal(inbox.items[0].state, 'waiting');
+  assert.equal((await (await devtools(`/devices/${phones.offline.id}/online`, { method: 'POST', body: '{}' })).json()).shown, 1);
+  assert.match(about('offline'), /came back online/);
+
+  const tap = await devtools(`/devices/${phones.deliver.id}/inbox/${record.id}/open`, { method: 'POST', body: '{}' });
+  assert.equal(tap.status, 200);
+  assert.equal(opened.length, 1);
+  assert.equal(opened[0].url, '/tables/7');
+  assert.match(about('deliver'), /Opened on Phone deliver: the app opens \/tables\/7/);
+  assert.equal((await devtools(`/devices/${phones.muted.id}/inbox/${record.id}/open`, { method: 'POST', body: '{}' })).status, 404, 'a hidden notification cannot be tapped');
+  off();
+});
+
+test('device simulator: rotating a token leaves the old one to fail once, then removed', async () => {
+  const u = await t.signup();
+  const first = await (await devtools('/devices', { method: 'POST', body: JSON.stringify({ userId: u.id, platform: 'android' }) })).json();
+  const rotated = await (await devtools(`/devices/${first.id}/rotate`, { method: 'POST', body: '{}' })).json();
+  assert.notEqual(rotated.id, first.id);
+  const res = await t.app.push.send({ to: u.id, title: 'After rotation' });
+  assert.equal(res.status, 'partial');
+  const ids = (await (await devtools(`/devices?user=${u.id}`)).json()).map((d) => d.id);
+  assert.deepEqual(ids, [rotated.id], 'the stale token was removed by the failed send');
+});
+
+test('devtools: a real token can be added to a user and goes through the real path', async () => {
+  const u = await t.signup();
+  const real = await (await devtools('/devices', { method: 'POST', body: JSON.stringify({ userId: u.id, platform: 'ios', token: 'ExponentPushToken[pasted-from-my-phone]' }) })).json();
+  assert.equal(real.simulated, false);
+  assert.equal(real.via, 'dev-capture', 'no transport installed in this test app, so it is captured');
+  const behavior = await devtools(`/devices/${real.id}`, { method: 'PATCH', body: JSON.stringify({ behavior: 'offline' }) });
+  assert.equal(behavior.status, 400, 'real devices have no simulated behavior');
+});
+
+test('push devices follow the session that registered them', async () => {
+  const u = await t.signup();
+  await t.post('/auth/devices', { token: 'session-bound-token-1', platform: 'ios' }, u);
+  assert.equal((await t.get('/auth/devices', u)).body.data[0].signedIn, true);
+  const second = (await t.post('/auth/login', { email: u.email, password: u.password })).body.data.token;
+  await t.post('/auth/devices', { token: 'session-bound-token-2', platform: 'android' }, second);
+  assert.equal((await t.get('/auth/devices', u)).body.data.length, 2);
+
+  assert.equal((await t.post('/auth/logout', {}, second)).status, 204);
+  const left = (await t.get('/auth/devices', u)).body.data;
+  assert.equal(left.length, 1, 'signing out removed the device that session registered');
+
+  // A session that expired on its own (TTL): the device is skipped and removed at send time.
+  await t.app.auth.service.Session.deleteMany({ user: u.id });
+  const fresh = (await t.post('/auth/login', { email: u.email, password: u.password })).body.data.token;
+  assert.equal((await t.get('/auth/devices', fresh)).body.data.length, 1, 'still stored until a send notices');
+  const res = await t.app.push.send({ to: u.id, title: 'Anyone there?' });
+  assert.equal(res.status, 'no-devices');
+  assert.ok(t.pushes.at(-1).log.some((l) => /the session that registered it has ended/.test(l.text)));
+  assert.equal((await t.get('/auth/devices', fresh)).body.data.length, 0);
+});
+
+test('apps can unregister by token, and a password reset ends devices with the sessions', async () => {
+  const u = await t.signup();
+  await t.post('/auth/devices', { token: 'unregister-me-token', platform: 'ios' }, u);
+  assert.equal((await t.post('/auth/devices/unregister', { token: 'unregister-me-token' }, u)).status, 204);
+  assert.equal((await t.get('/auth/devices', u)).body.data.length, 0);
+
+  await t.post('/auth/devices', { token: 'reset-ends-me-token', platform: 'android' }, u);
+  await t.post('/auth/password/forgot', { email: u.email });
+  await t.idle();
+  const token = t.mails.at(-1).meta.token;
+  assert.equal((await t.post('/auth/password/reset', { token, password: 'brand-new-password-9' })).status, 204);
+  const device = await t.app.push.devices.findOne({ token: 'reset-ends-me-token' }).lean();
+  assert.equal(device, null, 'a password reset signs out everywhere, so no phone keeps getting notifications');
 });

@@ -33,7 +33,7 @@ export function setupAuth(app) {
 
   const { Session, PasswordReset, LoginAttempt } = compileAuthModels(app.mongoose);
   const Device = compileDeviceModel(app.mongoose);
-  app.push.useDevices(Device);
+  app.push.useDevices(Device, Session);
   const deviceView = (d) => ({
     id: String(d._id),
     platform: d.platform,
@@ -42,6 +42,7 @@ export function setupAuth(app) {
     locale: d.locale,
     token: maskToken(d.token), // never echoed back in full
     simulated: d.simulated,
+    signedIn: Boolean(d.session), // stops when that session ends
     lastSeenAt: d.lastSeenAt,
     createdAt: d.createdAt,
   });
@@ -80,6 +81,15 @@ export function setupAuth(app) {
   }
 
   const clearFailures = (email) => LoginAttempt.deleteOne({ _id: attemptKey(email) });
+
+  /** End sessions, and stop push notifications to the devices those sessions registered. */
+  async function endSessions(filter) {
+    const ids = (await Session.find(filter).select('_id').lean()).map((x) => x._id);
+    if (!ids.length) return 0;
+    const res = await Session.deleteMany({ _id: { $in: ids } });
+    if (app.config.auth.devicesFollowSessions !== false) await Device.deleteMany({ session: { $in: ids } });
+    return res.deletedCount ?? 0;
+  }
 
   function checkPasswordContext(password, user) {
     const problem = passwordContextProblem(password, user);
@@ -152,6 +162,7 @@ export function setupAuth(app) {
     LoginAttempt,
     createSession,
     authenticate,
+    endSessions,
 
     async register(body, ctx) {
       if (!cfg.register) throw forbidden('Registration is disabled');
@@ -209,11 +220,11 @@ export function setupAuth(app) {
     },
 
     async logout(ctx) {
-      if (ctx.session) await Session.deleteOne({ _id: ctx.session.id });
+      if (ctx.session) await endSessions({ _id: ctx.session.id });
     },
 
     async logoutAll(ctx) {
-      await Session.deleteMany({ user: ctx.user._id });
+      await endSessions({ user: ctx.user._id });
     },
 
     async me(ctx) {
@@ -241,7 +252,7 @@ export function setupAuth(app) {
       }
       checkPasswordContext(input.newPassword, user);
       await userEntry.service.update(user._id, { [passwordField]: input.newPassword }, { ...ctx, scope: null });
-      await Session.deleteMany({ user: user._id, _id: { $ne: ctx.session.id } });
+      await endSessions({ user: user._id, _id: { $ne: ctx.session?.id } });
       app.events.emit('auth.password_changed', { user: toAuthUser(user) });
     },
 
@@ -289,10 +300,7 @@ export function setupAuth(app) {
 
       await userEntry.service.update(reset.user, { [passwordField]: input.password }, { system: true });
       if (owner?.email) await clearFailures(owner.email);
-      await Promise.all([
-        Session.deleteMany({ user: reset.user }),
-        PasswordReset.deleteMany({ user: reset.user, usedAt: null }),
-      ]);
+      await Promise.all([endSessions({ user: reset.user }), PasswordReset.deleteMany({ user: reset.user, usedAt: null })]);
       app.events.emit('auth.password_reset', { userId: String(reset.user) });
     },
 
@@ -310,8 +318,8 @@ export function setupAuth(app) {
     },
 
     async revokeSession(id, ctx) {
-      const res = await Session.deleteOne({ _id: id, user: ctx.user._id });
-      if (!res.deletedCount) throw notFound('Session not found');
+      const ended = await endSessions({ _id: id, user: ctx.user._id }).catch(() => 0);
+      if (!ended) throw notFound('Session not found');
     },
 
     /**
@@ -320,12 +328,20 @@ export function setupAuth(app) {
      */
     async registerDevice(input, ctx) {
       if (input.token.startsWith('sim_')) throw validationError({ token: 'Tokens starting with sim_ are reserved for simulated devices' });
+      // Bound to the session that registered it (not to API keys), so signing out stops
+      // notifications to this phone.
+      const session = ctx.auth?.via === 'session' && ctx.session ? ctx.session.id : null;
       const doc = await Device.findOneAndUpdate(
         { token: input.token },
-        { $set: { ...input, user: ctx.user._id, simulated: false, lastSeenAt: new Date() } },
+        { $set: { ...input, user: ctx.user._id, simulated: false, behavior: 'deliver', session, lastSeenAt: new Date() } },
         { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
       ).lean();
       return deviceView(doc);
+    },
+
+    /** Turn off notifications for the device that holds this token (apps know their token, not our id). */
+    async unregisterDevice(token, ctx) {
+      await Device.deleteOne({ token, user: ctx.user._id });
     },
 
     async listDevices(ctx) {
@@ -365,6 +381,7 @@ export function setupAuth(app) {
   r.post('/devices', { policy: 'authenticated', status: 201, summary: 'Register this device for push notifications', input: deviceInput, tags: ['auth'] }, (ctx) => service.registerDevice(ctx.body, ctx));
   r.get('/devices', { policy: 'authenticated', summary: 'Your devices registered for push notifications', tags: ['auth'] }, (ctx) => service.listDevices(ctx));
   r.delete('/devices/:deviceId', { policy: 'authenticated', summary: 'Stop push notifications to a device', tags: ['auth'] }, (ctx) => service.removeDevice(ctx.params.deviceId, ctx));
+  r.post('/devices/unregister', { policy: 'authenticated', status: 204, summary: 'Stop push notifications to the device holding this token', input: { token: f.string().required().max(4096) }, tags: ['auth'] }, (ctx) => service.unregisterDevice(ctx.body.token, ctx));
 
   return { service, routes: r.routes };
 }

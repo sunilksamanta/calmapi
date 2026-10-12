@@ -1434,6 +1434,42 @@ textarea.input.mono { font-family: var(--mono); }
 .np-intro-actions { display: flex; gap: 8px; }
 .np-intro .code { border-radius: 6px; }
 
+/* devices: behaviors, add form, simulated lock screen */
+.badge.b-blue { color: var(--blue); background: var(--accent-tint); }
+.np-behavior { height: 24px; padding: 0 6px; font-size: var(--fs-2); }
+.np-counts { font-variant-numeric: tabular-nums; }
+.np-add { display: grid; gap: 10px; padding: 12px; }
+.np-add-head { display: grid; gap: 1px; font-size: var(--fs-2); }
+.np-add .np-field[hidden] { display: none; }
+.np-add .np-hint { font-size: var(--fs-3); }
+.np-phone-view { flex: 1 1 auto; display: grid; grid-template-columns: minmax(300px, 420px) minmax(260px, 1fr); gap: 24px; align-items: start; padding: 14px 16px 28px; }
+.np-phone-wrap { display: grid; gap: 8px; justify-items: start; }
+.np-phone-wrap .link-btn { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-2); }
+.np-phone { display: grid; gap: 8px; align-content: start; min-height: 520px; max-width: 390px; padding-bottom: 20px; }
+.np-phone.np-android, .np-phone.np-web { padding-top: 16px; }
+.np-phone-item { display: grid; gap: 3px; }
+.np-phone-card { width: 100%; text-align: left; font: inherit; color: inherit; border: 0; cursor: pointer; transition: transform 0.12s, opacity 0.12s; }
+.np-phone-card:hover:not(:disabled) { transform: translateY(-1px); }
+.np-phone-card:disabled { cursor: default; }
+.np-phone-card.is-waiting { opacity: 0.55; outline: 1px dashed var(--np-card-2); outline-offset: -1px; }
+.np-phone-card.is-hidden { opacity: 0.35; }
+.np-phone-card.is-hidden .np-title, .np-phone-card.is-hidden .np-text { text-decoration: line-through; }
+.np-phone-card.is-opened { opacity: 0.8; }
+.np-ios .np-phone-card { display: grid; }
+.np-android .np-phone-card { grid-template-columns: 22px minmax(0, 1fr); gap: 10px; align-items: start; padding: 12px 16px; border-radius: 22px; background: var(--np-shade-card); }
+.np-android .np-phone-card .np-icon { width: 22px; height: 22px; border-radius: 50%; font-size: 11px; }
+.np-android .np-phone-card .np-head { display: flex; justify-content: space-between; gap: 8px; }
+.np-android .np-phone-card .np-when { font-size: 12px; color: var(--np-card-2); }
+.np-web .np-phone-card .np-head { display: flex; justify-content: space-between; gap: 8px; }
+.np-web .np-phone-card .np-when { font-size: 12px; color: var(--np-card-2); }
+.np-phone-note { padding: 0 6px; font-size: 11px; color: var(--np-card-2); }
+.np-phone-banner { justify-self: center; padding: 4px 10px; font-size: 12px; color: var(--np-card-text); background: var(--np-card); border-radius: 999px; }
+.np-phone-empty { justify-self: center; margin-top: 40px; font-size: 13px; color: var(--np-card-2); }
+.np-phone-side { display: grid; gap: 14px; align-content: start; max-width: 460px; }
+.np-phone-side .np-h { margin: 0; }
+.np-phone-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.np-phone-side .np-note { padding: 0; }
+
 /* ---- small screens ------------------------------------------------------------------ */
 
 @media (max-width: 900px) {
@@ -1448,4 +1484,5 @@ textarea.input.mono { font-family: var(--mono); }
   .np-compose { grid-template-columns: minmax(0, 1fr); overflow: auto; }
   .np-compose-form, .np-compose-preview { overflow: visible; }
   .np-compose-form { border-right: 0; border-bottom: 1px solid var(--line); }
+  .np-phone-view { grid-template-columns: minmax(0, 1fr); }
 }

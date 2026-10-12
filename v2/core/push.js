@@ -22,6 +22,17 @@ import { currentRequest } from './context.js';
 import { validationError } from './errors.js';
 
 export const PLATFORMS = ['ios', 'android', 'web'];
+
+// How a simulated device answers, so you can see what your app does when a phone is offline,
+// has notifications turned off or was uninstalled, without owning that phone.
+export const BEHAVIORS = {
+  deliver: 'Delivers: accepted, then shown on the lock screen',
+  offline: 'Offline: accepted, shown when the device comes back online',
+  muted: 'Notifications off: accepted, never shown (the provider cannot tell)',
+  uninstalled: 'App uninstalled: the provider says the token is gone, the device is removed',
+  invalid: 'Invalid token: rejected as malformed or replaced, the device is removed',
+  'rate-limited': 'Rate limited: too many notifications to this device, try again later',
+};
 export const PAYLOAD_LIMIT = 4096; // APNs, FCM and Expo all reject larger payloads
 
 // Approximate visible lengths, for preview warnings only (real limits depend on device width).
@@ -179,6 +190,10 @@ export function compileDeviceModel(mongoose) {
       appVersion: { type: String, maxlength: 50 },
       locale: { type: String, maxlength: 20 },
       simulated: { type: Boolean, default: false },
+      behavior: { type: String, enum: Object.keys(BEHAVIORS), default: 'deliver' }, // simulated devices only
+      // The session that registered the device. When it ends (sign out, password reset,
+      // revoked session), the device stops getting notifications.
+      session: { type: Schema.Types.ObjectId, index: true },
       lastSeenAt: Date,
     },
     { collection: 'calm_devices', timestamps: true, versionKey: false },
@@ -191,6 +206,7 @@ export function createPush({ log, mode, events }) {
   // first transport whose accepts(device) says yes, otherwise to one without accepts().
   let transports = [];
   let Device = null;
+  let Session = null;
   const observers = [];
   const notify = (record, event) => {
     for (const fn of observers) {
@@ -210,19 +226,31 @@ export function createPush({ log, mode, events }) {
   };
   const route = (device) => transports.find((t) => typeof t.accepts === 'function' && t.accepts(device)) ?? transports.find((t) => typeof t.accepts !== 'function') ?? null;
 
+  const toDevice = (d) => ({ id: String(d._id), user: String(d.user), token: d.token, platform: d.platform, name: d.name, simulated: Boolean(d.simulated), behavior: d.behavior ?? 'deliver', session: d.session ? String(d.session) : null });
+
+  /** Devices whose registering session has ended are removed and left out. */
+  async function dropEndedSessions(devices) {
+    const ids = [...new Set(devices.map((d) => d.session).filter(Boolean))];
+    if (!ids.length || !Session) return { devices, dropped: [] };
+    const alive = new Set((await Session.find({ _id: { $in: ids }, expiresAt: { $gt: new Date() } }).select('_id').lean()).map((x) => String(x._id)));
+    const dropped = devices.filter((d) => d.session && !alive.has(d.session));
+    if (dropped.length && Device) await Device.deleteMany({ _id: { $in: dropped.map((d) => d.id) } });
+    return { devices: devices.filter((d) => !dropped.includes(d)), dropped };
+  }
+
   async function resolveDevices(input) {
     const devices = [];
     if (input.to !== undefined && input.to !== null) {
       const ids = [input.to].flat().map(String);
       if (!Device) throw new Error('push.send({ to }) needs a user resource and auth; send to { tokens } instead');
       const found = await Device.find({ user: { $in: ids.filter((id) => /^[a-f\d]{24}$/i.test(id)) } }).lean();
-      devices.push(...found.map((d) => ({ id: String(d._id), user: String(d.user), token: d.token, platform: d.platform, name: d.name, simulated: d.simulated })));
+      devices.push(...found.map(toDevice));
     }
     if (input.deviceIds !== undefined) {
       if (!Device) throw new Error('push.send({ deviceIds }) needs a user resource and auth');
       const ids = [input.deviceIds].flat().map(String).filter((id) => /^[a-f\d]{24}$/i.test(id));
       const found = await Device.find({ _id: { $in: ids } }).lean();
-      devices.push(...found.map((d) => ({ id: String(d._id), user: String(d.user), token: d.token, platform: d.platform, name: d.name, simulated: d.simulated })));
+      devices.push(...found.map(toDevice));
     }
     for (const token of [input.tokens ?? []].flat()) {
       if (typeof token !== 'string' || !token) continue;
@@ -231,7 +259,82 @@ export function createPush({ log, mode, events }) {
     return devices;
   }
 
+  // ---- simulator: what a phone would do, for simulated devices (never in production) ----
+  const later = (fn) => (mode === 'test' ? fn() : setTimeout(fn, 1200).unref?.());
+  const inboxes = new Map(); // deviceId -> [{ pushId, message, state, receivedAt, shownAt, openedAt }]
+  const note = (record, deviceId, level, text, extra = {}) => {
+    record.log.push({ time: new Date(), device: deviceId, level, text, ...extra });
+    notify(record, 'updated');
+  };
+  const simulator = {
+    handle(record, d, i, entry, unregistered) {
+      const behavior = BEHAVIORS[d.behavior] ? d.behavior : 'deliver';
+      if (behavior === 'uninstalled') {
+        entry(i, 'error', 'simulator: DeviceNotRegistered, the app was uninstalled (token no longer valid, device removed)', { transport: 'simulator' });
+        if (d.id) unregistered.push(d.id);
+        return;
+      }
+      if (behavior === 'invalid') {
+        entry(i, 'error', 'simulator: InvalidRegistration, the token is malformed or was replaced by a new one (device removed)', { transport: 'simulator' });
+        if (d.id) unregistered.push(d.id);
+        return;
+      }
+      if (behavior === 'rate-limited') {
+        entry(i, 'error', 'simulator: MessageRateExceeded, too many notifications to this device. Retry later with backoff.', { transport: 'simulator' });
+        return;
+      }
+      const ticket = `sim_${randomBytes(5).toString('hex')}`;
+      entry(i, 'info', `Accepted by simulator (${ticket}).`, { ok: true, providerId: ticket, transport: 'simulator' });
+      if (!d.id) return;
+      const item = { pushId: record.id, message: record.message, state: behavior === 'offline' ? 'waiting' : behavior === 'muted' ? 'hidden' : 'shown', receivedAt: new Date(), shownAt: null, openedAt: null };
+      const list = inboxes.get(d.id) ?? [];
+      list.unshift(item);
+      if (list.length > 50) list.length = 50;
+      inboxes.set(d.id, list);
+      const name = d.name ?? 'the simulated device';
+      later(() => {
+        push.receipt(record.id, d.id, { ok: true, transport: 'simulator' });
+        if (item.state === 'shown') {
+          item.shownAt = new Date();
+          note(record, d.id, 'info', `Shown on ${name}.`, { phone: true });
+        } else if (item.state === 'hidden') {
+          note(record, d.id, 'warn', `Not shown on ${name}: notifications are turned off for the app. Providers still report it as accepted.`, { phone: true });
+        } else {
+          note(record, d.id, 'info', `Waiting: ${name} is offline. It is shown when the device comes back online.`, { phone: true });
+        }
+        events?.emit('push.simulated', { id: record.id, device: d.id, state: item.state });
+      });
+    },
+    /** The simulated lock screen of a device, newest first. */
+    inbox: (deviceId) => inboxes.get(String(deviceId)) ?? [],
+    clear: (deviceId) => inboxes.delete(String(deviceId)),
+    /** Bring an offline device back: every waiting notification is shown. */
+    online(deviceId, name = 'the simulated device') {
+      const shown = [];
+      for (const item of inboxes.get(String(deviceId)) ?? []) {
+        if (item.state !== 'waiting') continue;
+        item.state = 'shown';
+        item.shownAt = new Date();
+        shown.push(item);
+        const record = recent.get(item.pushId);
+        if (record) note(record, String(deviceId), 'info', `Shown on ${name} after it came back online (${Math.round((item.shownAt - item.receivedAt) / 1000)} s later).`, { phone: true });
+      }
+      return shown.length;
+    },
+    /** Simulate a tap on a notification: emits push.opened, the event your app would report. */
+    open(deviceId, pushId, name = 'the simulated device') {
+      const item = (inboxes.get(String(deviceId)) ?? []).find((x) => x.pushId === pushId);
+      if (!item || item.state !== 'shown') return null;
+      item.openedAt = new Date();
+      const record = recent.get(pushId);
+      if (record) note(record, String(deviceId), 'info', `Opened on ${name}${item.message.url ? `: the app opens ${item.message.url}` : ''}.`, { phone: true, opened: true });
+      events?.emit('push.opened', { id: pushId, device: String(deviceId), url: item.message.url ?? null, data: item.message.data ?? null, simulated: true });
+      return item;
+    },
+  };
+
   const push = {
+    simulator,
     /**
      * Add a transport: { name, send(message, devices), accepts?(device) }. A transport with the
      * same name replaces the old one; use(null) removes them all.
@@ -250,13 +353,14 @@ export function createPush({ log, mode, events }) {
     },
     /** Which transport a device would go through: a transport name, 'simulated', 'dev-capture' or null. */
     routeFor(device) {
-      if (device.simulated || String(device.token ?? '').startsWith('sim_')) return 'simulated';
+      if (device.simulated || String(device.token ?? '').startsWith('sim_')) return mode === 'production' ? null : 'simulator';
       if (!transports.length) return mode === 'production' ? null : 'dev-capture';
       return route(device)?.name ?? null;
     },
-    /** Called by auth with the device model, so send({ to: userId }) can find devices. */
-    useDevices(model) {
+    /** Called by auth with the device and session models, so send({ to: userId }) can find devices. */
+    useDevices(model, sessions = null) {
       Device = model;
+      Session = sessions;
     },
     get devices() {
       return Device;
@@ -272,7 +376,7 @@ export function createPush({ log, mode, events }) {
      */
     async send(input = {}) {
       const message = normalizeMessage(input);
-      const devices = await resolveDevices(input);
+      const { devices, dropped } = await dropEndedSessions(await resolveDevices(input));
       const payloads = providerPayloads(message, devices[0]?.token);
       const record = {
         id: `psh_${randomBytes(6).toString('hex')}`,
@@ -294,6 +398,9 @@ export function createPush({ log, mode, events }) {
       const entry = (deviceIndex, level, text, extra = {}) =>
         record.log.push({ time: new Date(), device: deviceIndex === null ? null : record.devices[deviceIndex]?.id ?? deviceIndex, level, text, ...extra });
 
+      for (const d of dropped) {
+        record.log.push({ time: new Date(), device: d.id, level: 'warn', text: `${d.name ?? 'A device'} was skipped and removed: the session that registered it has ended (signed out).` });
+      }
       if (!devices.length) {
         record.status = 'no-devices';
         entry(null, 'warn', record.to.users.length
@@ -303,12 +410,14 @@ export function createPush({ log, mode, events }) {
       remember(record);
       notify(record, 'created');
 
-      // Group real devices by the transport that takes them.
+      // Group real devices by the transport that takes them; simulated ones go to the simulator.
       const groups = new Map(); // transport -> [[device, index]]
+      const simulated = [];
       const unsendable = !transports.length && mode === 'production';
       for (const [i, d] of devices.entries()) {
         if (d.simulated) {
-          entry(i, 'info', 'Simulated device: captured, not delivered.');
+          if (mode === 'production') entry(i, 'info', 'Simulated device: skipped in production.');
+          else simulated.push([d, i]);
           continue;
         }
         if (!transports.length) {
@@ -345,6 +454,7 @@ export function createPush({ log, mode, events }) {
           });
         }),
       );
+      for (const [d, i] of simulated) simulator.handle(record, d, i, entry, unregistered);
       if (unregistered.length && Device) await Device.deleteMany({ _id: { $in: unregistered } });
       if (unsendable && devices.some((d) => !d.simulated)) {
         log.error('Push not sent: no push transport configured. Add one with `calm add push-fcm` or `calm add push-expo`.', { title: message.title });

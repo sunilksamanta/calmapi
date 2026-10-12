@@ -63,14 +63,15 @@ const who = (p) => {
   return p.to.tokens ? plural(p.to.tokens, 'token') : 'nobody';
 };
 const isHttps = (url) => /^https:\/\//i.test(url ?? '');
-// Where a device's notifications go: a transport (expo, fcm...), 'simulated', 'dev-capture' or null.
+// Where a device's notifications go: a transport (expo, fcm...), 'simulator', 'dev-capture' or null.
+const BEHAVIOR_SHORT = { deliver: 'Delivers', offline: 'Offline', muted: 'Notifications off', uninstalled: 'App uninstalled', invalid: 'Invalid token', 'rate-limited': 'Rate limited' };
 const viaText = (via) =>
-  via === 'simulated' ? 'Simulated: shown in devtools, never delivered'
+  via === 'simulator' ? 'Simulated: answers like the phone you chose, never reaches a real provider'
     : via === 'dev-capture' ? 'No transport installed: captured in devtools'
       : via ? `Sent through ${via}`
         : 'No installed transport takes this token, so it is not delivered';
 const viaBadge = (via) =>
-  via === 'simulated' ? h('span', { class: 'badge' }, 'simulated')
+  via === 'simulator' ? h('span', { class: 'badge b-blue' }, 'simulator')
     : via === 'dev-capture' ? h('span', { class: 'badge' }, 'captured')
       : via ? h('span', { class: 'badge b-green' }, via)
         : h('span', { class: 'badge b-red' }, 'no transport');
@@ -268,7 +269,7 @@ function mountPush(root, params) {
 
   function renderList() {
     paintCount();
-    viewSeg.set(state.view === 'devices' ? 'devices' : 'inbox');
+    viewSeg.set(state.view === 'devices' || state.view === 'phone' ? 'devices' : 'inbox');
     // The composer and the device list use the full width.
     search.hidden = state.view !== 'inbox';
     if (state.view !== 'inbox') return mount(list, null);
@@ -299,6 +300,7 @@ function mountPush(root, params) {
 
   function renderPane() {
     if (state.view === 'devices') return renderDevices();
+    if (state.view === 'phone') return renderPhone();
     if (state.view === 'compose') return renderComposer();
     if (!store.pushes.length) return renderFirstRun();
     renderDetail();
@@ -410,7 +412,7 @@ function mountPush(root, params) {
           { class: 'kv mail-meta np-meta' },
           h('dt', null, 'To'), h('dd', null, who(p), h('span', { class: 'muted' }, ` · ${p.devices.length ? p.devices.map((d) => `${PLATFORM[d.platform]}${d.simulated ? ' (sim)' : ''}`).join(', ') : 'no devices'}`)),
           h('dt', null, 'Sent'), h('dd', null, fullDate(p.createdAt), h('span', { class: 'muted' }, ` · ${relTime(p.createdAt)}`)),
-          h('dt', null, 'Via'), h('dd', null, p.transport ?? 'nothing (no transport)', fromRequest ? h('span', { class: 'muted' }, ' · sent by ', h('a', { href: `#/requests/${p.requestId}` }, 'this request')) : p.requestId ? h('span', { class: 'muted' }, ' · sent from devtools') : null),
+          h('dt', null, 'Via'), h('dd', null, [...new Set(p.devices.map((d) => d.via).filter(Boolean))].join(', ') || p.transport || 'nothing (no transport)', fromRequest ? h('span', { class: 'muted' }, ' · sent by ', h('a', { href: `#/requests/${p.requestId}` }, 'this request')) : p.requestId ? h('span', { class: 'muted' }, ' · sent from devtools') : null),
         ),
         p.warnings.length
           ? h(
@@ -463,7 +465,7 @@ function mountPush(root, params) {
 
   async function simulate(platform) {
     try {
-      const d = await api('/devices/simulate', { method: 'POST', body: { userId: draft.user.id, platform } });
+      const d = await api('/devices', { method: 'POST', body: { userId: draft.user.id, platform } });
       draft.devices = [d, ...draft.devices];
       if (draft.picked) draft.picked.add(d.id);
       toast(`Added ${d.name}`);
@@ -675,122 +677,216 @@ function mountPush(root, params) {
   // ---- devices --------------------------------------------------------------------------
 
   let devices = null;
+  let behaviors = null;
+  const loadBehaviors = async () => (behaviors ??= await api('/devices/behaviors').catch(() => []));
+
+  function behaviorSelect(d, onchange) {
+    const sel = h('select', { class: 'input np-behavior', 'aria-label': `What ${d.name ?? 'this device'} does with notifications`, title: behaviors?.find((b) => b.id === d.behavior)?.label ?? '' });
+    for (const b of behaviors ?? []) sel.append(h('option', { value: b.id, selected: b.id === d.behavior }, BEHAVIOR_SHORT[b.id] ?? b.id));
+    sel.addEventListener('change', async () => {
+      try {
+        const updated = await api(`/devices/${d.id}`, { method: 'PATCH', body: { behavior: sel.value } });
+        toast(`${updated.name}: ${BEHAVIOR_SHORT[updated.behavior]}`);
+        onchange?.(updated);
+      } catch (err) {
+        toast(err.message, { tone: 'error' });
+      }
+    });
+    return sel;
+  }
+
+  async function deviceAction(path, init, message) {
+    try {
+      const out = await api(path, init);
+      if (message) toast(typeof message === 'function' ? message(out) : message);
+      return out;
+    } catch (err) {
+      toast(err.message, { tone: 'error' });
+      return null;
+    }
+  }
+
+  /** Add a device: pick a user, then a simulated phone (with a behavior) or a real token. */
+  function addDeviceForm(anchor, { user, onAdded } = {}) {
+    const showForm = async (pop, u) => {
+      await loadBehaviors();
+      const form = { platform: 'ios', behavior: 'deliver', name: '', token: '' };
+      const platformSeg = segmented(['ios', 'android', 'web'].map((p) => ({ value: p, label: PLATFORM[p] })), form.platform, (v) => (form.platform = v), 'Platform');
+      const behaviorSel = h('select', { class: 'input', 'aria-label': 'Behavior' }, (behaviors ?? []).map((b) => h('option', { value: b.id }, BEHAVIOR_SHORT[b.id] ?? b.id)));
+      behaviorSel.addEventListener('change', () => (form.behavior = behaviorSel.value, (hint.textContent = behaviors.find((b) => b.id === behaviorSel.value)?.label ?? '')));
+      const hint = h('div', { class: 'np-hint' }, behaviors?.[0]?.label ?? '');
+      const nameInput = h('input', { class: 'input', placeholder: `Simulated ${PLATFORM[form.platform]}`, autocomplete: 'off' });
+      nameInput.addEventListener('input', () => (form.name = nameInput.value));
+      const tokenInput = h('input', { class: 'input mono', placeholder: 'Leave empty for a simulated device', autocomplete: 'off', spellcheck: false });
+      const behaviorRow = h('label', { class: 'np-field' }, h('span', { class: 'np-label' }, 'Behavior'), behaviorSel, hint);
+      tokenInput.addEventListener('input', () => {
+        form.token = tokenInput.value;
+        behaviorRow.hidden = Boolean(form.token.trim());
+      });
+      const addBtn = h('button', { class: 'btn primary', type: 'submit' }, 'Add device');
+      const anotherBox = h('input', { type: 'checkbox' });
+      const f = h(
+        'form',
+        { class: 'np-add', novalidate: true },
+        h('div', { class: 'np-add-head' }, h('b', null, u.name ?? u.email), h('span', { class: 'muted' }, u.email ?? '')),
+        h('div', { class: 'np-field' }, h('span', { class: 'np-label' }, 'Platform'), platformSeg),
+        behaviorRow,
+        h('label', { class: 'np-field' }, h('span', { class: 'np-label' }, 'Name', h('span', { class: 'np-hint' }, 'optional')), nameInput),
+        h('label', { class: 'np-field' }, h('span', { class: 'np-label' }, 'Real token', h('span', { class: 'np-hint' }, 'optional: your phone\'s Expo or FCM token')), tokenInput),
+        h('div', { class: 'np-actions' }, addBtn, h('label', { class: 'np-check' }, anotherBox, h('span', null, 'Add another')), h('span', { class: 'spacer' })),
+      );
+      f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        addBtn.disabled = true;
+        const d = await deviceAction('/devices', { method: 'POST', body: { userId: u.id, platform: form.platform, behavior: form.behavior, name: form.name || undefined, token: form.token.trim() || undefined } }, (x) => `Added ${x.name}`);
+        addBtn.disabled = false;
+        if (!d) return;
+        onAdded?.(d);
+        if (anotherBox.checked) {
+          nameInput.value = '';
+          tokenInput.value = '';
+          form.name = '';
+          form.token = '';
+          behaviorRow.hidden = false;
+          nameInput.focus();
+        } else closePopover();
+      });
+      mount(pop.pop, f);
+      pop.place();
+      setTimeout(() => nameInput.focus());
+    };
+    const pop = popover(anchor, h('div'), { width: 340 });
+    if (user) return showForm(pop, user);
+    mount(
+      pop.pop,
+      pickerList({
+        placeholder: 'Whose device? Search users',
+        load: (q) => api(`/users?q=${encodeURIComponent(q)}`),
+        render: userOption,
+        onPick: (u) => showForm(pop, u),
+      }),
+    );
+    pop.place();
+  }
+
   async function renderDevices() {
     if (!devices) mount(pane, loading('Loading devices'));
     try {
-      devices = await api('/devices');
+      [devices] = await Promise.all([api('/devices'), loadBehaviors()]);
     } catch (err) {
       return mount(pane, errorBox(err));
     }
     if (state.view !== 'devices') return;
-    const addBtn = h('button', { class: 'btn', type: 'button', 'aria-haspopup': 'dialog' }, 'Add simulated device');
-    addBtn.addEventListener('click', () => {
-      const pop = popover(
-        addBtn,
-        pickerList({
-          placeholder: 'Whose device? Search users',
-          load: (q) => api(`/users?q=${encodeURIComponent(q)}`),
-          render: userOption,
-          onPick: (u) =>
-            mount(
-              pop.pop,
-              h(
-                'div',
-                { class: 'np-pick-platform' },
-                h('div', { class: 'muted' }, `Simulated device for ${u.name ?? u.email}`),
-                h(
-                  'div',
-                  { class: 'np-pick-row' },
-                  ['ios', 'android', 'web'].map((pf) =>
-                    h(
-                      'button',
-                      {
-                        class: 'btn',
-                        type: 'button',
-                        onclick: async () => {
-                          closePopover();
-                          try {
-                            await api('/devices/simulate', { method: 'POST', body: { userId: u.id, platform: pf } });
-                            renderDevices();
-                          } catch (err) {
-                            toast(err.message, { tone: 'error' });
-                          }
-                        },
-                      },
-                      PLATFORM[pf],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        }),
-        { width: 320 },
-      );
-    });
-    const rows = devices.map((d) =>
-      h(
+    const addBtn = h('button', { class: 'btn primary', type: 'button', 'aria-haspopup': 'dialog' }, 'Add device');
+    addBtn.addEventListener('click', () => addDeviceForm(addBtn, { onAdded: () => renderDevices() }));
+    const rows = devices.map((d) => {
+      const counts = d.inbox;
+      return h(
         'tr',
         null,
         h('td', null, h('div', { class: 'ellipsis' }, d.user.name ?? d.user.id), d.user.email ? h('div', { class: 'muted ellipsis' }, d.user.email) : null),
-        h('td', null, d.name ?? h('span', { class: 'muted' }, 'Unnamed')),
-        h('td', null, PLATFORM[d.platform]),
-        h('td', null, d.simulated ? h('span', { class: 'muted' }, 'none') : h('span', { class: 'mono' }, d.token)),
+        h('td', null, h('div', { class: 'ellipsis' }, d.simulated ? h('a', { href: `#/push/phone/${d.id}`, title: 'Open its lock screen' }, d.name ?? 'Unnamed') : d.name ?? h('span', { class: 'muted' }, 'Unnamed')), h('div', { class: 'muted' }, PLATFORM[d.platform], d.signedIn ? ' · signed in' : '')),
+        h('td', null, d.simulated ? h('span', { class: 'muted' }, 'simulated') : h('span', { class: 'mono' }, d.token)),
         h('td', { title: viaText(d.via) }, viaBadge(d.via)),
+        h('td', null, d.simulated ? behaviorSelect(d, () => renderDevices()) : h('span', { class: 'muted' }, 'real device')),
+        h('td', { class: 'num' }, counts ? h('a', { href: `#/push/phone/${d.id}`, class: 'np-counts', title: `${counts.shown} shown, ${counts.waiting} waiting, ${counts.hidden} not shown` }, `${counts.shown}`, counts.waiting ? h('span', { class: 't-amber' }, ` +${counts.waiting}`) : null) : h('span', { class: 'muted' }, '')),
         h('td', { class: 'muted', title: d.lastSeenAt ? fullDate(d.lastSeenAt) : '' }, d.lastSeenAt ? relTime(d.lastSeenAt) : ''),
         h(
           'td',
           { class: 'np-dev-actions' },
-          h(
-            'button',
-            {
-              class: 'btn ghost',
-              type: 'button',
-              onclick: async () => {
-                Object.assign(draft, { title: draft.title || 'Test notification', body: draft.body || `Sent from CalmAPI devtools to ${d.name ?? PLATFORM[d.platform]}` });
-                await chooseUser({ id: d.user.id, name: d.user.name, email: d.user.email }, { keep: new Set([d.id]) });
-                go('#/push/new');
-              },
-            },
-            'Send test',
-          ),
-          h(
-            'button',
-            {
-              class: 'btn ghost',
-              type: 'button',
-              title: d.simulated ? 'Remove this simulated device' : 'Unregister this device (the app registers it again on next launch)',
-              onclick: async () => {
-                try {
-                  await api(`/devices/${d.id}`, { method: 'DELETE' });
-                  renderDevices();
-                } catch (err) {
-                  toast(err.message, { tone: 'error' });
-                }
-              },
-            },
-            'Remove',
-          ),
+          h('button', { class: 'btn ghost', type: 'button', onclick: () => sendTestTo(d) }, 'Send test'),
+          d.simulated ? h('button', { class: 'btn ghost', type: 'button', title: 'The provider rolls the token: the app registers a new one and the old one fails once', onclick: async () => (await deviceAction(`/devices/${d.id}/rotate`, { method: 'POST' }, 'Token rotated: the old one fails on the next send')) && renderDevices() }, 'Rotate') : null,
+          h('button', { class: 'btn ghost', type: 'button', title: d.simulated ? 'Remove this simulated device' : 'Unregister this device (the app registers it again on next launch)', onclick: async () => (await deviceAction(`/devices/${d.id}`, { method: 'DELETE' }, 'Device removed')) !== null && renderDevices() }, 'Remove'),
         ),
-      ),
-    );
+      );
+    });
     mount(
       pane,
       h(
         'div',
         { class: 'np-devlist scroll' },
-        h('div', { class: 'np-tools' }, h('span', { class: 'muted' }, devices.length ? `${plural(devices.length, 'device')}. Simulated devices receive previews only and never reach a real provider.` : 'No devices registered.'), h('span', { class: 'spacer' }), addBtn),
+        h('div', { class: 'np-tools' }, h('span', { class: 'muted' }, devices.length ? `${plural(devices.length, 'device')}. Simulated devices answer like the phone you choose and never reach a real provider.` : 'No devices registered.'), h('span', { class: 'spacer' }), addBtn),
         devices.length
-          ? h('table', { class: 'tbl np-dev-tbl' }, h('thead', null, h('tr', null, ['User', 'Device', 'Platform', 'Token', 'Sent through', 'Last seen', ''].map((t) => h('th', null, t)))), h('tbody', null, rows))
-          : empty('Apps register a device with POST /api/auth/devices { token, platform }. Or add a simulated one to preview notifications without a phone.'),
+          ? h('table', { class: 'tbl np-dev-tbl' }, h('thead', null, h('tr', null, ['User', 'Device', 'Token', 'Sent through', 'Behavior', 'Lock screen', 'Last seen', ''].map((t) => h('th', null, t)))), h('tbody', null, rows))
+          : empty('Apps register a device with POST /api/auth/devices { token, platform }. Or add a simulated one and pick how it behaves: delivers, offline, notifications off, uninstalled...'),
       ),
     );
+  }
+
+  async function sendTestTo(d) {
+    Object.assign(draft, { title: draft.title || 'Test notification', body: draft.body || `Sent from CalmAPI devtools to ${d.name ?? PLATFORM[d.platform]}` });
+    await chooseUser({ id: d.user.id, name: d.user.name, email: d.user.email }, { keep: new Set([d.id]) });
+    go('#/push/new');
+  }
+
+  // ---- phone: the lock screen of one simulated device ------------------------------------
+
+  let phoneId = null;
+  async function renderPhone() {
+    if (!phoneId) return go('#/push/devices');
+    let data;
+    try {
+      [data] = await Promise.all([api(`/devices/${phoneId}/inbox`), loadBehaviors()]);
+    } catch (err) {
+      return mount(pane, errorBox(err));
+    }
+    if (state.view !== 'phone') return;
+    const d = data.device;
+    const items = data.items;
+    const waiting = items.filter((x) => x.state === 'waiting').length;
+    const unread = items.filter((x) => x.state === 'shown' && !x.openedAt).length;
+    const app = store.overview?.app.name ?? 'App';
+    const stage = h(
+      'div',
+      { class: ['np-stage', 'np-phone', d.platform === 'android' ? 'np-android' : d.platform === 'web' ? 'np-web' : 'np-ios'] },
+      d.platform === 'ios' ? h('div', { class: 'np-ios-clock', 'aria-hidden': 'true' }, h('span', null, new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })), h('b', null, new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: false }))) : null,
+      d.behavior === 'offline' || waiting ? h('div', { class: 'np-phone-banner' }, `Offline · ${plural(waiting, 'notification')} waiting`) : null,
+      d.behavior === 'muted' ? h('div', { class: 'np-phone-banner' }, `Notifications are off for ${app}`) : null,
+      items.length
+        ? items.map((item) => {
+            const card = h(
+              'button',
+              { type: 'button', class: ['np-card', 'np-phone-card', `is-${item.state}`, item.openedAt && 'is-opened'], disabled: item.state !== 'shown', title: item.state === 'shown' ? (item.openedAt ? 'Opened' : 'Tap: the app receives push.opened') : item.state === 'waiting' ? 'Waiting for the device to come online' : 'Not shown: notifications are off' },
+              appMark('np-icon'),
+              h('div', { class: 'np-body' }, h('div', { class: 'np-head' }, h('span', { class: 'np-title' }, item.message.title ?? app), h('span', { class: 'np-when' }, relTime(item.receivedAt))), item.message.body ? h('div', { class: 'np-text' }, item.message.body) : item.message.silent ? h('div', { class: 'np-text muted' }, 'Silent: data only') : null),
+            );
+            card.addEventListener('click', async () => {
+              const opened = await deviceAction(`/devices/${d.id}/inbox/${item.pushId}/open`, { method: 'POST' }, item.message.url ? `Opened: the app goes to ${item.message.url}` : 'Opened');
+              if (opened) renderPhone();
+            });
+            return h('div', { class: 'np-phone-item' }, card, item.state !== 'shown' ? h('div', { class: 'np-phone-note' }, item.state === 'waiting' ? 'Waiting: device offline' : 'Not shown: notifications off') : null);
+          })
+        : h('div', { class: 'np-phone-empty' }, 'No notifications yet'),
+    );
+    const controls = h(
+      'div',
+      { class: 'np-phone-side' },
+      h('h2', { class: 'np-h' }, d.name ?? 'Simulated device'),
+      h('dl', { class: 'kv' }, h('dt', null, 'User'), h('dd', null, d.user.name ?? d.user.id), h('dt', null, 'Platform'), h('dd', null, PLATFORM[d.platform]), h('dt', null, 'Lock screen'), h('dd', null, `${items.filter((x) => x.state === 'shown').length} shown, ${unread} not opened${waiting ? `, ${waiting} waiting` : ''}`)),
+      d.simulated ? h('label', { class: 'np-field' }, h('span', { class: 'np-label' }, 'Behavior'), behaviorSelect(d, () => renderPhone()), h('span', { class: 'np-hint' }, behaviors?.find((b) => b.id === d.behavior)?.label ?? '')) : null,
+      h(
+        'div',
+        { class: 'np-phone-actions' },
+        h('button', { class: 'btn primary', type: 'button', onclick: () => sendTestTo(d) }, 'Send to this device'),
+        waiting || d.behavior === 'offline' ? h('button', { class: 'btn', type: 'button', onclick: async () => (await deviceAction(`/devices/${d.id}/online`, { method: 'POST' }, (x) => `Back online: ${plural(x.shown, 'notification')} shown`)) && renderPhone() }, 'Bring online') : null,
+        d.simulated ? h('button', { class: 'btn', type: 'button', title: 'The next send fails with DeviceNotRegistered and the device is removed', onclick: async () => (await deviceAction(`/devices/${d.id}`, { method: 'PATCH', body: { behavior: 'uninstalled' } }, 'App uninstalled: the next send removes this device')) && renderPhone() }, 'Uninstall app') : null,
+        d.simulated ? h('button', { class: 'btn', type: 'button', onclick: async () => { const fresh = await deviceAction(`/devices/${d.id}/rotate`, { method: 'POST' }, 'Token rotated'); if (fresh) go(`#/push/phone/${fresh.id}`); } }, 'Rotate token') : null,
+        items.length ? h('button', { class: 'btn ghost', type: 'button', onclick: async () => (await deviceAction(`/devices/${d.id}/inbox`, { method: 'DELETE' })) !== undefined && renderPhone() }, 'Clear') : null,
+        h('button', { class: 'btn ghost', type: 'button', onclick: async () => { if ((await deviceAction(`/devices/${d.id}`, { method: 'DELETE' }, 'Device removed')) !== null) go('#/push/devices'); } }, 'Remove device'),
+      ),
+      h('p', { class: 'muted np-note' }, 'Tapping a notification emits push.opened, the event your app reports when someone opens one. Every step is in the delivery log of the notification.'),
+    );
+    mount(pane, h('div', { class: 'np-phone-view scroll' }, h('div', { class: 'np-phone-wrap' }, h('a', { class: 'link-btn muted', href: '#/push/devices' }, icon('chevronLeft', 12), 'Devices'), stage), controls));
   }
 
   // ---- routing --------------------------------------------------------------------------
 
   function apply(p) {
     if (p[0] === 'devices') state.view = 'devices';
-    else if (p[0] === 'new') state.view = 'compose';
+    else if (p[0] === 'phone') {
+      state.view = 'phone';
+      phoneId = p[1] ?? null;
+    } else if (p[0] === 'new') state.view = 'compose';
     else {
       state.view = 'inbox';
       if (p[0]) openId = p[0];
@@ -804,7 +900,9 @@ function mountPush(root, params) {
 
   const off = [
     on('pushes:reset', (e) => {
-      // Never repaint the composer or the device list under someone's cursor.
+      // Never repaint the composer or the device list under someone's cursor; the lock screen
+      // of a simulated phone follows new notifications live.
+      if (state.view === 'phone') return renderPhone();
       if (state.view !== 'inbox') return renderList();
       if (e?.fresh && !openId) openId = e.fresh;
       render();

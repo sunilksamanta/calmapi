@@ -58,6 +58,7 @@ export async function loadConfig(root, overrides = {}) {
       resetUrl: null,
       password: { logN: 15, r: 8, p: 3 }, // scrypt cost; length rules live on f.password()
       lockout: { maxAttempts: 5, windowMinutes: 15, lockMinutes: 15 }, // per account, 0 disables
+      devicesFollowSessions: true, // push devices stop with the session that registered them
     },
     openapi: { enabled: true, path: '/openapi.json' },
     devtools: { enabled: mode === 'development' },

@@ -16,7 +16,7 @@ import { join, dirname } from 'node:path';
 import { currentRequest } from '../context.js';
 import { serialize } from '../resource/resource.js';
 import { kebab } from '../utils/strings.js';
-import { maskToken } from '../push.js';
+import { maskToken, BEHAVIORS, PLATFORMS } from '../push.js';
 
 const SKIP_COMMANDS = new Set(['hello', 'ismaster', 'isMaster', 'ping', 'endSessions', 'saslStart', 'saslContinue', 'buildInfo', 'getParameter', 'listIndexes', 'createIndexes']);
 const EXPLAINABLE = new Set(['find', 'aggregate', 'count', 'distinct', 'update', 'delete', 'findAndModify']);
@@ -296,11 +296,18 @@ export function setupDevtools(app, ex) {
     name: d.name ?? null,
     token: maskToken(d.token),
     simulated: Boolean(d.simulated),
+    behavior: d.simulated ? d.behavior ?? 'deliver' : null,
+    signedIn: Boolean(d.session),
     via: app.push.routeFor(d), // the transport that would deliver to it
+    inbox: d.simulated ? inboxCounts(String(d._id)) : null,
     appVersion: d.appVersion ?? null,
     lastSeenAt: d.lastSeenAt ?? null,
     createdAt: d.createdAt,
   });
+  const inboxCounts = (id) => {
+    const items = app.push.simulator.inbox(id);
+    return { shown: items.filter((x) => x.state === 'shown').length, waiting: items.filter((x) => x.state === 'waiting').length, hidden: items.filter((x) => x.state === 'hidden').length, unopened: items.filter((x) => x.state === 'shown' && !x.openedAt).length };
+  };
   async function listDevices(filter = {}) {
     if (!Device()) return [];
     const docs = await Device().find(filter).sort({ updatedAt: -1 }).limit(200).lean();
@@ -316,30 +323,87 @@ export function setupDevtools(app, ex) {
     res.json(await listDevices(filter));
   });
 
-  // A simulated device lets you send to a user who has no real phone registered yet.
-  api.post('/devices/simulate', async (req, res) => {
+  // Add a device to a user: simulated (a fake token that behaves like a phone you choose) or
+  // a real token you paste, for example your own phone's Expo token.
+  const LABEL = { ios: 'iPhone', android: 'Android phone', web: 'Browser' };
+  async function addDevice(req, res) {
     if (!Device()) return res.status(400).json({ error: 'Push devices need auth and a user resource' });
-    const { userId, platform = 'ios', name } = req.body ?? {};
-    if (!['ios', 'android', 'web'].includes(platform)) return res.status(400).json({ error: 'platform must be ios, android or web' });
+    const { userId, platform = 'ios', name, behavior = 'deliver', token } = req.body ?? {};
+    if (!PLATFORMS.includes(platform)) return res.status(400).json({ error: 'platform must be ios, android or web' });
+    if (!BEHAVIORS[behavior]) return res.status(400).json({ error: `behavior must be one of ${Object.keys(BEHAVIORS).join(', ')}` });
     const user = await app.model('user').findById(userId).lean().catch(() => null);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    const label = { ios: 'iPhone', android: 'Android phone', web: 'Browser' }[platform];
-    const doc = await Device().create({
-      user: user._id,
-      platform,
-      token: `sim_${platform}_${randomBytes(12).toString('hex')}`,
-      name: typeof name === 'string' && name.trim() ? name.trim().slice(0, 100) : `Simulated ${label}`,
-      simulated: true,
-      lastSeenAt: new Date(),
-    });
+    const real = typeof token === 'string' && token.trim() !== '';
+    if (real && (token.length > 4096 || token.startsWith('sim_'))) return res.status(400).json({ error: 'That token cannot be registered' });
+    const label = typeof name === 'string' && name.trim() ? name.trim().slice(0, 100) : real ? `${LABEL[platform]} (added in devtools)` : `Simulated ${LABEL[platform]}`;
+    const doc = real
+      ? await Device().findOneAndUpdate({ token: token.trim() }, { $set: { user: user._id, platform, name: label, simulated: false, behavior: 'deliver', session: null, lastSeenAt: new Date() } }, { upsert: true, returnDocument: 'after' })
+      : await Device().create({ user: user._id, platform, token: `sim_${platform}_${randomBytes(12).toString('hex')}`, name: label, simulated: true, behavior, lastSeenAt: new Date() });
+    app.log.info(`Devtools: added ${real ? 'a device token' : 'a simulated device'} for ${user.email ?? user._id}`);
     const [row] = await listDevices({ _id: doc._id });
     res.status(201).json(row);
+  }
+  api.post('/devices', addDevice);
+  api.post('/devices/simulate', addDevice); // older name
+
+  api.get('/devices/behaviors', (_req, res) => res.json(Object.entries(BEHAVIORS).map(([id, label]) => ({ id, label }))));
+
+  const findDevice = async (id) => (Device() ? Device().findById(id).lean().catch(() => null) : null);
+
+  api.patch('/devices/:id', async (req, res) => {
+    const d = await findDevice(req.params.id);
+    if (!d) return res.status(404).json({ error: 'Unknown device' });
+    const set = {};
+    if (req.body?.behavior !== undefined) {
+      if (!d.simulated) return res.status(400).json({ error: 'Only simulated devices have a behavior' });
+      if (!BEHAVIORS[req.body.behavior]) return res.status(400).json({ error: `behavior must be one of ${Object.keys(BEHAVIORS).join(', ')}` });
+      set.behavior = req.body.behavior;
+    }
+    if (typeof req.body?.name === 'string' && req.body.name.trim()) set.name = req.body.name.trim().slice(0, 100);
+    await Device().updateOne({ _id: d._id }, { $set: set });
+    const [row] = await listDevices({ _id: d._id });
+    res.json(row);
+  });
+
+  // The provider rolls the token: the app gets a new one and registers it, the old one stops
+  // working. Your server only learns about it when a send to the old token fails.
+  api.post('/devices/:id/rotate', async (req, res) => {
+    const d = await findDevice(req.params.id);
+    if (!d?.simulated) return res.status(400).json({ error: 'Only simulated devices can rotate their token' });
+    await Device().updateOne({ _id: d._id }, { $set: { behavior: 'invalid', name: `${d.name ?? 'Simulated device'} (old token)` } });
+    const fresh = await Device().create({ user: d.user, platform: d.platform, token: `sim_${d.platform}_${randomBytes(12).toString('hex')}`, name: (d.name ?? 'Simulated device').replace(/ \(old token\)$/, ''), simulated: true, behavior: 'deliver', lastSeenAt: new Date() });
+    const [row] = await listDevices({ _id: fresh._id });
+    res.status(201).json(row);
+  });
+
+  api.get('/devices/:id/inbox', async (req, res) => {
+    const d = await findDevice(req.params.id);
+    if (!d) return res.status(404).json({ error: 'Unknown device' });
+    res.json({ device: (await listDevices({ _id: d._id }))[0], items: app.push.simulator.inbox(String(d._id)) });
+  });
+  api.post('/devices/:id/online', async (req, res) => {
+    const d = await findDevice(req.params.id);
+    if (!d?.simulated) return res.status(404).json({ error: 'Unknown simulated device' });
+    if (d.behavior === 'offline') await Device().updateOne({ _id: d._id }, { $set: { behavior: 'deliver' } });
+    res.json({ shown: app.push.simulator.online(String(d._id), d.name ?? undefined) });
+  });
+  api.post('/devices/:id/inbox/:pushId/open', async (req, res) => {
+    const d = await findDevice(req.params.id);
+    if (!d) return res.status(404).json({ error: 'Unknown device' });
+    const item = app.push.simulator.open(String(d._id), req.params.pushId, d.name ?? undefined);
+    if (!item) return res.status(404).json({ error: 'Not on this lock screen' });
+    res.json(item);
+  });
+  api.delete('/devices/:id/inbox', (req, res) => {
+    app.push.simulator.clear(req.params.id);
+    res.status(204).end();
   });
 
   api.delete('/devices/:id', async (req, res) => {
     if (!Device()) return res.status(404).json({ error: 'Unknown device' });
     const result = await Device().deleteOne({ _id: req.params.id }).catch(() => ({ deletedCount: 0 }));
     if (!result.deletedCount) return res.status(404).json({ error: 'Unknown device' });
+    app.push.simulator.clear(req.params.id);
     res.status(204).end();
   });
 
