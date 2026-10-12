@@ -10,7 +10,7 @@ import { createPush } from './push.js';
 import { loadResources, loadBlocks, loadAppRoutes } from './loader.js';
 import { compileResource } from './resource/resource.js';
 import { crudRoutes } from './resource/routes.js';
-import { RouteBuilder, toExpressHandler, servicesProxy, policyPreCheck } from './http/router.js';
+import { RouteBuilder, toExpressHandler, servicesProxy, policyPreCheck, guardsFirst } from './http/router.js';
 import { registerPolicy } from './resource/policy.js';
 import { requestContext, securityHeaders, cors, rateLimit, createMemoryStore, accessLog, jsonGuard } from './http/middleware.js';
 import { setupAuth } from './auth/index.js';
@@ -318,7 +318,7 @@ async function buildExpress(app) {
     else if (route.rateLimit && typeof route.rateLimit === 'object' && config.rateLimit.enabled) {
       chain.push(rateLimit({ store: app.rateStore, name: `${route.method}:${route.path}`, ...route.rateLimit, onLimit }));
     }
-    if (route.middleware.length) chain.push(policyPreCheck(route), ...route.middleware);
+    if (route.middleware.length) chain.push(policyPreCheck(route), guardsFirst(app, route), ...route.middleware);
     api[route.method.toLowerCase()](route.path, ...chain, toExpressHandler(app, route));
   }
 

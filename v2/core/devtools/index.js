@@ -177,7 +177,7 @@ export function setupDevtools(app, ex) {
 
     const originalJson = res.json.bind(res);
     res.json = (body) => {
-      record.responseBody = truncate(body);
+      record.responseBody = truncate(redact(body, 0, true)); // tokens and keys in responses too
       return originalJson(body);
     };
     res.on('finish', () => {
@@ -621,11 +621,15 @@ function redactHeaders(headers) {
   return out;
 }
 
-function redact(value, depth = 0) {
+/** Secret-looking keys become [redacted]; in responses the first characters stay, to tell them apart. */
+function redact(value, depth = 0, partial = false) {
   if (depth > 6 || value === null || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
+  if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1, partial));
   const out = {};
-  for (const [k, v] of Object.entries(value)) out[k] = SECRET_KEYS.test(k) && typeof v === 'string' ? '[redacted]' : redact(v, depth + 1);
+  for (const [k, v] of Object.entries(value)) {
+    if (SECRET_KEYS.test(k) && typeof v === 'string') out[k] = partial && v.length > 16 && !v.includes('…') ? `${v.slice(0, 8)}… [redacted]` : partial && v.includes('…') ? v : '[redacted]';
+    else out[k] = redact(v, depth + 1, partial);
+  }
   return out;
 }
 

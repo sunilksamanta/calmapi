@@ -65,6 +65,10 @@ export class RouteBuilder {
       hidden: Boolean(opts.hidden),
       /** Express middleware run after the policy pre-check, before the handler (e.g. multer). */
       middleware: opts.middleware ?? [],
+      /** A permission name for credentials with scopes (API keys), e.g. 'reports:export'. */
+      scope: opts.scope ?? null,
+      /** Anything blocks want to read from the route in guards: { flag: 'beta', audit: false }. */
+      meta: opts.meta ?? {},
       handler,
     };
     route.policyLabel = describePolicy(route.policy);
@@ -122,18 +126,36 @@ export function policyPreCheck(route) {
   };
 }
 
+const routeContext = (app, route, req, res) => {
+  const entry = route.resource ? app.registry.get(route.resource) : null;
+  return createContext(app, req, res, { route, resource: entry?.def ?? null, service: entry?.service ?? null });
+};
+
+/**
+ * Guards (calm.guard) before route middleware, so a request a guard refuses never has its
+ * upload parsed. The context is kept for the handler, so what guards attach stays on it.
+ */
+export function guardsFirst(app, route) {
+  return async (req, res, next) => {
+    req.calmRoute = route;
+    const ctx = routeContext(app, route, req, res);
+    for (const guard of app.hooks.guards) await guard(ctx, route);
+    req.calmCtx = ctx;
+    next();
+  };
+}
+
 /** Express handler for one route record. */
 export function toExpressHandler(app, route) {
   return async (req, res) => {
     req.calmRoute = route;
     const entry = route.resource ? app.registry.get(route.resource) : null;
-    const ctx = createContext(app, req, res, {
-      route,
-      resource: entry?.def ?? null,
-      service: entry?.service ?? null,
-    });
-
-    for (const guard of app.hooks.guards) await guard(ctx, route);
+    let ctx = req.calmCtx;
+    if (ctx) Object.assign(ctx, { body: req.body, params: req.params, query: req.query }); // after middleware such as multer
+    else {
+      ctx = routeContext(app, route, req, res);
+      for (const guard of app.hooks.guards) await guard(ctx, route);
+    }
     if (entry && req.params.id !== undefined) {
       ctx.doc = await authorizeItem(entry, route.policy, route.action, ctx, req.params.id);
     } else {
