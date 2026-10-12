@@ -88,6 +88,8 @@ export function createContext(app, req, res, extra = {}) {
     body: req.body,
     user: req.user ?? null,
     session: req.session ?? null,
+    /** How this request authenticated: { via: 'session' | 'api-key' | ..., scopes, id } or null. */
+    auth: req.auth ?? null,
     requestId: req.id,
     app,
     config: app.config,
@@ -131,6 +133,7 @@ export function toExpressHandler(app, route) {
       service: entry?.service ?? null,
     });
 
+    for (const guard of app.hooks.guards) await guard(ctx, route);
     if (entry && req.params.id !== undefined) {
       ctx.doc = await authorizeItem(entry, route.policy, route.action, ctx, req.params.id);
     } else {

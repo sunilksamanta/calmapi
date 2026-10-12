@@ -14,6 +14,18 @@
 //   { allow: false, reason: 'unauthenticated' | 'forbidden' }
 
 const ALIASES = { auth: 'authenticated', user: 'authenticated', self: 'owner', nobody: 'none' };
+const BUILT_IN = new Set(['public', 'authenticated', 'owner', 'none']);
+
+// Named policies added by blocks with calm.policy(name, fn), e.g. 'member' from an
+// organizations block. They resolve to their function when a policy is parsed.
+const named = new Map();
+export function registerPolicy(name, fn) {
+  if (typeof name !== 'string' || !/^[a-z][\w-]*$/i.test(name)) throw new Error(`calm.policy(name, fn): invalid name "${name}"`);
+  if (BUILT_IN.has(name) || name in ALIASES) throw new Error(`calm.policy: "${name}" is a built-in policy`);
+  if (typeof fn !== 'function') throw new Error(`calm.policy('${name}', fn): fn must be a function`);
+  Object.defineProperty(fn, 'name', { value: name });
+  named.set(name, fn);
+}
 
 export function parsePolicy(expr) {
   if (expr === undefined || expr === null) return null;
@@ -24,7 +36,9 @@ export function parsePolicy(expr) {
     else if (typeof item === 'string') {
       for (const raw of item.split('|')) {
         const t = raw.trim();
-        if (t) tokens.push(ALIASES[t] ?? t.replace(/^role:/, ''));
+        if (!t) continue;
+        if (named.has(t)) tokens.push(named.get(t));
+        else tokens.push(ALIASES[t] ?? t.replace(/^role:/, ''));
       }
     } else throw new Error(`Invalid policy: ${String(item)}`);
   }

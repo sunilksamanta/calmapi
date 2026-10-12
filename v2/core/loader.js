@@ -83,11 +83,20 @@ export async function loadAppRoutes(root) {
 }
 
 /**
- * Declare a plugin (what blocks export).
+ * Declare a plugin (what blocks export). Only name and setup are required.
  *
  *   export default definePlugin({
  *     name: 'jobs',
- *     setup(calm) {
+ *     // Optional: environment variables the block reads. calm doctor reports missing ones,
+ *     // devtools shows whether they are set (never their value when secret).
+ *     env: {
+ *       JOBS_CONCURRENCY: 'How many jobs run at once (default 4)',
+ *       STRIPE_SECRET_KEY: { required: 'production', secret: true, description: 'From the Stripe dashboard' },
+ *     },
+ *     // Optional: settings with defaults. Users override them in calm.config.js:
+ *     //   blocks: { jobs: { pollMs: 500 } }
+ *     options: { pollMs: 1000 },
+ *     setup(calm, options) {
  *       calm.routes((r) => r.get('/jobs', { policy: 'admin' }, listJobs), { prefix: '/' });
  *       calm.on('post.created', ...);
  *       calm.onStart(async () => worker.start());
@@ -97,5 +106,11 @@ export async function loadAppRoutes(root) {
  */
 export const definePlugin = (plugin) => {
   if (!plugin?.name || typeof plugin.setup !== 'function') throw new Error('definePlugin({ name, setup(calm) }) needs a name and a setup function');
-  return { kind: 'calm.plugin', ...plugin };
+  if (!/^[a-z][\w-]*$/i.test(plugin.name)) throw new Error(`definePlugin: "${plugin.name}" is not a valid block name (letters, digits, - and _)`);
+  const env = {};
+  for (const [key, spec] of Object.entries(plugin.env ?? {})) {
+    if (!/^[A-Z][A-Z0-9_]*$/.test(key)) throw new Error(`definePlugin(${plugin.name}): env var "${key}" must be UPPER_SNAKE_CASE`);
+    env[key] = typeof spec === 'string' ? { description: spec, required: false, secret: false } : { required: false, secret: false, ...spec };
+  }
+  return { kind: 'calm.plugin', ...plugin, env, options: plugin.options ?? {} };
 };

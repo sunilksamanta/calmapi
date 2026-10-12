@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { styleText } from 'node:util';
 import express from 'express';
 import mongoose from 'mongoose';
-import { loadConfig } from './config.js';
+import { loadConfig, deepMerge } from './config.js';
 import { createLogger } from './logger.js';
 import { createEvents } from './events.js';
 import { createMailer } from './mail.js';
@@ -11,6 +11,7 @@ import { loadResources, loadBlocks, loadAppRoutes } from './loader.js';
 import { compileResource } from './resource/resource.js';
 import { crudRoutes } from './resource/routes.js';
 import { RouteBuilder, toExpressHandler, servicesProxy, policyPreCheck } from './http/router.js';
+import { registerPolicy } from './resource/policy.js';
 import { requestContext, securityHeaders, cors, rateLimit, createMemoryStore, accessLog, jsonGuard } from './http/middleware.js';
 import { setupAuth } from './auth/index.js';
 import { buildOpenAPI } from './openapi.js';
@@ -48,7 +49,7 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
   services.proxy = servicesProxy(services);
 
   const background = new Set();
-  const hooks = { start: [], shutdown: [], resource: [], service: [], middleware: [], routes: [], doctor: [], login: [], devtools: {} };
+  const hooks = { start: [], shutdown: [], resource: [], service: [], middleware: [], routes: [], doctor: [], login: [], authenticators: [], guards: [], devtools: {} };
   const rateStore = createMemoryStore();
 
   const app = {
@@ -145,9 +146,12 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
 
   // 2. Plugins set themselves up before models compile, so they can extend resources.
   for (const plugin of blocks) {
-    await plugin.setup(pluginApi(app, plugin));
-    app.plugins.push({ name: plugin.name, file: plugin.file ?? null });
+    const options = deepMerge(plugin.options ?? {}, config.blocks?.[plugin.name] ?? {});
+    const api = pluginApi(app, plugin, options);
+    await plugin.setup(api, options);
+    app.plugins.push({ name: plugin.name, file: plugin.file ?? null, env: describeEnv(plugin, config.mode), options });
   }
+  hooks.doctor.push(() => envFindings(app));
 
   // 3. Compile resources
   for (const item of loaded) {
@@ -195,11 +199,47 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
   return app;
 }
 
-function pluginApi(app, plugin) {
+/** Which declared env vars a block has, for devtools. Never includes secret values. */
+function describeEnv(plugin, mode) {
+  return Object.entries(plugin.env ?? {}).map(([key, spec]) => {
+    const set = process.env[key] !== undefined && process.env[key] !== '';
+    const required = spec.required === true || (spec.required === 'production' && mode === 'production');
+    return { key, set, required, requiredIn: spec.required || null, secret: Boolean(spec.secret), description: spec.description ?? null, value: set && !spec.secret ? process.env[key] : null };
+  });
+}
+
+/** Doctor findings for env vars blocks declared but nobody set. */
+function envFindings(app) {
+  const findings = [];
+  for (const p of app.plugins) {
+    for (const v of p.env ?? []) {
+      if (v.set || !v.requiredIn) continue;
+      const missingNow = v.requiredIn === true || app.config.mode === 'production';
+      findings.push({
+        level: missingNow ? 'error' : 'info',
+        id: `env-${v.key}`,
+        title: `${v.key} is not set (${p.name} block)`,
+        detail: `${v.description ? `${v.description}. ` : ''}${missingNow ? 'The block needs it.' : 'Needed in production.'} Add it to .env.`,
+        file: p.file,
+      });
+    }
+  }
+  return findings;
+}
+
+function pluginApi(app, plugin, options = {}) {
   return {
     app,
     name: plugin.name,
     config: app.config,
+    /** This block's settings: definePlugin options merged with calm.config.js blocks.<name>. */
+    options,
+    /** Read an environment variable the block declared in definePlugin({ env }). */
+    env: (key, fallback) => {
+      if (plugin.env && !(key in plugin.env)) throw new Error(`Block ${plugin.name} reads ${key} but does not declare it in definePlugin({ env })`);
+      const value = process.env[key];
+      return value === undefined || value === '' ? fallback : value;
+    },
     log: app.log,
     events: app.events,
     mongoose: app.mongoose,
@@ -214,6 +254,18 @@ function pluginApi(app, plugin) {
      * { mfaRequired: true, mfaToken }) to answer the login with a challenge instead.
      */
     loginChallenge: (fn) => app.hooks.login.push(fn),
+    /**
+     * Accept another kind of credential in Authorization: Bearer <token> (API keys, service
+     * tokens...). fn(token, req) returns null to pass, or { user, via, scopes, id }.
+     */
+    authenticate: (fn) => app.hooks.authenticators.push(fn),
+    /**
+     * Run before every route's policy check: fn(ctx, route). Throw (forbidden(), tooManyRequests()...)
+     * to stop the request. For API key scopes, maintenance mode, tenancy...
+     */
+    guard: (fn) => app.hooks.guards.push(fn),
+    /** A named policy usable in resources and routes: calm.policy('member', (ctx) => ...). */
+    policy: (name, fn) => registerPolicy(name, fn),
     routes: (fn, options = {}) => app.hooks.routes.push({ fn, options: { source: `block:${plugin.name}`, file: plugin.file, ...options } }),
     use: (fn) => app.hooks.middleware.push(fn),
     onStart: (fn) => app.hooks.start.push(fn),

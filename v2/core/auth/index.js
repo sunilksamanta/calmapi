@@ -114,6 +114,21 @@ export function setupAuth(app) {
     const match = /^Bearer\s+(\S+)$/i.exec(header);
     if (!match) return next(unauthorized('Authorization header must be "Bearer <token>"'));
 
+    // Blocks can accept other credentials (API keys...). The first one that recognizes the token wins.
+    for (const fn of app.hooks.authenticators) {
+      let found;
+      try {
+        found = await fn(match[1], req);
+      } catch (err) {
+        return next(err);
+      }
+      if (!found) continue;
+      if (!found.user || found.user.status === 'disabled') return next(unauthorized('Credentials are invalid or have expired'));
+      req.user = toAuthUser(found.user);
+      req.auth = { via: found.via ?? 'token', scopes: found.scopes ?? ['*'], id: found.id ?? null };
+      return next();
+    }
+
     const session = await Session.findOne({ tokenHash: hashToken(match[1]), expiresAt: { $gt: new Date() } }).lean();
     if (!session) {
       security('invalid_token', { ip: req.ip, path: req.originalUrl });
@@ -124,6 +139,7 @@ export function setupAuth(app) {
 
     req.user = toAuthUser(user);
     req.session = { id: String(session._id), expiresAt: session.expiresAt };
+    req.auth = { via: 'session', scopes: ['*'], id: String(session._id) };
     if (!session.lastUsedAt || Date.now() - session.lastUsedAt.getTime() > SESSION_TOUCH_MS) {
       Session.updateOne({ _id: session._id }, { $set: { lastUsedAt: new Date() } }).catch(() => {});
     }
