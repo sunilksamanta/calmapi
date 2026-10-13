@@ -4,9 +4,9 @@
 
 The first beta. alpha.2 showed what changed; this release asks a person to accept it, holds
 the API to what was accepted, keeps an agent's experiments away from your data, gives your
-frontend a typed client, and doubles the official blocks: 26, each with its own guide.
+frontend a typed client, and adds 14 official blocks: 35 in all, each with its own guide.
 
-### 12 new official blocks
+### 14 new official blocks
 - `oauth`: sign in with Google, GitHub or any OpenID Connect provider. PKCE, state and nonce,
   ID tokens verified against the provider's keys, flows bound to the browser that started
   them, accounts linked by email only when the provider verified it, link and unlink.
@@ -38,7 +38,7 @@ frontend a typed client, and doubles the official blocks: 26, each with its own 
 - `block.json` has `links` (the official documentation of what the block integrates: Stripe,
   Twilio, OpenID Connect, OWASP...) and `agents` (instructions for AI coding agents: the rules
   the block keeps, its options, common tasks). They become `app/blocks/<name>/AGENTS.md`, next
-  to the code, and the devtools Blocks panel shows both. All 26 official blocks have them,
+  to the code, and the devtools Blocks panel shows both. All 35 official blocks have them,
   `calm make block` writes one for yours, and the project AGENTS.md tells agents to read them.
 
 ### Typed client
