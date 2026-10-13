@@ -11,14 +11,15 @@ the API to what was accepted, and keeps an agent's experiments away from your da
   invariants), the files AI agents changed that nobody has signed, the last test run, and what
   agents declared they would change next to what they did. `--sign` records the signature in
   `.calm/reviews/` with the signer (your git user, or `--as`), a note and the commit; commit it
-  with your change. `--list` shows only unsigned agent files; `--ci` fails when access widened
+  with your change. An agent's edit stays unsigned until a person signs, even if they edit the
+  file afterwards. `--list` shows only unsigned agent files; `--ci` fails when access widened
   since the last signature. Signing refuses to run in an AI agent's shell.
 - Devtools **Review** panel: the same review with a Sign form. Routes and Resources show an
   **unsigned** badge on what an agent changed and nobody signed yet.
 - `calm_declare`: before an agent changes behavior it declares what it is about to do ("route
   POST /api/refunds", "field order.total", a route policy). The review lists what it did not
   declare, what it declared but did not make, and a policy that differs from the promise.
-  `calm_review` gives the agent the same view.
+  `calm_review` gives the agent the same view, compact.
 - New projects keep `.calm/` out of git except `.calm/reviews/`; existing projects are fixed when
   they first sign.
 
@@ -27,7 +28,7 @@ the API to what was accepted, and keeps an agent's experiments away from your da
   `security.snapshot.json`. From then on any access wider than the snapshot is an error in
   `calm audit --ci`, `calm doctor` and the Doctor panel until a person accepts it again, with
   the reason recorded next to their name. Accepting needs no database and refuses to run in an
-  agent's shell.
+  agent's shell; accepting again with nothing changed adds nothing to the log.
 - Contract diff: `calm diff <ref> --api` compares the OpenAPI contract your clients see and
   sorts every change into breaking, minor or patch (routes removed, auth added, required
   fields, removed response fields, narrowed enums, tightened limits...), with the version bump
@@ -43,7 +44,8 @@ the API to what was accepted, and keeps an agent's experiments away from your da
   its values; secrets redacted). `calm replay` sends them again as the same users against the
   code as it is now and reports answers whose status or shape changed: fields newly returned (a
   possible leak), fields gone, types changed. `--writes` replays writes too, between a
-  checkpoint and a restore. Devtools Requests has **Replay all**; `calm_replay` for agents.
+  checkpoint and a restore. Devtools Requests has **Replay all** and tags replayed requests,
+  which are neither recorded nor measured for budgets; `calm_replay` for agents.
 - **Save as test** on a request in devtools writes `test/recorded/<name>.test.js`, a plain
   `node --test` file that replays the request as the same user and checks status and shape.
 
@@ -62,6 +64,7 @@ the API to what was accepted, and keeps an agent's experiments away from your da
   the row), and edits outside the project, in `node_modules` or in `.git` are not logged.
 - `calm dev` records changes to `test/`, `README.md`, `AGENTS.md`, `package.json` and the other
   project files in Activity, not only `app/` and `calm/`.
+- `calm seed` names what it made in plurals.
 - MCP: 28 tools.
 
 ## 2.0.0-alpha.2
