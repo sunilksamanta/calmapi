@@ -55,6 +55,12 @@ export const humanize = (input) => {
   return out ? out[0].toUpperCase() + out.slice(1) : out;
 };
 
+/** An id short enough for a log line or a trace: 66f1a2b3c4d5e6f7a8b9c0d1 -> 66f1…d1 */
+export const shortId = (id) => {
+  const s = String(id ?? '');
+  return s.length > 10 ? `${s.slice(0, 4)}…${s.slice(-2)}` : s;
+};
+
 /** Escape user input so it can be embedded in a RegExp as a literal. */
 export const escapeRegex = (input) => String(input).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 

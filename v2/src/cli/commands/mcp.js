@@ -14,6 +14,7 @@ import { PKG, PKG_ROOT, readJson, readText } from '../lib/files.js';
 import { appendActivity, readActivity } from '../lib/activity.js';
 import { runAuditInProject } from './audit.js';
 import { introspect } from '../lib/introspect.js';
+import { explainText } from '../lib/explain-text.js';
 import { parseScopeArgs, resolveAgentSession, allowedIn, refusalText, annotateTools, scopeSentence, writeAgentSession, clearAgentSession } from '../lib/agent-scope.js';
 import { writeProposal } from '../lib/proposals.js';
 
@@ -190,6 +191,12 @@ const TOOLS = [
       },
       required: ['title', 'files'],
     },
+  },
+  {
+    name: 'calm_explain',
+    description:
+      'Why a request got its answer: the path it took through the code, step by step (rate limit, authentication, guards, the policy decision token by token, input validation, service hooks, the handler with file and line, events, the error). Use it on any 401, 403, 404 or 422 instead of guessing. The id comes from calm_recent_requests or the requestId of calm_http.',
+    inputSchema: { type: 'object', properties: { id: str('Request id') }, required: ['id'] },
   },
 ];
 
@@ -491,6 +498,14 @@ async function callTool(root, name, args) {
     case 'calm_propose': {
       const p = writeProposal(root, { ...args, client: clientName });
       return `Proposal ${p.id} saved: "${p.title}" (${p.files.map((f) => `${f.path} +${f.diff.added} -${f.diff.removed}`).join(', ')}). The developer can review the diff and apply it from devtools Activity (/_calm); nothing was written to the project.`;
+    }
+    case 'calm_explain': {
+      const record = await devtools(root, `/requests/${encodeURIComponent(args.id)}`);
+      return {
+        text: explainText(record),
+        request: { method: record.method, path: record.path, status: record.status, user: record.user, route: record.route ?? null, error: record.error ? { code: record.error.code, message: record.error.message } : null },
+        steps: record.steps ?? [],
+      };
     }
     default:
       throw new Error(`Unknown tool ${name}`);

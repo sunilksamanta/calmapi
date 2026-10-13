@@ -21,6 +21,7 @@ import { describeInvariants, checkInvariants, invariantFindings, formatBroken } 
 import { behaviorSnapshot } from './snapshot.js';
 import { canRead, inScope } from './resource/visibility.js';
 import { toHttpError, notFound } from './errors.js';
+import { trace } from './context.js';
 import { parseKeys, createCipher } from './security/encryption.js';
 import { createCheckpoint, listCheckpoints, readCheckpoint, restoreCheckpoint, deleteCheckpoint } from './checkpoints.js';
 
@@ -199,7 +200,7 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
     }
     if (registry.has(def.name)) throw new Error(`Two resources are named "${def.name}"`);
     const model = compileResource(def, db, { cipher });
-    const entry = { def, model, files: item.files, routesFn: item.routes };
+    const entry = { def, model, files: item.files, lines: item.lines ?? {}, routesFn: item.routes };
     entry.service = new item.ServiceClass({ def, model, app });
     registry.set(def.name, entry);
   }
@@ -343,6 +344,7 @@ function pluginApi(app, plugin, options = {}, uses = []) {
      */
     authenticate: (fn) => {
       note('authenticator');
+      Object.defineProperties(fn, { calmName: { value: plugin.name, configurable: true }, calmFile: { value: plugin.file ?? null, configurable: true } });
       app.hooks.authenticators.push(fn);
     },
     /**
@@ -352,7 +354,11 @@ function pluginApi(app, plugin, options = {}, uses = []) {
      */
     guard: (fn, { order = 0 } = {}) => {
       note('guard', order ? `order ${order}` : null);
-      Object.defineProperty(fn, 'calmOrder', { value: order, configurable: true });
+      Object.defineProperties(fn, {
+        calmOrder: { value: order, configurable: true },
+        calmName: { value: plugin.name, configurable: true }, // for the Path tab
+        calmFile: { value: plugin.file ?? null, configurable: true },
+      });
       app.hooks.guards.push(fn);
       app.hooks.guards.sort((a, b) => (a.calmOrder ?? 0) - (b.calmOrder ?? 0));
     },
@@ -392,7 +398,7 @@ async function buildExpress(app) {
   ex.set('trust proxy', config.trustProxy);
   ex.set('query parser', 'simple');
 
-  ex.use(requestContext());
+  ex.use(requestContext({ trace: config.devtools.enabled })); // steps for the Path tab, only with devtools
   if (config.devtools.enabled) {
     const { setupDevtools } = await import('./devtools/index.js');
     setupDevtools(app, ex);
@@ -442,6 +448,7 @@ async function buildExpress(app) {
   ex.use((err, req, res, _next) => {
     const httpErr = toHttpError(err);
     req.calmError = { original: err, http: httpErr };
+    trace({ kind: 'error', name: httpErr.code, detail: httpErr.message, status: httpErr.status, outcome: 'failed' });
     const who = { userId: req.user?.id ?? null, ip: req.ip, method: req.method, path: req.originalUrl };
     if (err?.blockedFields) app.events.emit('security.write_rejected', { ...who, ...err.blockedFields });
     else if (httpErr.status === 403) app.events.emit('security.forbidden', who);

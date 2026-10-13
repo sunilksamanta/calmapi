@@ -1,4 +1,5 @@
 import { notFound } from '../errors.js';
+import { trace } from '../context.js';
 import { hashPassword } from '../auth/password.js';
 
 /**
@@ -87,16 +88,24 @@ export class ResourceService {
     return this.model.findOne(this.filterFor(ctx, filter)).select(this.internalSelect).lean();
   }
 
+  /** A hook step for the Path tab, only when this service overrides it. */
+  #traceHook(name) {
+    if (this[name] === ResourceService.prototype[name]) return;
+    trace({ kind: 'hook', name: `${this.constructor.name}.${name}`, file: this.app?.registry?.get(this.def.name)?.files?.service ?? null });
+  }
+
   // ---- writes --------------------------------------------------------------------
   async create(data, ctx = {}) {
     let input = { ...data };
     if (this.def.ownerField && this.def.ownerField !== '_id' && ctx.user && input[this.def.ownerField] === undefined) {
       input[this.def.ownerField] = ctx.user.id;
     }
+    this.#traceHook('beforeCreate');
     input = await this.beforeCreate(input, ctx);
     input = await this.#hashPasswords(input);
     const created = await this.model.create(input);
     const doc = await this.model.findById(created._id).select(this.internalSelect).lean();
+    this.#traceHook('afterCreate');
     await this.afterCreate(doc, ctx);
     this.#emit('created', { doc }, ctx);
     return doc;
@@ -105,6 +114,7 @@ export class ResourceService {
   async update(id, data, ctx = {}) {
     const existing = await this.model.findOne(this.filterFor(ctx, { _id: id })).select(this.internalSelect).lean();
     if (!existing) throw notFound(`${this.def.name} not found`);
+    this.#traceHook('beforeUpdate');
     let changes = await this.beforeUpdate({ ...data }, existing, ctx);
     changes = await this.#hashPasswords(changes);
 
@@ -121,6 +131,7 @@ export class ResourceService {
     const doc = Object.keys(update).length
       ? await this.model.findOneAndUpdate({ _id: existing._id }, update, { returnDocument: 'after', runValidators: true }).select(this.internalSelect).lean()
       : existing;
+    this.#traceHook('afterUpdate');
     await this.afterUpdate(doc, existing, ctx);
     this.#emit('updated', { doc, previous: existing }, ctx);
     return doc;
@@ -129,8 +140,10 @@ export class ResourceService {
   async remove(id, ctx = {}) {
     const doc = await this.model.findOne(this.filterFor(ctx, { _id: id })).select(this.internalSelect).lean();
     if (!doc) throw notFound(`${this.def.name} not found`);
+    this.#traceHook('beforeDelete');
     await this.beforeDelete(doc, ctx);
     await this.model.deleteOne({ _id: doc._id });
+    this.#traceHook('afterDelete');
     await this.afterDelete(doc, ctx);
     this.#emit('deleted', { doc }, ctx);
     return doc;

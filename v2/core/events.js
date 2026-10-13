@@ -2,6 +2,8 @@
 // `auth.*`. Listeners run after the response path continues and never break a request:
 // errors are logged. Patterns: exact name, 'post.*', or '*'.
 
+import { trace } from './context.js';
+
 export function createEvents(log) {
   const listeners = new Map();
   const pending = new Set();
@@ -16,8 +18,10 @@ export function createEvents(log) {
       return () => listeners.get(pattern)?.delete(fn);
     },
     emit(name, payload) {
+      let count = 0;
       for (const [pattern, fns] of listeners) {
         if (!matches(pattern, name)) continue;
+        count += fns.size;
         for (const fn of fns) {
           const p = Promise.resolve()
             .then(() => fn(payload, name))
@@ -26,6 +30,7 @@ export function createEvents(log) {
           pending.add(p);
         }
       }
+      trace({ kind: 'event', name, detail: `${count} listener${count === 1 ? '' : 's'}` });
     },
     /** Resolves when every listener started so far has finished (tests, shutdown). */
     async idle() {

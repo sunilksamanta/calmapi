@@ -1,14 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { runWithRequest } from '../context.js';
+import { runWithRequest, trace } from '../context.js';
 import { tooManyRequests, badRequest } from '../errors.js';
 
-/** Assigns req.id (honours a sane incoming X-Request-Id) and runs the request in its context. */
-export function requestContext() {
+/**
+ * Assigns req.id (honours a sane incoming X-Request-Id) and runs the request in its context.
+ * With `trace` (devtools on) the store collects the request's path steps, see context.js.
+ */
+export function requestContext({ trace: tracing = false } = {}) {
   return (req, res, next) => {
     const incoming = req.get('x-request-id');
     req.id = incoming && /^[\w.-]{1,128}$/.test(incoming) ? incoming : randomUUID();
     res.setHeader('X-Request-Id', req.id);
-    runWithRequest({ id: req.id, req, startedAt: performance.now(), queries: [] }, next);
+    runWithRequest({ id: req.id, req, startedAt: performance.now(), queries: [], steps: tracing ? [] : null }, next);
   };
 }
 
@@ -81,6 +84,10 @@ export function createMemoryStore() {
   };
 }
 
+// "this minute", "in 15 minutes": how a limiter's window reads in the request path.
+const windowText = (ms) =>
+  ms === 60_000 ? 'this minute' : ms === 3_600_000 ? 'this hour' : ms % 60_000 === 0 ? `in ${ms / 60_000} minutes` : `in ${Math.round(ms / 1000)} seconds`;
+
 export function rateLimit({ store, windowMs, max, key = (req) => req.ip, name = 'global', onLimit }) {
   return async (req, res, next) => {
     const { count, resetAt } = await store.hit(`${name}:${key(req)}`, windowMs);
@@ -88,6 +95,7 @@ export function rateLimit({ store, windowMs, max, key = (req) => req.ip, name = 
     res.setHeader('RateLimit-Limit', String(max));
     res.setHeader('RateLimit-Remaining', String(Math.max(0, max - count)));
     res.setHeader('RateLimit-Reset', String(resetSeconds));
+    trace({ kind: 'rateLimit', name, file: 'calm/http/middleware.js', detail: `${count} of ${max} ${windowText(windowMs)}`, outcome: count > max ? 'denied' : 'passed' });
     if (count > max) {
       res.setHeader('Retry-After', String(resetSeconds));
       if (count === max + 1) onLimit?.(req, name); // once per window, not on every rejected hit

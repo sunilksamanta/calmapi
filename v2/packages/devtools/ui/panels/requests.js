@@ -4,7 +4,7 @@
 import {
   h, icon, mount, clear, api, fmtMs, relTime, clock, fullDate, methodTag, statusTag, statusClass, pathView, STATUS_TEXT,
   codeBlock, jsonLine, jsonViewer, empty, loading, errorBox, searchBox, segmented, tabs, copy, toast, plural, editorUrl, relPath,
-  bar, joined, hoverTip, hideTip, storage, actorMark,
+  bar, joined, hoverTip, hideTip, storage, actorMark, fileLink,
 } from '../lib.js';
 import { store, on, getRecord, clearRequests, authHeader, startActAs } from '../store.js';
 import { logRow } from './logs.js';
@@ -312,6 +312,7 @@ function mountRequests(root, params) {
     const heavy = rec.queries.length > MANY_QUERIES;
     const tabDefs = [
       { id: 'timeline', label: 'Timeline' },
+      rec.steps?.length ? { id: 'path', label: 'Path', dot: rec.steps.some((x) => x.outcome === 'denied' || x.outcome === 'failed') ? 'amber' : null } : null,
       { id: 'queries', label: 'Queries', count: rec.queries.length, tone: heavy ? 'amber' : null },
       { id: 'request', label: 'Request' },
       { id: 'response', label: 'Response' },
@@ -325,7 +326,7 @@ function mountRequests(root, params) {
       state.tab = id;
       hideTip();
       body.scrollTop = 0;
-      const views = { timeline: timelineView, queries: queriesView, request: requestView, response: responseView, logs: logsView, error: errorView };
+      const views = { timeline: timelineView, path: pathTraceView, queries: queriesView, request: requestView, response: responseView, logs: logsView, error: errorView };
       mount(body, views[id](rec, { goTo }));
     };
     const tabBar = tabs(tabDefs, state.tab, renderTab);
@@ -827,4 +828,41 @@ async function replay(rec) {
   const opener = id ? { label: 'Open', run: () => (location.hash = `#/requests/${id}`) } : null;
   const actAs = lostAuth && rec.user && store.overview?.auth ? { label: `Act as ${firstName(rec.user.name)}`, run: async () => { await startActAs(rec.user); replay(rec); } } : null;
   toast(`Replayed${who}: ${res.status} ${STATUS_TEXT[res.status] ?? ''} in ${fmtMs(ms)}${note}`, { tone: res.ok ? 'info' : 'warn', action: actAs ?? opener });
+}
+
+// ---- path: the way a request took through the code ---------------------------------
+
+const STEP_GLYPH = { rateLimit: '⏱', auth: '◉', guard: '◆', policy: '§', input: '✓', service: '▸', hook: '↳', handler: 'ƒ', event: '✦', error: '✖', middleware: '·' };
+
+function pathTraceView(rec) {
+  const root = store.overview?.app?.root ?? null;
+  const steps = rec.steps ?? [];
+  const items = steps.map((st) => {
+    const bad = st.outcome === 'denied' || st.outcome === 'failed';
+    const detail = Array.isArray(st.detail)
+      ? h('div', { class: 'pt-tokens' }, st.detail.map((t) => h('div', { class: ['pt-token', `pt-${t.result}`] }, h('span', { class: 'mono' }, t.token), h('span', null, t.why))), st.note ? h('div', { class: 'pt-note' }, st.note) : null)
+      : st.detail != null
+        ? h('div', { class: 'pt-detail' }, typeof st.detail === 'string' ? st.detail : JSON.stringify(st.detail))
+        : null;
+    return h(
+      'li',
+      { class: ['pt-step', bad && 'pt-bad', st.outcome === 'answered' && 'pt-answered'] },
+      h('span', { class: 'pt-at mono' }, `${st.at ?? 0} ms`),
+      h('span', { class: 'pt-glyph', 'aria-hidden': 'true' }, STEP_GLYPH[st.kind] ?? '·'),
+      h(
+        'div',
+        { class: 'pt-main' },
+        h('div', { class: 'pt-head' }, h('span', { class: 'pt-kind' }, st.kind), h('span', { class: 'pt-name mono' }, st.name), st.ms != null ? h('span', { class: 'muted mono' }, `${st.ms} ms`) : null, st.file ? fileLink(root, st.file, { line: st.line ?? undefined }) : null),
+        detail,
+      ),
+    );
+  });
+  const ran = steps.some((st) => st.kind === 'handler' || st.kind === 'hook');
+  return h(
+    'div',
+    { class: 'pt' },
+    h('p', { class: 'muted pt-intro' }, 'The path this request took through the code, in order. Agents read the same with calm_explain.'),
+    h('ol', { class: 'pt-list' }, items),
+    ran ? null : h('p', { class: 'pt-stop' }, 'The service and hooks did not run.'),
+  );
 }

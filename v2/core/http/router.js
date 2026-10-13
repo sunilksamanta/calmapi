@@ -9,13 +9,25 @@
 // Throw a CalmError (or any error) to fail; return undefined for 204; return
 // ctx.reply(data, { status: 201, meta }) to control the response.
 
-import { parsePolicy, evaluatePolicy, isOwner, describePolicy } from '../resource/policy.js';
+import { fileURLToPath } from 'node:url';
+import { parsePolicy, evaluatePolicy, isOwner, describePolicy, explainOwner } from '../resource/policy.js';
 import { validateInput, serialize } from '../resource/resource.js';
 import { isObjectId } from '../resource/fields.js';
 import { unauthorized, forbidden, notFound, validationError } from '../errors.js';
-import { kebab } from '../utils/strings.js';
+import { kebab, shortId } from '../utils/strings.js';
+import { trace, traced } from '../context.js';
 
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'];
+const HERE = fileURLToPath(import.meta.url);
+
+/** Line of the r.get()/r.post() call that is defining a route: the first stack frame outside this file. Boot only. */
+function definitionLine() {
+  for (const frame of (new Error().stack ?? '').split('\n').slice(1)) {
+    const m = /:(\d+):\d+\)?\s*$/.exec(frame);
+    if (m && !frame.includes(HERE)) return Number(m[1]);
+  }
+  return null;
+}
 
 export class Reply {
   constructor(data, { status, meta, headers } = {}) {
@@ -55,6 +67,7 @@ export class RouteBuilder {
       resource: this.entry?.def.name ?? null,
       source: this.source,
       file: this.file,
+      line: definitionLine(),
       summary: opts.summary,
       description: opts.description,
       tags: opts.tags,
@@ -121,10 +134,25 @@ export function createContext(app, req, res, extra = {}) {
 export function policyPreCheck(route) {
   return async (req, _res, next) => {
     const anonymousCanPass = route.policy?.some((t) => t === 'public' || typeof t === 'function');
-    if (!req.user && !anonymousCanPass) return next(unauthorized());
+    if (!req.user && !anonymousCanPass) {
+      trace({ ...policyStep(route, null), outcome: 'denied', detail: [], note: 'no user and the policy needs one: 401' });
+      return next(unauthorized());
+    }
     next();
   };
 }
+
+/** The policy step of a route: its label and where it is written (resource file for CRUD, the route call otherwise). */
+function policyStep(route, entry) {
+  const crud = route.source === 'crud';
+  return { kind: 'policy', name: route.policyLabel, file: route.file ?? null, line: (crud ? entry?.lines?.policy : route.line) ?? null };
+}
+
+const handlerName = (route, entry) => {
+  if (route.source === 'crud') return `${entry?.service?.constructor?.name ?? 'ResourceService'}.${CRUD_METHOD[route.action] ?? route.action}`;
+  return route.handler.name || route.summary || `${route.method} ${route.path}`;
+};
+const CRUD_METHOD = { list: 'list', read: 'get', create: 'create', update: 'update', delete: 'remove' };
 
 /**
  * Run calm.guard() hooks. A guard stops the request by throwing, by returning a Reply
@@ -133,7 +161,8 @@ export function policyPreCheck(route) {
  */
 async function runGuards(app, ctx, route) {
   for (const guard of app.hooks.guards) {
-    const out = await guard(ctx, route);
+    const answered = (out) => out instanceof Reply || ctx.res.headersSent || ctx.res.writableEnded;
+    const out = await traced({ kind: 'guard', name: guard.calmName ?? guard.name ?? 'guard', file: guard.calmFile ?? null }, () => guard(ctx, route), (out) => (answered(out) ? { outcome: 'answered' } : null));
     if (out instanceof Reply) {
       send(ctx.res, out, out.status ?? 200);
       return true;
@@ -174,15 +203,16 @@ export function toExpressHandler(app, route) {
       if (await runGuards(app, ctx, route)) return;
     }
     if (entry && req.params.id !== undefined) {
-      ctx.doc = await authorizeItem(entry, route.policy, route.action, ctx, req.params.id);
+      ctx.doc = await authorizeItem(entry, route.policy, route.action, ctx, req.params.id, route);
     } else {
       const decision = await evaluatePolicy(route.policy, { user: ctx.user, action: route.action, req, body: req.body });
+      trace({ ...policyStep(route, entry), outcome: decision.allow ? 'passed' : 'denied', detail: decision.trace ?? [], note: decision.allow ? undefined : `no alternative allows it: ${ctx.user ? '403' : '401'}` });
       if (!decision.allow) throw ctx.user ? forbidden() : unauthorized();
       ctx.scope = decision.scope ?? null;
     }
 
-    if (route.input) ctx.body = await validateWithInput(route.input, req.body, ctx);
-    let result = await route.handler(ctx);
+    if (route.input) ctx.body = await traceInput(route.file, () => validateWithInput(route.input, req.body, ctx));
+    let result = await traced({ kind: 'handler', name: handlerName(route, entry), file: route.file ?? null, line: route.line ?? null }, () => route.handler(ctx));
     // Safety net: raw documents returned from a resource route are serialized with the
     // resource's visibility rules, so hidden fields cannot slip out of custom routes.
     if (entry && route.source !== 'crud') {
@@ -207,27 +237,53 @@ async function autoSerialize(value, ctx) {
  * Unauthorized users get 401; users who can see the record but not change it get 403;
  * everyone else gets 404 so ids of private records are not revealed.
  */
-export async function authorizeItem(entry, tokens, action, ctx, id) {
+export async function authorizeItem(entry, tokens, action, ctx, id, route = null) {
   const { def, service } = entry;
+  const step = route ? policyStep(route, entry) : { kind: 'policy', name: describePolicy(tokens), file: entry.files?.resource ?? null, line: entry.lines?.policy ?? null };
+  const load = { kind: 'service', name: `load ${def.name} ${shortId(id)}`, file: 'calm/http/router.js' };
   const anonymousCanPass = tokens?.some((t) => t === 'public' || typeof t === 'function');
-  if (!ctx.user && !anonymousCanPass) throw unauthorized();
-  if (!isObjectId(String(id))) throw notFound(`${def.name} not found`);
+  if (!ctx.user && !anonymousCanPass) {
+    trace({ ...step, outcome: 'denied', detail: [], note: 'no user and the policy needs one: 401' });
+    throw unauthorized();
+  }
+  if (!isObjectId(String(id))) {
+    trace({ ...load, outcome: 'failed', detail: `"${String(id).slice(0, 40)}" is not an id: 404` });
+    throw notFound(`${def.name} not found`);
+  }
 
   const doc = await service.model.findOne(service.filterFor({ ...ctx, scope: null }, { _id: id })).lean();
+  trace({ ...load, outcome: doc ? 'passed' : 'failed', detail: doc ? `found (within ${service.constructor.name}.scope)` : `no ${def.name} with this id within ${service.constructor.name}.scope: 404` });
   if (!doc) throw notFound(`${def.name} not found`);
 
   const decision = await evaluatePolicy(tokens, { user: ctx.user, action, doc, req: ctx.req });
+  if (decision.scope) explainOwner(decision.trace, def, doc, ctx.user);
+  const decide = (outcome, note) => trace({ ...step, outcome, detail: decision.trace ?? [], note });
   if (decision.allow && (!decision.scope || isOwner(def, doc, ctx.user))) {
+    decide('passed');
     ctx.scope = decision.scope ?? null;
     return doc;
   }
-  if (!ctx.user) throw unauthorized();
-  if (action !== 'read') {
-    const read = await evaluatePolicy(def.policy.read, { user: ctx.user, action: 'read', doc, req: ctx.req });
-    if (read.allow && (!read.scope || isOwner(def, doc, ctx.user))) throw forbidden();
+  if (!ctx.user) {
+    decide('denied', 'no alternative allows an anonymous caller: 401');
+    throw unauthorized();
   }
+  if (action !== 'read') {
+    const read = await evaluatePolicy(def.policy.read, { user: ctx.user, action: 'read', doc, req: ctx.req, explain: false });
+    if (read.allow && (!read.scope || isOwner(def, doc, ctx.user))) {
+      decide('denied', `the user may read this ${def.name} but not ${action} it: 403`);
+      throw forbidden();
+    }
+  }
+  decide('denied', `the user may not even read this ${def.name}, so the id is not confirmed: 404`);
   throw notFound(`${def.name} not found`);
 }
+
+/** Validation as a step: how many fields passed, or which ones failed. */
+export const traceInput = (file, validate) =>
+  traced({ kind: 'input', name: 'validate', file: file ?? null }, validate, (out) => {
+    const n = out && typeof out === 'object' ? Object.keys(out).length : 0;
+    return { detail: `${n} field${n === 1 ? '' : 's'}` };
+  });
 
 async function validateWithInput(input, body, ctx) {
   if (input['~standard']) {

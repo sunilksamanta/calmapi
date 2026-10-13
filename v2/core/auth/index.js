@@ -12,6 +12,7 @@
 //  - Every suspicious event is emitted as security.* (devtools, audit-log, your alerts).
 
 import { compileAuthModels } from './models.js';
+import { trace } from '../context.js';
 import { createToken, hashToken } from './tokens.js';
 import { hashPassword, verifyPassword, needsRehash } from './password.js';
 import { RouteBuilder } from '../http/router.js';
@@ -121,9 +122,14 @@ export function setupAuth(app) {
   }
 
   /** Express middleware: resolves `Authorization: Bearer <token>` into req.user. */
+  const who = (u) => `${u.name ?? u.email ?? u.id} (${(u.roles ?? []).join(', ') || 'no roles'})`;
+
   async function authenticate(req, _res, next) {
     const header = req.headers.authorization;
-    if (!header) return next();
+    if (!header) {
+      trace({ kind: 'auth', name: 'anonymous', file: 'calm/auth/index.js', detail: 'no credentials', outcome: 'passed' });
+      return next();
+    }
     const match = /^Bearer\s+(\S+)$/i.exec(header);
     if (!match) return next(unauthorized('Authorization header must be "Bearer <token>"'));
 
@@ -136,14 +142,20 @@ export function setupAuth(app) {
         return next(err);
       }
       if (!found) continue;
-      if (!found.user || inactive(found.user)) return next(unauthorized('Credentials are invalid or have expired'));
+      const step = { kind: 'auth', name: fn.calmName ?? found.via ?? 'token', file: fn.calmFile ?? null };
+      if (!found.user || inactive(found.user)) {
+        trace({ ...step, detail: 'credentials are invalid, expired or the account is disabled', outcome: 'denied' });
+        return next(unauthorized('Credentials are invalid or have expired'));
+      }
       req.user = toAuthUser(found.user);
       req.auth = { via: found.via ?? 'token', scopes: found.scopes ?? ['*'], id: found.id ?? null };
+      trace({ ...step, detail: `${who(req.user)} via ${req.auth.via}`, outcome: 'passed' });
       return next();
     }
 
     const session = await Session.findOne({ tokenHash: hashToken(match[1]), expiresAt: { $gt: new Date() } }).lean();
     if (!session) {
+      trace({ kind: 'auth', name: 'session', file: 'calm/auth/index.js', detail: 'no session for this token (expired, signed out or wrong)', outcome: 'denied' });
       security('invalid_token', { ip: req.ip, path: req.originalUrl });
       return next(unauthorized('Session is invalid or has expired'));
     }
@@ -153,6 +165,7 @@ export function setupAuth(app) {
     req.user = toAuthUser(user);
     req.session = { id: String(session._id), expiresAt: session.expiresAt };
     req.auth = { via: 'session', scopes: ['*'], id: String(session._id) };
+    trace({ kind: 'auth', name: 'session', file: 'calm/auth/index.js', detail: who(req.user), outcome: 'passed' });
     if (!session.lastUsedAt || Date.now() - session.lastUsedAt.getTime() > SESSION_TOUCH_MS) {
       Session.updateOne({ _id: session._id }, { $set: { lastUsedAt: new Date() } }).catch(() => {});
     }

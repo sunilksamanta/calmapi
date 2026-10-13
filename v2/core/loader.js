@@ -8,13 +8,19 @@
 // Blocks (added with `calm add`) live in app/blocks/<name>/index.js and export a plugin.
 // App-wide custom routes live in app/routes.js.
 
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { isResource } from './resource/resource.js';
 import { ResourceService } from './resource/service.js';
 
 const importFile = async (file) => (await import(pathToFileURL(file).href)).default;
+
+/** Line of `policy:` in a resource file, so devtools can link a policy decision to it. Boot only. */
+function policyLine(file) {
+  const m = /^\s*policy\s*:/m.exec(readFileSync(file, 'utf8'));
+  return m ? m.input.slice(0, m.index).split('\n').length : null;
+}
 
 export async function loadResources(root) {
   const dir = join(root, 'app', 'resources');
@@ -55,6 +61,7 @@ export async function loadResources(root) {
         service: existsSync(file('service')) ? rel(file('service')) : null,
         routes: routes ? rel(file('routes')) : null,
       },
+      lines: { policy: policyLine(file('resource')) },
     });
   }
   return out;
