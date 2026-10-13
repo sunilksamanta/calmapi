@@ -155,6 +155,18 @@ const TOOLS = [
       'What changed in behavior (not lines) between a git ref (default HEAD) and the working tree: routes added or removed, policies loosened or tightened, fields visible to more people, env vars, hosts the code can reach, events, blocks and invariants, with a count of changes that widen access. Run it before you finish, and show the developer the result.',
     inputSchema: { type: 'object', properties: { ref: str('Git ref to compare with, e.g. "main" (default HEAD)') } },
   },
+  {
+    name: 'calm_checkpoint',
+    description:
+      'Snapshot the development database (every collection, to .calm/checkpoints) so it can be put back with calm_restore. One is taken automatically when you connect; take another before a migration, a seed or a destructive change. Needs the dev server (npm run dev).',
+    inputSchema: { type: 'object', properties: { name: str('Short name, e.g. "before migration" (default "manual")') } },
+  },
+  {
+    name: 'calm_restore',
+    description:
+      'Put the development database back exactly as it was in a checkpoint: every stored collection is replaced, collections created since are dropped. Use the id from calm_checkpoint or from the checkpoint events in calm_activity. Needs the dev server (npm run dev).',
+    inputSchema: { type: 'object', properties: { id: str('Checkpoint id, e.g. "20260413-141500-before-claude-session"') }, required: ['id'] },
+  },
 ];
 
 export async function run(argv) {
@@ -194,6 +206,8 @@ async function handle(root, msg) {
       const requested = params?.protocolVersion;
       clientName = String(params?.clientInfo?.name ?? 'agent').slice(0, 60);
       appendActivity(root, { type: 'agent', client: clientName, tool: 'connect', ok: true, ms: 0, summary: `${clientName} connected over MCP` });
+      // A checkpoint of the dev database before the agent touches anything (needs the dev server).
+      await autoCheckpoint(root, clientName).catch(() => {});
       return result({
         protocolVersion: PROTOCOLS.includes(requested) ? requested : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
@@ -429,7 +443,62 @@ async function callTool(root, name, args) {
           ? { ...e, diff: { added: e.diff.added, removed: e.diff.removed, text: e.diff.hunks.map((h) => h.lines.join('\n')).join('\n...\n').slice(0, 3000) } }
           : e,
       );
+    case 'calm_checkpoint': {
+      const meta = await checkpointCall(root, 'POST', '/checkpoints', { name: args.name || 'manual', actor: { kind: 'agent', name: clientName } });
+      return { id: meta.id, name: meta.name, createdAt: meta.createdAt, collections: meta.collections.length, docs: meta.collections.reduce((n, c) => n + c.docs, 0), restoreWith: `calm_restore { id: "${meta.id}" }` };
+    }
+    case 'calm_restore': {
+      if (!args.id) {
+        const list = await checkpointCall(root, 'GET', '/checkpoints');
+        throw new Error(list.length ? `Pass the id of a checkpoint. Available (newest first): ${list.map((c) => `${c.id} (${c.name})`).join(', ')}` : 'No checkpoints yet. Take one with calm_checkpoint.');
+      }
+      return checkpointCall(root, 'POST', `/checkpoints/${encodeURIComponent(args.id)}/restore`, { actor: { kind: 'agent', name: clientName } });
+    }
     default:
       throw new Error(`Unknown tool ${name}`);
   }
+}
+
+// ---- checkpoints (through the dev server's devtools API) ---------------------------------
+
+async function checkpointCall(root, method, path, body) {
+  const base = devServerUrl(root);
+  let res;
+  try {
+    res = await fetch(`${base}/_calm/api${path}`, {
+      method,
+      headers: { 'x-calm-devtools': '1', ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(60_000),
+    });
+  } catch {
+    throw new Error(`The dev server is not reachable at ${base}. Checkpoints are taken through it: start it with \`npm run dev\`.`);
+  }
+  if (res.status === 204) return null;
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = null;
+  }
+  if (!res.ok) throw new Error(data?.error ?? `${path}: ${res.status} ${clip(text, 300)}`);
+  return data;
+}
+
+/**
+ * On connect: a checkpoint named after the client, unless one is less than ten minutes old.
+ * Only the five newest automatic ones are kept. Silent when the dev server is not running.
+ */
+async function autoCheckpoint(root, client) {
+  let list;
+  try {
+    list = await checkpointCall(root, 'GET', '/checkpoints');
+  } catch {
+    return;
+  }
+  const newest = list[0];
+  if (newest && Date.now() - Date.parse(newest.createdAt) < 10 * 60_000) return;
+  await checkpointCall(root, 'POST', '/checkpoints', { name: `before ${client} session`, actor: { kind: 'agent', name: client }, auto: true });
+  for (const old of list.filter((c) => c.auto).slice(4)) await checkpointCall(root, 'DELETE', `/checkpoints/${encodeURIComponent(old.id)}`).catch(() => {});
 }

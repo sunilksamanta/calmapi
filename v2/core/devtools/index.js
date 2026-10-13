@@ -435,6 +435,52 @@ export function setupDevtools(app, ex) {
     }
   });
 
+  // Checkpoints: snapshots of the dev database (calm/checkpoints.js). The CLI and
+  // `calm mcp` take and restore them through here, so one running app does the work.
+  const actorFrom = (body) => {
+    const a = body?.actor;
+    if (a && typeof a === 'object' && typeof a.name === 'string') return { kind: a.kind === 'agent' ? 'agent' : 'human', name: a.name };
+    return { kind: 'human', name: 'devtools' };
+  };
+  const checkpointError = (res, err) => res.status(err.status ?? 400).json({ error: err.message });
+  api.get('/checkpoints', async (_req, res) => {
+    try {
+      res.json(await app.checkpoints.list());
+    } catch (err) {
+      checkpointError(res, err);
+    }
+  });
+  api.post('/checkpoints', async (req, res) => {
+    const { name, note, auto } = req.body ?? {};
+    try {
+      const meta = await app.checkpoints.create({ name: typeof name === 'string' ? name : undefined, note: typeof note === 'string' ? note : null, actor: actorFrom(req.body), auto: auto === true });
+      app.log.info(`Devtools: checkpoint ${meta.id} (${meta.collections.length} collections)`);
+      broadcast('checkpoint', { action: 'created', id: meta.id, name: meta.name });
+      res.status(201).json(meta);
+    } catch (err) {
+      checkpointError(res, err);
+    }
+  });
+  api.post('/checkpoints/:id/restore', async (req, res) => {
+    try {
+      const out = await app.checkpoints.restore(req.params.id, { actor: actorFrom(req.body) });
+      app.log.info(`Devtools: restored checkpoint ${out.id} (${out.collections.length} collections${out.dropped.length ? `, dropped ${out.dropped.join(', ')}` : ''})`);
+      broadcast('checkpoint', { action: 'restored', id: out.id, name: out.name });
+      res.json(out);
+    } catch (err) {
+      checkpointError(res, err);
+    }
+  });
+  api.delete('/checkpoints/:id', async (req, res) => {
+    try {
+      const meta = await app.checkpoints.delete(req.params.id, { actor: actorFrom(req.body) });
+      broadcast('checkpoint', { action: 'deleted', id: meta.id, name: meta.name });
+      res.status(204).end();
+    } catch (err) {
+      checkpointError(res, err);
+    }
+  });
+
   api.get('/resources/:name/docs', async (req, res) => {
     const entry = app.registry.get(kebab(req.params.name));
     if (!entry) return res.status(404).json({ error: 'Unknown resource' });

@@ -3,6 +3,7 @@
 
 import { h, icon, mount, api, inlineValue, jsonViewer, empty, loading, errorBox, segmented, bar, popover, pickerList, userOption, relTime, copy, plural, closePopover, fullDate, toast } from '../lib.js';
 import { store } from '../store.js';
+import { checkpointButton } from './checkpoints.js';
 
 const PAGE = 10;
 const state = { resource: null, skip: 0, view: 'lens', viewer: null };
@@ -231,6 +232,7 @@ function mountData(root, params) {
               ),
               h('span', { class: 'spacer' }),
               h('button', { class: 'btn ghost', type: 'button', title: 'Create 10 records that look real, from the field definitions, through the service (hooks and validation run)', onclick: sampleData }, 'Sample data'),
+              checkpointButton({ onRestored: () => ((state.skip = 0), (last = null), load()) }),
               pager,
               h('button', { class: 'btn ghost', type: 'button', onclick: () => load(), title: 'Reload documents' }, 'Reload'),
             ]

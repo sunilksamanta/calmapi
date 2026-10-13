@@ -79,6 +79,9 @@ const ICONS = {
   system: '<circle cx="8" cy="8" r="5.75"/><path d="M8 2.25v11.5" /><path d="M8 2.25a5.75 5.75 0 0 1 0 11.5z" fill="currentColor" stroke="none"/>',
   sidebar: '<rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M6 2.5v11"/>',
   check: '<path d="M3.5 8.5l3 3 6-7"/>',
+  // checkpoints: a bookmark for a snapshot, a turned-back arrow for a restore
+  bookmark: '<path d="M4 2.5h8v11l-4-3-4 3z"/>',
+  undo: '<path d="M3.5 8a4.5 4.5 0 1 0 1.3-3.2"/><path d="M3.5 2.5v2.5H6"/>',
 };
 
 /** Inline SVG icon (functional icons only: close, chevrons, copy, theme, external). */

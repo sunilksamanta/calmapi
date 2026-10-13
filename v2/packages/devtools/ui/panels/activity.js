@@ -2,8 +2,9 @@
 // restarts and crashes come from `calm dev`; tool calls come from `calm mcp`, so you can
 // watch an AI agent work and see exactly what it changed.
 
-import { h, mount, clock, fullDate, relTime, empty, bar, segmented, plural, fileLink, actorMark, joined, fmtMs, methodTag, statusTag, codeBlock } from '../lib.js';
+import { h, icon, mount, clock, fullDate, relTime, empty, bar, segmented, plural, fileLink, actorMark, joined, fmtMs, methodTag, statusTag, codeBlock } from '../lib.js';
 import { store, on, markActivitySeen, unseenActivity } from '../store.js';
+import { restoreCheckpoint } from './checkpoints.js';
 
 const SERVER = new Set(['restart', 'ready', 'session', 'crash']);
 const state = { filter: 'all', follow: true };
@@ -27,11 +28,11 @@ export default {
 // Ids are assigned by the dev server and change when it restarts; this key does not.
 const keyOf = (e) => `${e.time}|${e.type}|${e.path ?? e.tool ?? ''}`;
 const actorKind = (e) => (typeof e.actor === 'string' ? e.actor : e.actor?.kind) ?? 'human';
-export const isAgentEvent = (e) => e.type === 'agent' || (e.type === 'file' && actorKind(e) === 'agent');
+export const isAgentEvent = (e) => e.type === 'agent' || ((e.type === 'file' || e.type === 'checkpoint') && actorKind(e) === 'agent');
 
 function actorName(e) {
   if (e.type === 'agent') return e.client ?? 'agent';
-  if (e.type === 'file') return actorKind(e) === 'agent' ? (e.actor?.name ?? e.client ?? 'agent') : 'you';
+  if (e.type === 'file' || e.type === 'checkpoint') return actorKind(e) === 'agent' ? (e.actor?.name ?? e.client ?? 'agent') : 'you';
   return 'server';
 }
 
@@ -118,6 +119,15 @@ function describe(e, readyIn) {
       return [h('span', null, e.note ?? 'Session started'), readyIn.has(e) ? h('span', { class: 'muted' }, `ready in ${fmtMs(readyIn.get(e))}`) : null];
     case 'crash':
       return [h('span', { class: 't-red act-strong' }, 'Crashed'), h('span', { class: 'mono act-err' }, firstErrorLine(e.text))];
+    case 'checkpoint':
+      return [
+        h('span', { class: 'cp-icon', 'aria-hidden': 'true' }, icon(e.action === 'restored' ? 'undo' : 'bookmark', 12)),
+        h('span', null, `Checkpoint ${e.action}: `, h('b', null, e.name ?? e.id)),
+        e.docs != null ? h('span', { class: 'muted' }, `${plural(e.collections ?? 0, 'collection')}, ${plural(e.docs, 'document')}`) : null,
+        e.action === 'created'
+          ? h('button', { class: 'btn ghost cp-restore', type: 'button', title: 'Put the database back as it was at this checkpoint', onclick: (ev) => (ev.stopPropagation(), restoreCheckpoint(e.id, e.name ?? e.id)) }, 'Restore')
+          : null,
+      ];
     default:
       return [h('span', null, e.type), e.note ? h('span', { class: 'muted' }, e.note) : null];
   }
@@ -134,6 +144,7 @@ function markFor(e) {
   if (e.type === 'agent' && e.ok === false) return actorMark('agent-fail', `${e.client ?? 'Agent'} (tool call failed)`);
   if (isAgentEvent(e)) return actorMark('agent', `AI agent: ${actorName(e)}`);
   if (e.type === 'file') return actorMark('human', 'You (a human edit)');
+  if (e.type === 'checkpoint') return actorMark('human', 'You');
   return actorMark('server', 'Dev server');
 }
 
