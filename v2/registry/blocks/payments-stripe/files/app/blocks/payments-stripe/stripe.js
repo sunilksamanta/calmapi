@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 // A small Stripe REST client: fetch, form-encoded bodies, Bearer key. No SDK, so nothing to
@@ -71,7 +72,7 @@ export function createStripe({ apiBase, key, apiVersion = null, timeoutMs = 15_0
         return await once(method, path, { params, idempotencyKey });
       } catch (err) {
         if (!safeToRepeat || !retryable(err) || err.type === 'configuration_error') throw err;
-        await sleep(300 + Math.floor(Math.random() * 300));
+        await sleep(300 + randomInt(300));
         return once(method, path, { params, idempotencyKey });
       }
     },

@@ -1,7 +1,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import { hostname } from 'node:os';
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { sign } from './signing.js';
 import { urlProblem, guardedLookup } from './ssrf.js';
 
@@ -108,7 +108,7 @@ export function createDeliveries({ app, Webhook, Delivery, settings, open, onDis
   function retryDelay(attempts, retryAfter) {
     if (attempts > schedule.length) return null;
     // Jitter (+-20%) so a receiver that was down is not hit by every retry at the same moment.
-    const delay = Math.round(schedule[attempts - 1] * (0.8 + Math.random() * 0.4));
+    const delay = Math.round(schedule[attempts - 1] * (0.8 + randomInt(401) / 1000));
     const asked = retryAfterMs(retryAfter);
     return asked ? Math.max(delay, Math.min(asked, schedule.at(-1))) : delay;
   }

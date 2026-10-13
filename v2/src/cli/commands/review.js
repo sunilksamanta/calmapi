@@ -39,8 +39,8 @@ try {
 } catch (err) {
   result = { error: err.message, code: err.code ?? null };
 }
-process.stdout.write('\\n@@CALM@@' + JSON.stringify(result));
-process.exit(0);
+// Exit once the pipe took everything: exiting right after a large write cuts the output short.
+process.stdout.write('\\n@@CALM@@' + JSON.stringify(result), () => process.exit(0));
 `;
 
 async function runInProject(root, op) {

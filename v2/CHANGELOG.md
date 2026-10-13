@@ -17,7 +17,8 @@ frontend a typed client, and doubles the official blocks: 26, each with its own 
 - `teams`: organizations with roles (owner, admin, member, your own), invitations bound to the
   invited email, transfers and the last owner rule, and team-scoped resources (`team: true`):
   every query is filtered to the caller's teams, records never move between teams, policies
-  `member`, `team:admin`, `team:owner`.
+  `member`, `team:admin`, `team:owner`. `calm make resource task title:string --team` scaffolds
+  one, with tests proving that people outside the team see nothing.
 - `email-verification`: verification links after sign-up and email changes, the `verified`
   policy, and `required: 'routes' | 'login'`.
 - `captcha`: Cloudflare Turnstile, hCaptcha or reCAPTCHA v3 on sign-up, sign-in and password
@@ -55,6 +56,10 @@ frontend a typed client, and doubles the official blocks: 26, each with its own 
   matrix with `{ simulate }`.
 - Mail transports receive the message's `meta` as a second argument (it is never sent).
 - `app.idle()` waits for chains of events and background tasks.
+- `calm doctor` and the other commands that ask the app about itself no longer cut large
+  reports short (projects with many blocks failed with "Unterminated string in JSON").
+- Every official block installs next to every other one and passes `calm doctor` (a test keeps
+  it so); mail transports declare their conflicts both ways.
 - A `scope()` that returns a Promise where a filter is needed now throws instead of matching
   every record.
 

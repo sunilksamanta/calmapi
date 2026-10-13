@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { hostname } from 'node:os';
 import { definePlugin, currentRequest } from '#calm';
 import { parseDsn, authHeader, newEventId, exceptionValues, scrub, scrubString, scrubQuery, sensitiveMatcher, envelope, DEFAULT_SENSITIVE } from './event.js';
@@ -90,7 +91,7 @@ export default definePlugin({
       if (last && now - last < options.dedupeSeconds * 1000) return 'deduped';
       if (now - minute.start >= 60_000) minute = { start: now, count: 0 };
       if (minute.count >= options.maxEventsPerMinute) return 'capped';
-      if (sampleRate < 1 && Math.random() >= sampleRate) return 'sampledOut';
+      if (sampleRate < 1 && randomInt(1_000_000) / 1_000_000 >= sampleRate) return 'sampledOut';
       minute.count += 1;
       recent.set(fingerprint, now);
       if (recent.size > 1000) for (const key of [...recent.keys()].slice(0, 500)) recent.delete(key);

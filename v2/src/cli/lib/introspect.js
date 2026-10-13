@@ -45,8 +45,8 @@ try {
 } catch (err) {
   result.error = { message: err.message, code: err.code || null, stack: err.stack };
 }
-process.stdout.write('\\n@@CALM@@' + JSON.stringify(result));
-process.exit(0);
+// Exit once the pipe took everything: exiting right after a large write cuts the output short.
+process.stdout.write('\\n@@CALM@@' + JSON.stringify(result), () => process.exit(0));
 `;
 
 export async function introspect(root, { mode } = {}) {

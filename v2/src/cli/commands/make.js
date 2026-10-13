@@ -33,6 +33,7 @@ ${c.bold('calm make block <name>')}
     --service     also create <name>.service.js
     --routes      also create <name>.routes.js
     --no-owner    do not add an owner field (default: owner = the signed-in user)
+    --team        records belong to a team (needs the teams block): only its members see them
     --no-test     do not create test/<names>.test.js
     --force       overwrite existing files
 
@@ -51,6 +52,7 @@ export async function run(argv) {
       service: { type: 'boolean', default: false },
       routes: { type: 'boolean', default: false },
       'no-owner': { type: 'boolean', default: false },
+      team: { type: 'boolean', default: false },
       'no-test': { type: 'boolean', default: false },
       force: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h' },
@@ -66,6 +68,8 @@ export async function run(argv) {
   const name = kebab(rawName);
   if (!name) throw new Error(`Invalid resource name "${rawName}"`);
   const hasUsers = existsSync(join(root, 'app', 'resources', 'user', 'user.resource.js'));
+  const team = Boolean(values.team);
+  if (team && !existsSync(join(root, 'app', 'blocks', 'teams', 'index.js'))) throw new Error('--team needs the teams block: npx calm add teams');
   const fields = specs.map(parseFieldSpec);
   if (new Set(fields.map((f) => f.name)).size !== fields.length) throw new Error('Duplicate field names');
 
@@ -81,12 +85,12 @@ export async function run(argv) {
     written.push(rel);
   };
 
-  put(`app/resources/${name}/${name}.resource.js`, resourceFile(name, fields, { owner, addOwner, hasUsers }));
+  put(`app/resources/${name}/${name}.resource.js`, resourceFile(name, fields, { owner, addOwner, hasUsers, team }));
   if (values.service) put(`app/resources/${name}/${name}.service.js`, serviceFile(name));
   if (values.routes) put(`app/resources/${name}/${name}.routes.js`, routesFile(name));
   if (hasUsers && !values['no-test']) {
     const testFile = `test/${pluralize(name)}.test.js`;
-    const content = testFileContent(name, fields); // null when required refs need fixtures we cannot guess
+    const content = testFileContent(name, fields, { team }); // null when required refs need fixtures we cannot guess
     if (content && (!existsSync(join(root, testFile)) || values.force)) put(testFile, content);
   }
 
@@ -98,11 +102,20 @@ export async function run(argv) {
   if (missing.length) out(c.yellow(`  Heads up: referenced resources do not exist yet: ${missing.join(', ')}`));
 }
 
-function resourceFile(name, fields, { owner, addOwner, hasUsers }) {
+function resourceFile(name, fields, { owner, addOwner, hasUsers, team }) {
   const lines = fields.map((f) => `    ${f.name}: ${fieldCode(f)},`);
   if (addOwner) lines.push("    owner: f.ref('user').owner(), // set from the session, powers 'owner' policies");
   if (!lines.length) lines.push("    name: f.string().required().max(200).searchable(),");
-  const policy = hasUsers
+  const policy = team
+    ? `  // Team-scoped (the teams block): every query only sees the caller's teams, whatever the policy says.
+  policy: {
+    list: 'member',
+    read: 'member',
+    create: 'member',
+    update: ${owner ? "'team:admin | owner'" : "'team:admin'"},
+    delete: 'team:admin',
+  },`
+    : hasUsers
     ? `  policy: {
     list: 'authenticated',
     read: 'authenticated',
@@ -121,7 +134,7 @@ function resourceFile(name, fields, { owner, addOwner, hasUsers }) {
   },`;
   return `import { resource, f } from '#calm';
 
-export default resource('${name}', {
+export default resource('${name}', {${team ? '\n  team: true, // records belong to a team: body "team" or the X-Team header on create' : ''}
   fields: {
 ${lines.join('\n')}
   },
@@ -157,7 +170,7 @@ export default (r) => {
 `;
 }
 
-function testFileContent(name, fields) {
+function testFileContent(name, fields, { team = false } = {}) {
   const plural = pluralize(name);
   const sample = {};
   for (const f of fields) {
@@ -184,7 +197,16 @@ before(async () => {
 });
 after(() => t.close());
 
-test('${plural}: create, read, list', async () => {
+${team ? teamTests(plural, sample) : ownTests(plural, sample)}
+test('${plural}: signed-out requests are refused', async () => {
+  assert.equal((await t.get('/${plural}')).status, 401);
+});
+`;
+}
+
+/** Tests for a resource of signed-in users. */
+function ownTests(plural, sample) {
+  return `test('${plural}: create, read, list', async () => {
   const user = await t.signup();
   const created = await t.post('/${plural}', ${JSON.stringify(sample)}, user);
   assert.equal(created.status, 201, JSON.stringify(created.body));
@@ -195,11 +217,33 @@ test('${plural}: create, read, list', async () => {
   const list = await t.get('/${plural}', user);
   assert.equal(list.body.meta.total, 1);
 });
-
-test('${plural}: signed-out requests are refused', async () => {
-  assert.equal((await t.get('/${plural}')).status, 401);
-});
 `;
+}
+
+/** Tests for a team-scoped resource: members see the team's records, nobody else does. */
+function teamTests(plural, sample) {
+  return `test('${plural}: members of the team create, read and list', async () => {
+  const user = await t.signup();
+  const team = await t.post('/teams', { name: 'Team A' }, user);
+  assert.equal(team.status, 201, JSON.stringify(team.body));
+  const created = await t.post('/${plural}', ${JSON.stringify({ ...sample, team: '__TEAM__' })}, user);
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+
+  const read = await t.get(\`/${plural}/\${created.body.data.id}\`, user);
+  assert.equal(read.status, 200);
+  const list = await t.get('/${plural}', user);
+  assert.equal(list.body.meta.total, 1);
+});
+
+test('${plural}: people outside the team see nothing', async () => {
+  const owner = await t.signup();
+  const team = await t.post('/teams', { name: 'Team B' }, owner);
+  const created = await t.post('/${plural}', ${JSON.stringify({ ...sample, team: '__TEAM__' })}, owner);
+  const stranger = await t.signup();
+  assert.equal((await t.get(\`/${plural}/\${created.body.data.id}\`, stranger)).status, 404);
+  assert.equal((await t.get('/${plural}', stranger)).body.meta.total, 0);
+});
+`.replaceAll('"__TEAM__"', 'team.body.data.id');
 }
 
 // ---- blocks --------------------------------------------------------------------------------

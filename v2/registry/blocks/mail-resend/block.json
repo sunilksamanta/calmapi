@@ -4,6 +4,7 @@
   "description": "Deliver emails (password resets, notifications) through the Resend HTTP API. No SDK, just fetch.",
   "version": "1.0.1",
   "categories": ["mail"],
+  "conflicts": ["mail-smtp", "mail-postmark"],
   "envVars": { "RESEND_API_KEY": "", "MAIL_FROM": "My App <no-reply@example.com>" },
   "docs": "Set RESEND_API_KEY and MAIL_FROM (a sender on a domain verified in Resend). In development without a key, emails still go to devtools.",
   "links": [

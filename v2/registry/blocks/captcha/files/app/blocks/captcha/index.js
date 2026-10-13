@@ -17,9 +17,9 @@ import { definePlugin, CalmError } from '#calm';
 //    work needs no keys; production never skips, and doctor reports the missing key.
 
 const PROVIDERS = {
-  turnstile: { name: 'Cloudflare Turnstile', verifyUrl: 'https://challenges.cloudflare.com/turnstile/v0/siteverify', secret: 'TURNSTILE_SECRET_KEY', site: 'TURNSTILE_SITE_KEY' },
-  hcaptcha: { name: 'hCaptcha', verifyUrl: 'https://api.hcaptcha.com/siteverify', secret: 'HCAPTCHA_SECRET_KEY', site: 'HCAPTCHA_SITE_KEY' },
-  recaptcha: { name: 'Google reCAPTCHA v3', verifyUrl: 'https://www.google.com/recaptcha/api/siteverify', secret: 'RECAPTCHA_SECRET_KEY', site: 'RECAPTCHA_SITE_KEY' },
+  turnstile: { name: 'Cloudflare Turnstile', verifyUrl: 'https://challenges.cloudflare.com/turnstile/v0/siteverify', secretEnv: 'TURNSTILE_SECRET_KEY', siteEnv: 'TURNSTILE_SITE_KEY' },
+  hcaptcha: { name: 'hCaptcha', verifyUrl: 'https://api.hcaptcha.com/siteverify', secretEnv: 'HCAPTCHA_SECRET_KEY', siteEnv: 'HCAPTCHA_SITE_KEY' },
+  recaptcha: { name: 'Google reCAPTCHA v3', verifyUrl: 'https://www.google.com/recaptcha/api/siteverify', secretEnv: 'RECAPTCHA_SECRET_KEY', siteEnv: 'RECAPTCHA_SITE_KEY' },
 };
 const DEFAULT_ROUTES = ['POST /auth/register', 'POST /auth/login', 'POST /auth/password/forgot', 'POST /auth/magic-link'];
 const MAX_TOKEN = 2048; // Turnstile documents 2048 characters as the maximum
@@ -70,8 +70,8 @@ export default definePlugin({
     const production = calm.config.mode === 'production';
     const security = (name, data) => calm.events.emit(`security.${name}`, data);
     // Read on each request (cheap), so rotating keys or options in tests needs no restart.
-    const secret = () => calm.env(preset().secret);
-    const siteKey = () => calm.env(preset().site) ?? null;
+    const secret = () => calm.env(preset().secretEnv);
+    const siteKey = () => calm.env(preset().siteEnv) ?? null;
     const bypassing = () => !secret() && !production && options.bypass !== false;
     const prefix = calm.config.apiPrefix;
     const normalize = (entry) => {
@@ -135,7 +135,7 @@ export default definePlugin({
         const who = { path: key, ip: ctx.req.ip };
 
         if (bypassing()) {
-          if (!warned) calm.log.warn(`captcha: no ${preset().secret} set, so CAPTCHA checks are skipped (${calm.config.mode} only)`);
+          if (!warned) calm.log.warn(`captcha: no ${preset().secretEnv} set, so CAPTCHA checks are skipped (${calm.config.mode} only)`);
           warned = true;
           return;
         }
@@ -190,11 +190,11 @@ export default definePlugin({
       if (!secret()) {
         findings.push(
           production
-            ? { level: 'error', id: 'captcha-no-secret', title: `${p.secret} is not set`, detail: `Every protected route answers 503 until it is set (${p.name} dashboard).` }
-            : { level: 'warn', id: 'captcha-no-secret', title: `CAPTCHA checks are skipped: ${p.secret} is not set`, detail: 'Fine for local work. Production refuses protected requests without it.' },
+            ? { level: 'error', id: 'captcha-no-secret', title: `${p.secretEnv} is not set`, detail: `Every protected route answers 503 until it is set (${p.name} dashboard).` }
+            : { level: 'warn', id: 'captcha-no-secret', title: `CAPTCHA checks are skipped: ${p.secretEnv} is not set`, detail: 'Fine for local work. Production refuses protected requests without it.' },
         );
       }
-      if (!siteKey()) findings.push({ level: production ? 'warn' : 'info', id: 'captcha-no-site-key', title: `${p.site} is not set`, detail: 'Your frontend needs the site key to render the widget (GET /api/captcha returns it).' });
+      if (!siteKey()) findings.push({ level: production ? 'warn' : 'info', id: 'captcha-no-site-key', title: `${p.siteEnv} is not set`, detail: 'Your frontend needs the site key to render the widget (GET /api/captcha returns it).' });
       if (options.failOpen) findings.push({ level: 'info', id: 'captcha-fail-open', title: 'CAPTCHA fails open', detail: 'When the provider does not answer, protected routes are not protected.' });
       if (options.routes) {
         const known = new Set(app.routes.map((r) => `${r.method} ${r.path}`));

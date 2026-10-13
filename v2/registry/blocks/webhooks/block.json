@@ -2,7 +2,7 @@
   "name": "webhooks",
   "title": "Webhooks",
   "description": "Outgoing webhooks for resource events: Standard Webhooks signatures, a MongoDB delivery queue with retries and a delivery log, per-user visibility, SSRF protection and secret rotation. Zero dependencies.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minVersion": "2.0.0-alpha.1",
   "categories": [
     "webhooks",
