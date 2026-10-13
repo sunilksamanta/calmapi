@@ -10,7 +10,7 @@ import { createPush } from './push.js';
 import { loadResources, loadBlocks, loadAppRoutes } from './loader.js';
 import { compileResource } from './resource/resource.js';
 import { crudRoutes } from './resource/routes.js';
-import { RouteBuilder, toExpressHandler, servicesProxy, policyPreCheck, guardsFirst } from './http/router.js';
+import { RouteBuilder, toExpressHandler, servicesProxy, policyPreCheck, guardsFirst, rawBodyMatcher } from './http/router.js';
 import { registerPolicy, resolveNamed } from './resource/policy.js';
 import { requestContext, securityHeaders, cors, rateLimit, createMemoryStore, accessLog, jsonGuard } from './http/middleware.js';
 import { setupAuth } from './auth/index.js';
@@ -467,7 +467,10 @@ async function buildExpress(app) {
 
   const onLimit = (req, name) => app.events.emit('security.rate_limited', { ip: req.ip, path: req.originalUrl, limiter: name });
   const api = express.Router();
-  wire(api, 'json body', express.json({ limit: config.bodyLimit }), `parses JSON bodies up to ${config.bodyLimit} (express.json)`, { file: 'express', scope: 'api' });
+  // Routes declared with { rawBody: true } (signed webhooks) also get the exact bytes as req.rawBody.
+  const wantsRaw = rawBodyMatcher(app.routes);
+  const verify = wantsRaw ? (req, _res, buf) => void (wantsRaw(req) && (req.rawBody = buf)) : undefined;
+  wire(api, 'json body', express.json({ limit: config.bodyLimit, verify }), `parses JSON bodies up to ${config.bodyLimit} (express.json)${wantsRaw ? '; keeps the raw bytes for routes with rawBody: true' : ''}`, { file: 'express', scope: 'api' });
   wire(api, 'jsonGuard', jsonGuard(config.jsonLimits), `refuses bodies nested deeper than ${config.jsonLimits.maxDepth} levels or with more than ${config.jsonLimits.maxKeys} values`, { scope: 'api' });
   if (config.rateLimit.enabled) {
     const { windowMs, max } = config.rateLimit.global;

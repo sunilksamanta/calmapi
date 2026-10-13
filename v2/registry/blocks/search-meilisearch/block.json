@@ -1,0 +1,19 @@
+{
+  "name": "search-meilisearch",
+  "title": "Search with Meilisearch",
+  "description": "Full-text search for the resources you choose: records sync to Meilisearch in the background with retries, only public fields are indexed, a reindex route pages through the collection, and search results are loaded back through each resource's own policy, so search never leaks a record or a field. Zero dependencies.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-beta.1",
+  "categories": ["search", "data"],
+  "envVars": { "MEILI_HOST": "http://localhost:7700", "MEILI_MASTER_KEY": "", "MEILI_SEARCH_KEY": "" },
+  "dependencies": [],
+  "docs": "Set MEILI_HOST and MEILI_MASTER_KEY (or an admin API key); MEILI_SEARCH_KEY (a search-only key) is used for queries when set.\nChoose resources in calm.config.js: blocks: { 'search-meilisearch': { resources: { post: true, product: { fields: ['name', 'description'], filterable: ['category'] } } } }. Hidden, write-only, visibleTo(), pii() and encrypted fields are never indexed.\nSearch: GET /api/posts/search?q=hello&limit=20&offset=0 -> { data, meta: { q, limit, offset, nextOffset } }. Results are records the caller may read, serialized like GET /api/posts/:id.\nFill or rebuild an index: POST /api/search/post/reindex { clear: true } (admins), or await app.ext.search.reindex('post').",
+  "links": [
+    { "title": "Meilisearch documents API", "url": "https://www.meilisearch.com/docs/reference/api/documents" },
+    { "title": "Meilisearch search API", "url": "https://www.meilisearch.com/docs/reference/api/search" },
+    { "title": "Meilisearch index settings API", "url": "https://www.meilisearch.com/docs/reference/api/settings" },
+    { "title": "Securing your project (API keys)", "url": "https://www.meilisearch.com/docs/learn/security/basic_security" },
+    { "title": "Asynchronous operations (tasks)", "url": "https://www.meilisearch.com/docs/learn/async/asynchronous_operations" }
+  ],
+  "agents": "- Read `app/blocks/search-meilisearch/index.js` (field selection, sync, `search()`) and `meili.js` (HTTP client) first.\n- Choose what is indexed in calm.config.js `blocks['search-meilisearch'].resources`; do not edit the block to add a resource.\n- Invariant: hidden, write-only, password, visibleTo(), pii() and encrypted fields are never indexed. `indexedFields()` throws at boot if config lists one. Never weaken `privateReason()`.\n- Invariant: search results are ids only; records are loaded through the resource service (scope()) and `app.canRead()`, then serialized for the caller. Never return Meilisearch hits or `_formatted` values to clients directly.\n- Do not expose `estimatedTotalHits`: it counts records the caller cannot see.\n- Keys live in `.env`. Never send `MEILI_MASTER_KEY` or `MEILI_SEARCH_KEY` to browsers: the index holds records that not everybody may read.\n- Sync happens in event listeners (`<resource>.created|updated|deleted|restored`). Writes made without the service (insertMany, updateMany, migrations) are not synced: run `POST /api/search/<resource>/reindex` or `app.ext.search.reindex(name)` afterwards.\n- After changing searchable, filterable or sortable fields, reindex so the settings are pushed.\n- Meilisearch writes are asynchronous tasks: a 202 means queued, a document may take a moment to be searchable.\n- Tests: point `MEILI_HOST` at a local node:http fake (see `test/blocks/search-meilisearch.test.js` in the CalmAPI repo)."
+}

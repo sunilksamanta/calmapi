@@ -4,6 +4,7 @@
   "description": "Deliver emails through any SMTP server (SES, Postmark, Mailgun, your own) with Nodemailer.",
   "version": "1.0.1",
   "categories": ["mail"],
+  "conflicts": ["mail-resend", "mail-postmark"],
   "dependencies": ["nodemailer@^10.0.11"],
   "envVars": { "SMTP_URL": "smtps://user:password@smtp.example.com:465", "MAIL_FROM": "My App <no-reply@example.com>" },
   "docs": "Set SMTP_URL (smtp:// or smtps://) and MAIL_FROM.",

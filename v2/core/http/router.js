@@ -84,6 +84,8 @@ export class RouteBuilder {
       scope: opts.scope ?? null,
       /** Anything blocks want to read from the route in guards: { flag: 'beta', audit: false }. */
       meta: opts.meta ?? {},
+      /** Keep the exact bytes of a JSON body as ctx.rawBody (a Buffer), to check a signature over them (Stripe, GitHub...). */
+      rawBody: Boolean(opts.rawBody),
       handler,
     };
     route.policyLabel = describePolicy(route.policy);
@@ -97,6 +99,20 @@ export const joinPath = (...parts) => {
   return path.startsWith('/') ? path || '/' : `/${path}`;
 };
 
+/**
+ * For express.json({ verify }): true when the request goes to a route declared with
+ * { rawBody: true }. Matched by method and path (':param' is one segment) before routing
+ * runs, so only those requests keep a second copy of their body in memory.
+ */
+export function rawBodyMatcher(routes) {
+  const wanted = routes.filter((r) => r.rawBody).map((r) => ({ method: r.method, segments: r.path.split('/').filter(Boolean) }));
+  if (!wanted.length) return null;
+  return (req) => {
+    const segments = req.path.split('/').filter(Boolean);
+    return wanted.some((w) => w.method === req.method && w.segments.length === segments.length && w.segments.every((s, i) => s.startsWith(':') || s === segments[i]));
+  };
+}
+
 /** Build the ctx object every handler, hook and policy function receives. */
 export function createContext(app, req, res, extra = {}) {
   const ctx = {
@@ -105,6 +121,8 @@ export function createContext(app, req, res, extra = {}) {
     params: req.params,
     query: req.query,
     body: req.body,
+    /** The body as received (Buffer) on routes declared with { rawBody: true }, otherwise null. */
+    rawBody: req.rawBody ?? null,
     user: req.user ?? null,
     session: req.session ?? null,
     /** How this request authenticated: { via: 'session' | 'api-key' | ..., scopes, id } or null. */

@@ -1,0 +1,47 @@
+{
+  "name": "payments-stripe",
+  "title": "Payments with Stripe",
+  "description": "Stripe Checkout, subscriptions and the customer portal without the SDK: allowlisted prices, redirect allowlist, one customer per user, signed webhooks processed exactly once, plan checks for routes (meta: { plan }, 'plan-pro' policies) and billing.* events. Zero dependencies.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-beta.1",
+  "categories": [
+    "payments",
+    "billing",
+    "subscriptions",
+    "webhooks"
+  ],
+  "envVars": {
+    "STRIPE_SECRET_KEY": "",
+    "STRIPE_WEBHOOK_SECRET": ""
+  },
+  "dependencies": [],
+  "conflicts": [],
+  "docs": "1. List what you sell in calm.config.js: blocks: { 'payments-stripe': { prices: { price_123: 'pro', price_456: { plan: 'lifetime', mode: 'payment' } } } }. Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET in .env.\n2. Point a Stripe webhook at APP_URL/api/billing/webhook (locally: stripe listen --forward-to localhost:5001/api/billing/webhook).\n3. POST /api/billing/checkout { price } -> { id, url }: redirect the browser to url. POST /api/billing/portal -> { url }. GET /api/billing -> { plan, status, currentPeriodEnd, cancelAtPeriodEnd, ... }. GET /api/billing/prices lists what is on sale.\nGate routes with meta: { plan: 'pro' } (402 PLAN_REQUIRED) or policy: 'plan-pro'. React with calm.on('billing.subscription_updated' | 'billing.payment_failed' | ...).",
+  "links": [
+    {
+      "title": "Stripe: Checkout quickstart",
+      "url": "https://docs.stripe.com/checkout/quickstart"
+    },
+    {
+      "title": "Stripe: Build a subscriptions integration",
+      "url": "https://docs.stripe.com/billing/subscriptions/build-subscriptions"
+    },
+    {
+      "title": "Stripe: Customer portal",
+      "url": "https://docs.stripe.com/customer-management"
+    },
+    {
+      "title": "Stripe: Webhooks and signature verification",
+      "url": "https://docs.stripe.com/webhooks"
+    },
+    {
+      "title": "Stripe CLI: test webhooks locally",
+      "url": "https://docs.stripe.com/stripe-cli"
+    },
+    {
+      "title": "Stripe API reference",
+      "url": "https://docs.stripe.com/api"
+    }
+  ],
+  "agents": "Read app/blocks/payments-stripe/index.js (routes, webhook processing, plan checks), stripe.js (the REST client) and signature.js (Stripe-Signature verification) before changing anything. docs.md in the CalmAPI registry has the full setup.\nConfiguration lives in calm.config.js under blocks['payments-stripe'] (prices, successUrl, cancelUrl, portalReturnUrl, allowedRedirects, activeStatuses, oneSubscription, trialDays, allowPromotionCodes). Keys come from .env: STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET. Never hardcode or log them.\nInvariants that must not be broken:\n- Never trust a price, amount, plan or customer id from the client. Checkout only sells price ids listed in options.prices; add a price there, never accept arbitrary ones.\n- Always verify the Stripe-Signature on ctx.rawBody (the route keeps rawBody: true). Never verify against ctx.body or JSON.stringify(ctx.body), never skip verification in any mode.\n- Each event id is processed once (calm_billing_events, unique _id). Keep the claim before the side effects, and delete it on failure so Stripe retries.\n- The webhook is the source of truth for plans. Do not grant a plan from the success page or a client call; read billing state with app.ext.billing.plansOf(userId) / hasPlan().\n- Redirect URLs (successUrl, cancelUrl, returnUrl) must stay restricted to allowedRedirects (default: the APP_URL origin).\n- Events can arrive out of order or twice: keep the lastEventAt guard and never move a canceled subscription back to active.\nCommon tasks: gate a route with meta: { plan: 'pro' } (402 PLAN_REQUIRED), or a policy: 'plan-pro' named policy, or policy: requirePlan('pro') imported from app/blocks/payments-stripe/index.js. React to billing with calm.on('billing.subscription_updated' | 'billing.subscription_canceled' | 'billing.payment_failed' | 'billing.payment_succeeded' | 'billing.checkout_completed', fn). Handle a new Stripe event type by adding it to HANDLED and to handle() in index.js.\nPitfalls: unknown event types must still answer 200 (or Stripe retries for days); the webhook route must stay policy: 'public' (Stripe has no session) and outside guards that need a user; test keys in production and live keys in development are reported by calm doctor.\nTests: use a fake Stripe server (node:http) and blocks['payments-stripe'].apiBase, sign events with signStripePayload() from signature.js, as test/blocks/payments-stripe.test.js in the CalmAPI repo does. Build test keys at runtime, never commit key-shaped literals."
+}

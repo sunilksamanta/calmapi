@@ -1,0 +1,19 @@
+{
+  "name": "mail-postmark",
+  "title": "Email via Postmark",
+  "description": "Deliver emails (password resets, notifications) through the Postmark HTTP API: message streams, tags, metadata, attachments and clear errors. No SDK, just fetch.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-beta.1",
+  "categories": ["mail"],
+  "conflicts": ["mail-resend", "mail-smtp"],
+  "envVars": { "POSTMARK_SERVER_TOKEN": "", "POSTMARK_MESSAGE_STREAM": "outbound", "MAIL_FROM": "My App <no-reply@example.com>" },
+  "dependencies": [],
+  "docs": "Set POSTMARK_SERVER_TOKEN (Postmark: Servers, your server, API Tokens) and MAIL_FROM (a sender on a verified domain or sender signature). In development without a token, emails still go to devtools.\nEvery app.mailer.send() now goes through Postmark. Extra message fields: cc, bcc, replyTo, headers, tag, metadata, attachments: [{ filename, content, contentType, cid }].\nThe Postmark tag defaults to meta.kind (password-reset, magic-link...). Options in calm.config.js: blocks: { 'mail-postmark': { messageStream, trackOpens, trackLinks } }",
+  "links": [
+    { "title": "Postmark Email API", "url": "https://postmarkapp.com/developer/api/email-api" },
+    { "title": "Postmark API overview and error codes", "url": "https://postmarkapp.com/developer/api/overview" },
+    { "title": "Sending email with the API", "url": "https://postmarkapp.com/developer/user-guide/send-email-with-api" },
+    { "title": "Message Streams API", "url": "https://postmarkapp.com/developer/api/message-streams-api" }
+  ],
+  "agents": "- Read `app/blocks/mail-postmark/index.js` first: it is one `calm.mailer.use()` transport, about 100 lines.\n- Send mail through `ctx.app.mailer.send({ to, subject, text, html })` (or `app.mailer` outside requests). Never call Postmark directly from routes.\n- The token lives in `.env` as `POSTMARK_SERVER_TOKEN`; never hardcode it, log it or put it in calm.config.js.\n- `MAIL_FROM` must be on a domain or sender signature verified in Postmark, otherwise Postmark answers ErrorCode 400.\n- `meta` on a message is for devtools and tests and can hold tokens: the transport only reads `meta.tag` and `meta.kind` for the Postmark tag. Never forward `meta` wholesale to Postmark.\n- Put provider metadata in `message.metadata` (string values, shown in Postmark activity), not in `meta`.\n- Options (`messageStream`, `trackOpens`, `trackLinks`, `apiBase`) go in calm.config.js under `blocks['mail-postmark']`. `apiBase` exists for tests and proxies.\n- Errors throw a `PostmarkError` with `status`, `errorCode` and `inactiveRecipient` (ErrorCode 406: the address bounced or unsubscribed). Do not retry those.\n- Broadcast (marketing) mail must use a broadcast message stream, never the default transactional `outbound` stream.\n- Only one mail transport can be active: this block conflicts with mail-resend and mail-smtp.\n- Tests: point `apiBase` at a local node:http server, see `test/blocks/mail-postmark.test.js` in the CalmAPI repo."
+}

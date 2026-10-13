@@ -1,0 +1,43 @@
+{
+  "name": "cache",
+  "title": "Response cache",
+  "description": "Caches JSON answers of chosen GET routes in MongoDB (TTL index) or an in-memory LRU: keys per identity so users never share answers, invalidation on resource events and by tag or path, strong ETags with 304, Cache-Control, x-cache headers and stampede protection. Zero dependencies.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-beta.1",
+  "categories": [
+    "performance",
+    "http",
+    "caching"
+  ],
+  "envVars": {},
+  "dependencies": [],
+  "conflicts": [],
+  "docs": "Opt a route in: r.get('/stats', { policy: 'public', meta: { cache: '60s' } }, ...). CRUD routes from calm.config.js: blocks: { cache: { routes: { 'GET /api/posts': '30s', 'GET /api/posts/:id': { ttl: '5m', tags: ['user'] } } } }.\nAnswers carry x-cache: hit | miss and a strong ETag (If-None-Match -> 304). Entries are per user (vary: 'roles' shares them between users with the same roles, refused on owner routes).\nResource events clear their routes; clear by hand with ctx.cache.invalidate('post') or app.ext.cache.invalidate('/api/reports'). store: 'mongo' (default, calm_cache) or 'memory'.",
+  "links": [
+    {
+      "title": "MDN: HTTP caching",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching"
+    },
+    {
+      "title": "MDN: ETag",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag"
+    },
+    {
+      "title": "MDN: If-None-Match",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-None-Match"
+    },
+    {
+      "title": "MDN: Cache-Control",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control"
+    },
+    {
+      "title": "RFC 9111: HTTP Caching",
+      "url": "https://www.rfc-editor.org/rfc/rfc9111"
+    },
+    {
+      "title": "MongoDB: TTL indexes",
+      "url": "https://www.mongodb.com/docs/manual/core/index-ttl/"
+    }
+  ],
+  "agents": "Read app/blocks/cache/index.js (the six safety rules at the top, the guard, invalidation) and stores.js (memory LRU, MongoDB, the store interface) before changing anything.\nConfiguration lives in calm.config.js under blocks.cache (store, ttl, routes, maxEntries, maxBodyKb, varyHeaders, browserMaxAge, waitMs). A route opts in with meta: { cache: '60s' } or meta: { cache: { ttl, tags, vary } }; generated CRUD routes are listed in blocks.cache.routes as 'GET /api/posts': '30s'.\nInvariants that must not be broken:\n- The cache key always contains the identity: 'anonymous', or the user id with roles and credential scopes. Never drop it, never key signed-in answers by path alone.\n- vary: 'roles' is only for answers that depend on roles alone. Keep the boot check that refuses it on owner/function policies, visibleTo rules with them and services with scope().\n- Only 200 JSON answers without Set-Cookie and without Cache-Control: no-store are stored. Do not cache errors, redirects or per-visitor responses.\n- The cache guard runs last (order 1000) so other guards (API key scopes, plans, maintenance) refuse first. Do not lower its order.\n- Every write path must invalidate: resource events do it for resources; data changed outside a resource service (raw model.updateMany, another app) needs ctx.cache.invalidate('post') or app.ext.cache.invalidate('/api/reports').\n- If a route reads a request header to build its answer (tenant, language), add it to varyHeaders, or users of one tenant can see another's cached answer.\nCommon tasks: cache a custom route with meta: { cache: '5m' }; make a list depend on another resource with tags: ['user'] so user events clear it; switch to store: 'memory' for one instance; clear everything with app.ext.cache.clear().\nPitfalls: the memory store is per process (use 'mongo' with several instances); routes that are neither a resource route nor tagged only expire by TTL or manual invalidation; answers that depend on time (publishAt in the future) stay cached until their TTL.\nTests: assert x-cache: hit | miss, call t.idle() after requests (stores and invalidations run in the background), and check two users never share an entry, as test/blocks/cache.test.js in the CalmAPI repo does."
+}

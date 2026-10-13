@@ -1,0 +1,19 @@
+{
+  "name": "slack",
+  "title": "Slack notifications",
+  "description": "Post to Slack from app events (signups, orders...) and get security alerts, through an incoming webhook or a bot token. Values are escaped so user data cannot ping @channel, bursts become one digest, 429 waits for Retry-After, and nothing blocks a request. Zero dependencies.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-beta.1",
+  "categories": ["notifications", "integrations", "security"],
+  "envVars": { "SLACK_WEBHOOK_URL": "", "SLACK_BOT_TOKEN": "", "SLACK_CHANNEL": "" },
+  "dependencies": [],
+  "docs": "Set SLACK_WEBHOOK_URL (Slack app, Incoming Webhooks), or SLACK_BOT_TOKEN (chat:write scope) and SLACK_CHANNEL (a channel ID). Without them messages are only logged.\nMap events to messages in calm.config.js: blocks: { slack: { events: { 'auth.registered': 'New signup: {user.name}', 'order.created': 'Order {doc.number}: {doc.total} EUR' } } }. Values are escaped; a function (payload, name) => text | { text, blocks } gives full control.\nsecurity.* events are posted as alerts (security.forbidden and security.invalid_token ignored): maxPerWindow per window, the rest in one digest. Send from code: await ctx.app.ext.slack.send('text' | blocks | { text, blocks, channel }), or ctx.app.ext.slack.post(...) to fire and forget.",
+  "links": [
+    { "title": "Sending messages using incoming webhooks", "url": "https://api.slack.com/messaging/webhooks" },
+    { "title": "chat.postMessage", "url": "https://api.slack.com/methods/chat.postMessage" },
+    { "title": "Formatting text (escaping)", "url": "https://api.slack.com/reference/surfaces/formatting" },
+    { "title": "Rate limits", "url": "https://api.slack.com/apis/rate-limits" },
+    { "title": "Block Kit", "url": "https://api.slack.com/block-kit" }
+  ],
+  "agents": "- Read `app/blocks/slack/index.js` first: `render()` and `escape()` at the top, then `deliver()` (retries) and the security digest at the bottom.\n- Add a notification by mapping an event in calm.config.js `blocks.slack.events`, not by calling Slack from routes or services.\n- Invariant: every value that can come from users goes through `escape()` (templates do it for placeholders). Never build Slack text by string concatenation of user data: it allows <!channel> pings and disguised links.\n- Template strings are trusted (they may contain <!here> on purpose); functions in `events` must escape what they interpolate (`escape` is passed as the third argument).\n- Never await Slack in a request: use `ctx.app.ext.slack.post()` (background). `send()` awaits and throws, for jobs and scripts.\n- Secrets: `SLACK_WEBHOOK_URL` and `SLACK_BOT_TOKEN` live in `.env` only. A webhook URL is a credential, never log or commit it.\n- Security alerts: tune `security.maxPerWindow`, `security.window` and `security.ignore`; keep the digest so an attack cannot flood the channel.\n- Do not put emails, tokens or IP addresses of users in messages unless the team agreed: the channel is not access controlled like the API.\n- 429 answers are retried after Retry-After; 400/401/403/404/410 and errors like channel_not_found or invalid_auth are permanent and not retried.\n- Tests: point `SLACK_WEBHOOK_URL` or `apiBase` at a local node:http server."
+}

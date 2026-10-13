@@ -1,0 +1,19 @@
+{
+  "name": "sentry",
+  "title": "Error reporting with Sentry",
+  "description": "Report unhandled errors (5xx) and failed background work to Sentry without the SDK: stack frames, route, user id, breadcrumbs from the request's logs, release and environment. Secrets are scrubbed, 4xx ignored, bursts deduplicated, sampling and a per minute cap.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-beta.1",
+  "categories": ["monitoring", "errors"],
+  "envVars": { "SENTRY_DSN": "", "SENTRY_ENVIRONMENT": "", "SENTRY_RELEASE": "" },
+  "dependencies": [],
+  "docs": "Set SENTRY_DSN (Sentry: Project settings, Client Keys (DSN)). Every 5xx is then reported with its stack, route, URL (query secrets filtered), user id and the request's log lines; 4xx are not.\nFailed background tasks and event listeners are reported too. Report your own: ctx.app.ext.sentry.captureException(err, { tags, extra }) or captureMessage(text, { level }).\nOptions in calm.config.js: blocks: { sentry: { sampleRate, dedupeSeconds, maxEventsPerMinute, sendUserEmail, sendIp, sendBody, sensitiveKeys, ignoreErrors, beforeSend } }",
+  "links": [
+    { "title": "Sentry envelopes", "url": "https://develop.sentry.dev/sdk/data-model/envelopes/" },
+    { "title": "Sentry event payloads", "url": "https://develop.sentry.dev/sdk/data-model/event-payloads/" },
+    { "title": "Sentry SDK overview (authentication, DSN)", "url": "https://develop.sentry.dev/sdk/overview/" },
+    { "title": "Data Source Name (DSN)", "url": "https://docs.sentry.io/concepts/key-terms/dsn-explainer/" },
+    { "title": "Scrubbing sensitive data", "url": "https://docs.sentry.io/security-legal-pii/scrubbing/" }
+  ],
+  "agents": "- Read `app/blocks/sentry/index.js` (capture rules, the log sink) and `event.js` (DSN, stack frames, scrubbing, envelope) before changing anything.\n- Errors reach Sentry through the logger: the core error handler logs 5xx with `log.error(msg, { err })` after setting `req.calmError`. Do not add try/catch blocks that swallow errors to report them; let them throw.\n- Invariant: 4xx are never reported, and nothing leaves the server unscrubbed. Every new field added to an event must go through `scrub()` or `scrubString()`.\n- Invariant: only the user id is sent by default. Email (`sendUserEmail`), IP (`sendIp`) and request bodies (`sendBody`) are opt-in options; do not turn them on without the user asking.\n- Add keys to scrub with the `sensitiveKeys` option in calm.config.js rather than editing the built-in list.\n- Report handled problems with `ctx.app.ext.sentry.captureException(err, { tags, extra })` or `captureMessage(text, { level })`; both return the event id or null.\n- `SENTRY_DSN` lives in `.env`. The DSN's public key is not a secret, but keep it out of git anyway.\n- Inside this block, log failures with `log.warn` and never with an `err` field at error level: the sink would report its own failures in a loop.\n- Noise control lives in `admit()`: dedupe window, per minute cap, sample rate, and a pause after Sentry answers 429. Keep it in front of every send.\n- Tests point `SENTRY_DSN` at a local node:http server (http://key@127.0.0.1:port/42) and read the envelopes it receives."
+}

@@ -1,0 +1,20 @@
+{
+  "name": "sms-twilio",
+  "title": "SMS and phone verification via Twilio",
+  "description": "Send SMS through the Twilio Messages API (app.ext.sms.send) and verify phone numbers with 6-digit codes: stored hashed, 10 minute expiry, attempt limits, resend cooldown, per number, IP and user limits. Signed delivery reports. Dev console transport without credentials. Zero dependencies.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-beta.1",
+  "categories": ["sms", "auth", "notifications"],
+  "envVars": { "TWILIO_ACCOUNT_SID": "", "TWILIO_AUTH_TOKEN": "", "TWILIO_MESSAGING_SERVICE_SID": "", "TWILIO_FROM_NUMBER": "" },
+  "dependencies": [],
+  "docs": "Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN (Twilio Console, Account info), and TWILIO_MESSAGING_SERVICE_SID (recommended) or TWILIO_FROM_NUMBER. Without them, SMS go to the console and devtools in development.\nSend: await ctx.app.ext.sms.send({ to: '+14155550100', body: 'Your order shipped' }).\nVerify a number (signed in): POST /api/auth/phone/start { phone } -> 202, then POST /api/auth/phone/verify { phone, code } -> { phone, phoneVerifiedAt }. The user gets phone and phoneVerifiedAt (owner and admin only). DELETE /api/auth/phone removes it.\nDelivery reports: set blocks['sms-twilio'].statusCallbackUrl to the public URL of POST /api/sms/twilio/status; requests are checked with X-Twilio-Signature and emit sms.status.",
+  "links": [
+    { "title": "Twilio Messages resource (send an SMS)", "url": "https://www.twilio.com/docs/messaging/api/message-resource" },
+    { "title": "Webhooks security (X-Twilio-Signature)", "url": "https://www.twilio.com/docs/usage/webhooks/webhooks-security" },
+    { "title": "Track the message status (status callbacks)", "url": "https://www.twilio.com/docs/messaging/guides/track-outbound-message-status" },
+    { "title": "Messaging Services", "url": "https://www.twilio.com/docs/messaging/services" },
+    { "title": "E.164 phone number format", "url": "https://www.twilio.com/docs/glossary/what-e164" },
+    { "title": "Twilio error and warning dictionary", "url": "https://www.twilio.com/docs/api/errors" }
+  ],
+  "agents": "- Read `app/blocks/sms-twilio/index.js` (transport, status callback, verification routes) and `twilio.js` (E.164, signature, Messages API) first.\n- Send SMS only through `ctx.app.ext.sms.send({ to, body, meta })`; it validates E.164, applies `allowedPrefixes` and falls back to the dev transport. Never call the Twilio API from routes.\n- Credentials live in `.env` (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, sender). Never log the auth token, full phone numbers or verification codes; use `maskPhone()`.\n- Invariant: verification codes are stored as a salted SHA-256 hash only, are single use, expire (`ttlMinutes`) and are thrown away after `maxAttempts` wrong tries. Keep the attempt increment atomic and before the comparison.\n- Invariant: the status callback is refused unless `X-Twilio-Signature` matches. Behind a proxy or load balancer set `statusCallbackUrl` to the exact public URL, otherwise every signature fails.\n- The user fields `phone` and `phoneVerifiedAt` are readOnly and visible to owner and admin only: only `/api/auth/phone/verify` writes them.\n- Abuse limits (SMS pumping): keep the resend cooldown and the per number, per IP and per user limits; restrict countries with `allowedPrefixes` if the product is local.\n- Only 429 answers are retried: after a timeout or 5xx the message may already be accepted, a retry would text the person twice.\n- Options go in calm.config.js under `blocks['sms-twilio']` (verification: ttlMinutes, maxAttempts, resendCooldownSeconds, limits, uniquePhone, message).\n- Tests: set `apiBase` to a local node:http fake; in test mode without `apiBase` the block never calls Twilio. Read codes with `app.ext.sms.observe()`."
+}
