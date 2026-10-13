@@ -186,6 +186,7 @@ export function setupDevtools(app, ex) {
       record.requestBody = req.body === undefined ? null : truncate(redact(req.body));
       if (req.user) record.user = { id: req.user.id, name: req.user.name, email: req.user.email, roles: req.user.roles };
       if (req.calmRoute) record.route = `${app.config.apiPrefix}${req.calmRoute.path}`;
+      record.steps = store?.steps ?? []; // the path through the code (Path tab, calm_explain)
       if (req.calmError) {
         const { original, http } = req.calmError;
         record.error = { status: http.status, code: http.code, message: http.message, internal: original?.message, stack: original?.stack, details: http.details };
