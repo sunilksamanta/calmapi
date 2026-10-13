@@ -106,7 +106,7 @@ function mountData(root, params) {
     const to = Math.min(out.total, out.skip + out.items.length);
     mount(
       pager,
-      h('span', { class: 'bar-meta' }, `${from}–${to} of ${out.total}`),
+      h('span', { class: 'bar-meta' }, `${from} to ${to} of ${out.total}`),
       h('button', { class: 'icon-btn', 'aria-label': 'Previous page', title: 'Previous page (k)', disabled: out.skip <= 0, onclick: () => ((state.skip = Math.max(0, out.skip - PAGE)), load()) }, icon('chevronLeft', 14)),
       h('button', { class: 'icon-btn', 'aria-label': 'Next page', title: 'Next page (j)', disabled: out.skip + out.items.length >= out.total, onclick: () => ((state.skip = out.skip + PAGE), load()) }, icon('chevronRight', 14)),
     );
