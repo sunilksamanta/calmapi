@@ -131,7 +131,7 @@ visibility, realtime events and MCP tool calls alike.
 
 ```
 calm create [dir]                       new project (npm create calmapi@latest)
-calm dev                                watch mode + devtools
+calm dev [--agent-db]                   watch mode + devtools (--agent-db: run on a disposable copy of the database)
 calm make resource <name> [fields...]   e.g. product name:string+required price:number status:enum:draft,live=draft category:ref:category
 calm add <block...>                     copy blocks into your project (calm add --list, gh:user/repo/name)
 calm make block <name>                  start your own block
@@ -141,6 +141,13 @@ calm routes                             every route with its policy and source f
 calm openapi                            write openapi.json
 calm doctor [--prod] [--ci] [--audit]   security and correctness checks
 calm audit [--ci]                       test every route as every role on a throwaway database
+calm audit --accept --reason "..."      accept the exposure matrix as the budget (security.snapshot.json)
+calm review [--sign] [--ci]             what changed since the last signed review; sign it
+calm diff [--api] [--ci]                behavior and API contract changes (breaking, minor, patch)
+calm replay [--writes] [--ci]           replay recorded traffic against the current code
+calm budgets [--ci]                     queries, p95 and response size per route against calm.config.js budgets
+calm checkpoint [name] / calm restore   save and restore the code and the data
+calm about                              everything the framework does that you did not write
 calm admin <email> [--revoke]           grant the admin role
 calm keygen [--write]                   encryption key for .encrypted() fields (rotates)
 calm upgrade                            merge framework updates into calm/

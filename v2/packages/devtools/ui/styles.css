@@ -517,6 +517,7 @@ a.file:hover { color: var(--accent); }
 .top-mode { color: var(--text-3); }
 .top-db { display: inline-flex; align-items: center; gap: 7px; color: var(--text-2); white-space: nowrap; }
 .top-db .mono { font-size: var(--fs-2); }
+.top-copy { font-size: var(--fs-3); padding: 1px 6px; border-radius: 999px; border: 1px solid var(--amber, #c98a1b); color: var(--amber, #c98a1b); text-transform: uppercase; letter-spacing: .04em; }
 .top-link { display: inline-flex; align-items: center; gap: 4px; color: var(--text-2); }
 .top-link:hover { color: var(--text); text-decoration: none; }
 .top-link .icon { color: var(--text-3); }

@@ -734,6 +734,8 @@ function overview(app) {
       connected: app.mongoose.connection.readyState === 1,
       name: app.mongoose.connection.name,
       host: app.mongoose.connection.host,
+      // calm dev --agent-db: this is a disposable copy of that database.
+      copyOf: process.env.CALM_AGENT_DB_FROM || null,
     },
     auth: Boolean(app.auth),
     mail: app.mailer.transport,

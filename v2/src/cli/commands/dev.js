@@ -7,10 +7,11 @@ import { appendActivity, readActivity, lineDiff } from '../lib/activity.js';
 import { protectionReason } from '../lib/protected.js';
 import { attribute, detectAgentEnv } from '../lib/attribution.js';
 import { readAgentSession, DEFAULT_PROTECTED } from '../lib/agent-scope.js';
-import { c, out } from '../lib/ui.js';
+import { c, out, ok, warn } from '../lib/ui.js';
+import { devDatabaseUri, createAgentDb, dropAgentDb } from '../lib/agent-db.js';
 
 export const help = `
-${c.bold('calm dev')}
+${c.bold('calm dev')} [--agent-db]
 
   Start the app in development mode: NODE_ENV=development, file watching
   (app/, calm/, calm.config.js, server.js, .env) and devtools at
@@ -18,6 +19,10 @@ ${c.bold('calm dev')}
 
   Every file change (with its diff), restart and crash is recorded in
   .calm/activity.jsonl, so devtools can show what you or your AI agent changed.
+
+  --agent-db   run on a copy of the development database (<name>_agent on the same
+               server), dropped when calm dev stops: an AI agent can create, change and
+               delete data freely, and yours stays as it was.
 `;
 
 const TEXT = /\.(m?js|cjs|ts|json|md|txt|ya?ml|html|css)$/;
@@ -30,6 +35,17 @@ const MAX_SNAPSHOT = 256 * 1024;
 export async function run(argv) {
   if (argv.includes('--help') || argv.includes('-h')) return out(help);
   const root = requireProject();
+  const useAgentDb = argv.includes('--agent-db');
+  argv = argv.filter((a) => a !== '--agent-db');
+  let agentDb = null;
+  if (useAgentDb) {
+    const uri = devDatabaseUri(root);
+    if (!uri) throw new Error('MONGODB_URI is not set (.env): there is no database to copy.');
+    out(c.dim('  Copying the development database for the agent...'));
+    agentDb = await createAgentDb(root, uri);
+    agentDb.source = uri;
+    ok(`Running on ${c.bold(agentDb.to)}, a copy of ${agentDb.from} (${agentDb.collections.length} collections, ${agentDb.collections.reduce((n, x) => n + x.docs, 0)} documents). It is dropped when calm dev stops.`);
+  }
   const watched = ['app', 'calm', 'calm.config.js', 'server.js', '.env'].filter((p) => existsSync(join(root, p)));
 
   // ---- the app, restarted by node --watch -------------------------------------------
@@ -37,7 +53,7 @@ export async function run(argv) {
   const child = spawn(
     process.execPath,
     [...watched.map((p) => `--watch-path=${join(root, p)}`), '--watch-preserve-output', ...argv, join(root, 'server.js')],
-    { cwd: root, stdio: ['inherit', 'pipe', 'pipe'], env: { ...process.env, ...color, NODE_ENV: process.env.NODE_ENV || 'development' } },
+    { cwd: root, stdio: ['inherit', 'pipe', 'pipe'], env: { ...process.env, ...color, NODE_ENV: process.env.NODE_ENV || 'development', ...(agentDb ? { MONGODB_URI: agentDb.uri, CALM_AGENT_DB_FROM: agentDb.from } : {}) } },
   );
 
   let errBuffer = [];
@@ -129,7 +145,7 @@ export async function run(argv) {
   }
   // The project root, not recursive: only the files listed in RECORDED_FILES.
   safeWatch(root, false, (name) => RECORDED_FILES.has(name) && onChange(name));
-  appendActivity(root, { type: 'session', note: 'calm dev started' });
+  appendActivity(root, { type: 'session', note: agentDb ? `calm dev started on ${agentDb.to}, a disposable copy of ${agentDb.from}` : 'calm dev started' });
 
   const stop = (signal) => {
     for (const w of watchers) w.close();
@@ -139,4 +155,13 @@ export async function run(argv) {
   process.on('SIGTERM', stop);
   await new Promise((resolve) => child.on('exit', resolve));
   for (const w of watchers) w.close();
+  if (agentDb) {
+    try {
+      await dropAgentDb(root, agentDb.source, agentDb.to);
+      appendActivity(root, { type: 'session', note: `dropped ${agentDb.to}, the agent's copy of ${agentDb.from}` });
+      out(c.dim(`  Dropped ${agentDb.to}.`));
+    } catch (err) {
+      warn(`Could not drop ${agentDb.to}: ${err.message}. It is replaced on the next calm dev --agent-db.`);
+    }
+  }
 }

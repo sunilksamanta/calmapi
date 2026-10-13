@@ -150,8 +150,8 @@ function renderHeader() {
   el.appVer.textContent = ov.app.version ?? '';
   el.mode.textContent = ov.app.mode;
   const db = ov.database;
-  mount(el.db, h('span', { class: ['dot', db.connected ? 'dot-green' : 'dot-red'] }), h('span', { class: 'mono' }, db.name ?? 'database'));
-  el.db.title = db.connected ? `MongoDB connected: ${db.host}/${db.name}` : 'MongoDB is not connected';
+  mount(el.db, h('span', { class: ['dot', db.connected ? 'dot-green' : 'dot-red'] }), h('span', { class: 'mono' }, db.name ?? 'database'), db.copyOf ? h('span', { class: 'top-copy' }, 'copy') : null);
+  el.db.title = (db.connected ? `MongoDB connected: ${db.host}/${db.name}` : 'MongoDB is not connected') + (db.copyOf ? `\nA disposable copy of ${db.copyOf} (calm dev --agent-db), dropped when calm dev stops. Your data is untouched.` : '');
   if (ov.openapi) mount(el.openapi, h('a', { class: 'top-link', href: ov.openapi, target: '_blank', rel: 'noopener', title: `OpenAPI document at ${ov.openapi}` }, 'OpenAPI', icon('external', 12)));
   else clear(el.openapi);
   const uptime = () => {
