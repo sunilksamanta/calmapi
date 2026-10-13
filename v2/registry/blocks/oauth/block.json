@@ -1,0 +1,46 @@
+{
+  "name": "oauth",
+  "title": "Sign in with Google, GitHub and OpenID Connect",
+  "description": "OAuth 2.0 / OpenID Connect sign-in: Google and GitHub presets plus any OIDC provider by discovery, PKCE (S256), state and nonce stored hashed, single use flows bound to the browser, ID tokens verified with the provider JWKS, safe account linking by verified email, link and unlink. Lockout, disabled accounts and 2FA (totp) still apply. Zero dependencies.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-alpha.1",
+  "categories": [
+    "auth",
+    "security"
+  ],
+  "envVars": {
+    "GOOGLE_CLIENT_ID": "",
+    "GOOGLE_CLIENT_SECRET": "",
+    "GITHUB_CLIENT_ID": "",
+    "GITHUB_CLIENT_SECRET": ""
+  },
+  "dependencies": [],
+  "links": [
+    {
+      "title": "Google: OpenID Connect",
+      "url": "https://developers.google.com/identity/openid-connect/openid-connect"
+    },
+    {
+      "title": "Google: Using OAuth 2.0 for Web Server Applications",
+      "url": "https://developers.google.com/identity/protocols/oauth2/web-server"
+    },
+    {
+      "title": "GitHub: Authorizing OAuth apps",
+      "url": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps"
+    },
+    {
+      "title": "RFC 7636: Proof Key for Code Exchange (PKCE)",
+      "url": "https://www.rfc-editor.org/rfc/rfc7636"
+    },
+    {
+      "title": "OpenID Connect Core 1.0",
+      "url": "https://openid.net/specs/openid-connect-core-1_0.html"
+    },
+    {
+      "title": "OpenID Connect Discovery 1.0",
+      "url": "https://openid.net/specs/openid-connect-discovery-1_0.html"
+    }
+  ],
+  "agents": "Read app/blocks/oauth/index.js (flows, linking rules, routes), providers.js (presets, discovery, code exchange, profiles) and jwt.js (ID token checks) before changing anything.\nConfiguration lives in calm.config.js under blocks.oauth (providers, callbackUrl, createAccount, linkVerifiedEmail, allowedRedirects, ttlMinutes, timeoutMs). Client ids and secrets come from .env (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET) or the provider entry; never hardcode secrets.\nInvariants that must not be broken:\n- Sign-in always goes through calm.app.auth.service.completeLogin(user, ctx): never create sessions directly, or lockout and 2FA are skipped.\n- Never link or create an account from an email the provider did not mark as verified (GitHub: only the primary verified address from /user/emails).\n- Keep PKCE (S256), the hashed state, the nonce check and the requestId (browser binding) on every flow; flows stay single use (atomic claim on usedAt).\n- ID tokens: only asymmetric algorithms, key from the provider JWKS, and iss, aud, exp and nonce checked. Do not skip verification \"because it came over TLS\".\n- Provider endpoints come from config or discovery only, never from request data; production refuses non-https endpoints.\n- Redirects go through checkRedirect (allowedRedirects); do not return raw redirect values from requests.\nCommon tasks: add an OIDC provider with providers: { okta: { type: \"oidc\", issuer, clientId: process.env.OKTA_CLIENT_ID, clientSecret: process.env.OKTA_CLIENT_SECRET, name: \"Okta\" } }; a non-OIDC OAuth 2.0 provider uses type: \"oauth2\" with authorizationUrl, tokenUrl, userinfoUrl and an optional profile(raw) mapper; extra fields for new accounts go in newAccount() in index.js.\nPitfalls: the provider redirect URI must equal callbackUrl exactly (default APP_URL/auth/oauth/callback, a frontend page that POSTs /api/auth/oauth/callback); the cookie start (GET /:provider/start) only works when that page is on the API site; unlinking the last sign-in method of an account without a password answers 409 LAST_SIGN_IN_METHOD on purpose.\nTests: test a change with a fake provider (node:http server with discovery, token, userinfo and jwks) and override endpoints in the provider entry, as test/blocks/oauth.test.js in the CalmAPI repo does.",
+  "docs": "1. Set GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET and/or GITHUB_CLIENT_ID/GITHUB_CLIENT_SECRET, and register APP_URL/auth/oauth/callback as the redirect URI at the provider (option callbackUrl).\n2. GET /api/auth/oauth/providers -> [{ id, name, type }] for your login buttons.\n3. POST /api/auth/oauth/:provider/start { redirect? } -> { url, requestId, expiresIn }. Keep requestId in sessionStorage and send the browser to url.\n4. Your callback page POSTs /api/auth/oauth/callback { code, state, requestId } -> { token, user, provider, redirect?, created? }, or { mfaRequired, mfaToken } when 2FA is on.\nSigned in: POST /api/auth/oauth/:provider/link, GET /api/auth/oauth/identities, DELETE /api/auth/oauth/identities/:id.\nOptions (calm.config.js blocks.oauth): providers (add any OIDC issuer), callbackUrl, createAccount, linkVerifiedEmail, allowedRedirects, ttlMinutes, timeoutMs."
+}

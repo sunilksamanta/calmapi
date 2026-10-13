@@ -27,6 +27,7 @@ export const CLI_FILES = [
   { path: '.env', by: 'calm keygen --write', when: 'adds or rotates CALM_ENCRYPTION_KEYS' },
   { path: 'calm.lock', by: 'calm create, calm add, calm upgrade', when: 'the framework version and a hash of every framework and block file, so upgrade and devtools can tell what you changed' },
   { path: 'openapi.json', by: 'calm openapi', when: 'the OpenAPI document (--out changes the path, --stdout writes nothing)' },
+  { path: 'calm-client.ts (or client.out)', by: 'calm client, calm dev with client.out', when: 'the typed client for your frontend, written again when the API changes (development only; may be outside the project)' },
   { path: '.calm/activity.jsonl', by: 'calm dev, calm mcp, calm agent-hook, checkpoints', when: 'file changes with diffs, restarts, crashes, agent tool calls and the files agents are about to edit, for the Activity panel; trimmed at 4 MB' },
   { path: '.calm/checkpoints/**', by: 'calm checkpoint, calm mcp, devtools', when: 'snapshots of the development database, restored with calm restore' },
   { path: '.calm/agent-session.json, .calm/proposals/**', by: 'calm mcp', when: 'what an agent is doing and the changes it proposes, for devtools' },

@@ -10,12 +10,43 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { readJson, readText, walk, isDir } from './files.js';
+export { parseBlockGuide } from '../../../core/utils/block-guide.js';
 
 /** The block name of a calm.lock entry: stored since 2.0.0-alpha.1, else from its key (@calmapi/jobs, a URL, a file). */
 export const lockName = (key, entry) => entry?.name ?? key.split('/').pop().replace(/\.json$/, '');
 
 export const ITEM_SCHEMA = 'https://ui.shadcn.com/schema/registry-item.json';
 const SKIP = new Set(['block.json', 'docs.md', '.DS_Store']);
+
+/** block.json "links": [{ title, url }] with http(s) URLs only. */
+export function cleanLinks(links) {
+  if (!Array.isArray(links)) return [];
+  return links
+    .filter((l) => l && typeof l.title === 'string' && l.title.trim() && typeof l.url === 'string' && /^https?:\/\//.test(l.url))
+    .map((l) => ({ title: l.title.trim(), url: l.url.trim() }));
+}
+
+export const GUIDE_FILE = 'AGENTS.md';
+
+/**
+ * app/blocks/<name>/AGENTS.md: what a person or an AI agent needs before changing a block, kept
+ * next to its code. Built from block.json "agents" (instructions), "links" (official
+ * documentation), "docs" and "envVars". Devtools reads the two first sections back.
+ */
+export function blockGuide(meta, { official = false } = {}) {
+  const name = meta.name;
+  const out = [`# ${meta.title ?? name} (block: ${name})`, ''];
+  if (meta.description) out.push(meta.description, '');
+  out.push(`The code is in \`app/blocks/${name}/\` and belongs to this project. Options go in \`calm.config.js\` under \`blocks['${name}']\`; secrets go in \`.env\`.`, '');
+  if (typeof meta.agents === 'string' && meta.agents.trim()) out.push('## For AI agents', '', meta.agents.trim(), '');
+  const links = cleanLinks(meta.links);
+  if (links.length) out.push('## Official documentation', '', ...links.map((l) => `- [${l.title}](${l.url})`), '');
+  if (typeof meta.docs === 'string' && meta.docs.trim()) out.push('## Usage', '', meta.docs.trim(), '');
+  const env = Object.entries(meta.envVars ?? {});
+  if (env.length) out.push('## Environment variables', '', ...env.map(([k, v]) => `- \`${k}\`${v ? `: ${v}` : ''}`), '');
+  if (official) out.push(`More: https://docs.calmapi.dev/blocks/${name}`, '');
+  return out.join('\n');
+}
 
 /** Registry item from block metadata and files ([{ target, content }]). */
 export function toRegistryItem(meta, files, { pathFor = (f) => f.target } = {}) {
@@ -35,7 +66,7 @@ export function toRegistryItem(meta, files, { pathFor = (f) => f.target } = {}) 
     registryDependencies: meta.registryDependencies ?? [],
     envVars: meta.envVars ?? {},
     docs: meta.docs ?? '',
-    meta: { calmapi: { minVersion: meta.minVersion ?? '2.0.0-alpha.0', conflicts: meta.conflicts ?? [] } },
+    meta: { calmapi: { minVersion: meta.minVersion ?? '2.0.0-alpha.0', conflicts: meta.conflicts ?? [], links: cleanLinks(meta.links), agents: typeof meta.agents === 'string' ? meta.agents : '' } },
     files: files.map((f) => ({ path: pathFor(f), type: 'registry:file', target: f.target, content: f.content })),
   };
 }
@@ -51,6 +82,9 @@ export function readProjectBlock(root, name) {
     if (SKIP.has(rel)) continue;
     files.push({ target: `app/blocks/${name}/${rel}`, content: readText(join(dir, rel)) });
   }
+  // A block.json with "agents" or "links" and no AGENTS.md yet: share the generated guide too.
+  const guide = `app/blocks/${name}/AGENTS.md`;
+  if ((meta.agents || meta.links) && !files.some((f) => f.target === guide)) files.push({ target: guide, content: blockGuide(meta) });
   for (const extra of meta.files ?? []) {
     const path = join(root, extra);
     if (!existsSync(path)) throw new Error(`block.json lists ${extra}, which does not exist`);

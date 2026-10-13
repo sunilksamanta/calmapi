@@ -394,19 +394,38 @@ export function setupAuth(app) {
 
   const r = new RouteBuilder({ app, prefix: '/auth', source: 'auth', file: 'calm/auth/index.js' });
   const limited = { rateLimit: 'auth' };
-  r.post('/register', { policy: 'public', status: 201, summary: 'Create an account and sign in', ...limited, tags: ['auth'] }, (ctx) => service.register(ctx.req.body, ctx));
-  r.post('/login', { policy: 'public', summary: 'Sign in with email and password', ...limited, tags: ['auth'] }, (ctx) => service.login(ctx.req.body, ctx));
+  // What these handlers accept and return, for the OpenAPI document and generated clients (calm client).
+  // Documentation only: the handlers validate their input themselves.
+  const ref = (name) => ({ $ref: `#/components/schemas/${name}` });
+  const str = { type: 'string' };
+  const time = { type: 'string', format: 'date-time' };
+  const obj = (properties, required = Object.keys(properties)) => ({ type: 'object', properties, required });
+  const session = obj({ user: ref('User'), token: str, expiresAt: time });
+  const challenge = obj({ mfaRequired: { type: 'boolean', enum: [true] }, mfaToken: str, methods: { type: 'array', items: str }, expiresAt: time }, ['mfaRequired', 'mfaToken']);
+  const message = obj({ message: str });
+  const doc = {
+    register: { body: ref('UserCreate'), response: session },
+    login: { body: obj({ email: { type: 'string', format: 'email' }, password: str }), response: { oneOf: [session, challenge] } },
+    me: { response: ref('User') },
+    updateMe: { body: ref('UserUpdate'), response: ref('User') },
+    password: { body: obj({ currentPassword: str, newPassword: str }) },
+    forgot: { body: obj({ email: { type: 'string', format: 'email' } }), response: message },
+    reset: { body: obj({ token: str, password: str }) },
+    sessions: { response: { type: 'array', items: obj({ id: str, current: { type: 'boolean' }, createdAt: time, lastUsedAt: time, expiresAt: time, ip: str, userAgent: str }, ['id', 'current', 'createdAt', 'expiresAt']) } },
+  };
+  r.post('/register', { policy: 'public', status: 201, summary: 'Create an account and sign in', ...limited, tags: ['auth'], openapi: doc.register }, (ctx) => service.register(ctx.req.body, ctx));
+  r.post('/login', { policy: 'public', summary: 'Sign in with email and password', ...limited, tags: ['auth'], openapi: doc.login }, (ctx) => service.login(ctx.req.body, ctx));
   r.post('/logout', { policy: 'authenticated', summary: 'Sign out this session', tags: ['auth'] }, (ctx) => service.logout(ctx));
   r.post('/logout-all', { policy: 'authenticated', summary: 'Sign out every session', tags: ['auth'] }, (ctx) => service.logoutAll(ctx));
-  r.get('/me', { policy: 'authenticated', summary: 'The signed-in user', tags: ['auth'] }, (ctx) => service.me(ctx));
-  r.patch('/me', { policy: 'authenticated', summary: 'Update your profile', tags: ['auth'] }, (ctx) => service.updateMe(ctx.req.body, ctx));
-  r.post('/password', { policy: 'authenticated', summary: 'Change your password', ...limited, tags: ['auth'] }, (ctx) => service.changePassword(ctx.req.body, ctx));
-  r.post('/password/forgot', { policy: 'public', status: 202, summary: 'Email a password reset link', ...limited, tags: ['auth'] }, async (ctx) => {
+  r.get('/me', { policy: 'authenticated', summary: 'The signed-in user', tags: ['auth'], openapi: doc.me }, (ctx) => service.me(ctx));
+  r.patch('/me', { policy: 'authenticated', summary: 'Update your profile', tags: ['auth'], openapi: doc.updateMe }, (ctx) => service.updateMe(ctx.req.body, ctx));
+  r.post('/password', { policy: 'authenticated', summary: 'Change your password', ...limited, tags: ['auth'], openapi: doc.password }, (ctx) => service.changePassword(ctx.req.body, ctx));
+  r.post('/password/forgot', { policy: 'public', status: 202, summary: 'Email a password reset link', ...limited, tags: ['auth'], openapi: doc.forgot }, async (ctx) => {
     await service.forgotPassword(ctx.req.body);
     return ctx.reply({ message: 'If that email is registered, a reset link is on its way.' }, { status: 202 });
   });
-  r.post('/password/reset', { policy: 'public', summary: 'Set a new password with a reset token', ...limited, tags: ['auth'] }, (ctx) => service.resetPassword(ctx.req.body));
-  r.get('/sessions', { policy: 'authenticated', summary: 'Your active sessions', tags: ['auth'] }, (ctx) => service.listSessions(ctx));
+  r.post('/password/reset', { policy: 'public', summary: 'Set a new password with a reset token', ...limited, tags: ['auth'], openapi: doc.reset }, (ctx) => service.resetPassword(ctx.req.body));
+  r.get('/sessions', { policy: 'authenticated', summary: 'Your active sessions', tags: ['auth'], openapi: doc.sessions }, (ctx) => service.listSessions(ctx));
   r.delete('/sessions/:sessionId', { policy: 'authenticated', summary: 'Revoke one session', tags: ['auth'] }, (ctx) => service.revokeSession(ctx.params.sessionId, ctx));
   const deviceInput = {
     token: f.string().required().max(4096),

@@ -263,7 +263,7 @@ describe('mcp', () => {
       send({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
       const tools = (await wait(2)).result.tools.map((t) => t.name);
       assert.ok(['calm_routes', 'calm_make_resource', 'calm_recent_requests', 'calm_pushes', 'calm_diff', 'calm_checkpoint', 'calm_restore', 'calm_propose', 'calm_explain', 'calm_about', 'calm_review', 'calm_declare', 'calm_replay', 'calm_budgets'].every((t) => tools.includes(t)), tools.join(','));
-      assert.equal(tools.length, 28);
+      assert.equal(tools.length, 29);
 
       send({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'calm_make_resource', arguments: { name: 'ticket', fields: ['title:string!', 'priority:enum:low,high=low'] } } });
       const made = await wait(3);

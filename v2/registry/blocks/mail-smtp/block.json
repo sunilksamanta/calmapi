@@ -6,5 +6,13 @@
   "categories": ["mail"],
   "dependencies": ["nodemailer@^10.0.11"],
   "envVars": { "SMTP_URL": "smtps://user:password@smtp.example.com:465", "MAIL_FROM": "My App <no-reply@example.com>" },
-  "docs": "Set SMTP_URL (smtp:// or smtps://) and MAIL_FROM."
+  "docs": "Set SMTP_URL (smtp:// or smtps://) and MAIL_FROM.",
+  "links": [
+    { "title": "Nodemailer", "url": "https://nodemailer.com/" },
+    { "title": "Nodemailer: SMTP transport", "url": "https://nodemailer.com/smtp" },
+    { "title": "Nodemailer: Message configuration", "url": "https://nodemailer.com/message" },
+    { "title": "Amazon SES: Using the SMTP interface", "url": "https://docs.aws.amazon.com/ses/latest/dg/send-email-smtp.html" },
+    { "title": "RFC 5321: Simple Mail Transfer Protocol", "url": "https://www.rfc-editor.org/rfc/rfc5321.html" }
+  ],
+  "agents": "- Read first: `app/blocks/mail-smtp/index.js` (one Nodemailer transport registered with `calm.mailer.use`).\n- Configuration: env `SMTP_URL` (secret; `smtp://` with STARTTLS, usually port 587, or `smtps://` for implicit TLS on 465) and `MAIL_FROM`. No `calm.config.js` options. Unset, or still the `smtp.example.com` placeholder, means no transport: development mail stays in devtools and `calm doctor` errors in production.\n- Invariant: `SMTP_URL` contains credentials. Never log it, include it in errors or commit it; URL-encode special characters in the user name and password.\n- Send through `app.mailer.send({ to, subject, text, html })`; do not create other Nodemailer transports in features, so tests and devtools keep capturing mail.\n- Only `from`, `to`, `subject`, `text` and `html` reach `transport.sendMail`. Add `cc`, `bcc`, `replyTo`, `attachments` or `headers` there using Nodemailer message fields. `meta` is stripped by the core.\n- Transport options beyond the URL (`pool`, timeouts, `tls`): pass an options object to `nodemailer.createTransport` instead of the URL string. Keep `transport.close()` in `calm.onShutdown`.\n- Only one mail transport is active: `calm.mailer.use` replaces the previous one, so do not install mail-resend next to it.\n- Pitfall: most providers (SES, Postmark, Gmail) only accept a verified sender in `MAIL_FROM`; SES SMTP credentials are not your IAM access keys.\n- Pitfall: `sendMail` errors propagate to the caller; send from a job (jobs block) when you need retries. When delivery fails, `await transport.verify()` in a script checks the connection and credentials."
 }

@@ -1,0 +1,40 @@
+{
+  "name": "captcha",
+  "title": "CAPTCHA (Turnstile, hCaptcha, reCAPTCHA v3)",
+  "description": "Protects sign up, sign in, password reset and magic links (or any routes you list) with Cloudflare Turnstile, hCaptcha or Google reCAPTCHA v3: tokens verified server side with the client IP, minimum score and action checks, fails closed when the provider is down, skipped locally when no key is set. Zero dependencies.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-alpha.1",
+  "categories": [
+    "security",
+    "auth"
+  ],
+  "envVars": {
+    "TURNSTILE_SITE_KEY": "",
+    "TURNSTILE_SECRET_KEY": ""
+  },
+  "dependencies": [],
+  "links": [
+    {
+      "title": "Cloudflare Turnstile: Server-side validation",
+      "url": "https://developers.cloudflare.com/turnstile/get-started/server-side-validation/"
+    },
+    {
+      "title": "Cloudflare Turnstile: Testing (dummy keys)",
+      "url": "https://developers.cloudflare.com/turnstile/troubleshooting/testing/"
+    },
+    {
+      "title": "hCaptcha: Developer guide (verify the user response server side)",
+      "url": "https://docs.hcaptcha.com/"
+    },
+    {
+      "title": "Google reCAPTCHA v3",
+      "url": "https://developers.google.com/recaptcha/docs/v3"
+    },
+    {
+      "title": "Google reCAPTCHA: Verifying the user response",
+      "url": "https://developers.google.com/recaptcha/docs/verify"
+    }
+  ],
+  "agents": "Read app/blocks/captcha/index.js first: one guard (calm.guard, order -50) that checks the listed routes, the siteverify call and a public GET /api/captcha route for the frontend.\nConfiguration lives in calm.config.js under blocks.captcha (provider, routes, header, field, minScore, action, hostnames, failOpen, timeoutMs, bypass, verifyUrl). Keys come from .env: TURNSTILE_SITE_KEY/TURNSTILE_SECRET_KEY, HCAPTCHA_SITE_KEY/HCAPTCHA_SECRET_KEY or RECAPTCHA_SITE_KEY/RECAPTCHA_SECRET_KEY.\nInvariants that must not be broken:\n- Tokens are verified server side with the secret key; never trust a client flag such as { captchaOk: true }, and never send the secret key to the frontend (only the site key is public).\n- Keep failing closed by default (503 CAPTCHA_UNAVAILABLE) when the provider does not answer; failOpen is an explicit opt-in.\n- Never bypass in production: the check is skipped only when no secret key is set and the mode is development or test.\n- reCAPTCHA v3: keep the minScore and action checks; map each protected route to the action its page declares.\n- The body field (captchaToken) is deleted by the guard before input validation; keep that, or strict input validation answers 422.\nCommon tasks: protect another route by adding \"POST /posts\" (method and path without the /api prefix) to blocks.captcha.routes (the list replaces the defaults, so keep the auth routes you still want); switch provider by setting provider and the matching env vars.\nError codes for frontends: 400 CAPTCHA_REQUIRED (no token), 400 CAPTCHA_INVALID (rejected, low score, wrong action or hostname), 503 CAPTCHA_UNAVAILABLE. Tokens are single use: render a fresh widget token after every failed attempt.\nPitfalls: routes are matched exactly as declared (\"POST /posts/:id/comments\"); calm doctor warns about entries that match no route. Tests should point verifyUrl at a fake siteverify server and set the secret env var at runtime.",
+  "docs": "1. Set TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY (or provider: \"hcaptcha\" / \"recaptcha\" with HCAPTCHA_* / RECAPTCHA_*).\n2. GET /api/captcha -> { provider, siteKey, header, field, routes } for your widget.\n3. Send the widget token with each protected request: header x-captcha-token, or body field captchaToken.\nProtected by default: POST /api/auth/register, /auth/login, /auth/password/forgot, /auth/magic-link. Errors: 400 CAPTCHA_REQUIRED, 400 CAPTCHA_INVALID, 503 CAPTCHA_UNAVAILABLE.\nWithout a secret key, development and test skip the check; production refuses.\nOptions (calm.config.js blocks.captcha): provider, routes, minScore, action, hostnames, failOpen, timeoutMs, bypass, header, field, verifyUrl."
+}

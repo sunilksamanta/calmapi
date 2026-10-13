@@ -4,5 +4,14 @@
   "description": "Store rate limit counters in MongoDB so limits hold across every instance of your API.",
   "version": "1.0.0",
   "categories": ["security", "scaling"],
-  "docs": "Nothing to configure: once added, config.rateLimit uses MongoDB (collection calm_rate_limits, cleaned up by a TTL index)."
+  "docs": "Nothing to configure: once added, config.rateLimit uses MongoDB (collection calm_rate_limits, cleaned up by a TTL index).",
+  "links": [
+    { "title": "MongoDB TTL indexes", "url": "https://www.mongodb.com/docs/manual/core/index-ttl/" },
+    { "title": "MongoDB findOneAndUpdate", "url": "https://www.mongodb.com/docs/manual/reference/method/db.collection.findOneAndUpdate/" },
+    { "title": "MongoDB $inc", "url": "https://www.mongodb.com/docs/manual/reference/operator/update/inc/" },
+    { "title": "IETF draft: RateLimit header fields for HTTP", "url": "https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/" },
+    { "title": "RFC 6585: 429 Too Many Requests", "url": "https://www.rfc-editor.org/rfc/rfc6585.html" },
+    { "title": "OWASP Denial of Service Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Denial_of_Service_Cheat_Sheet.html" }
+  ],
+  "agents": "- Read first: `app/blocks/rate-limit-mongo/index.js` (about 25 lines; it sets `calm.app.rateStore`).\n- What it does: replaces the in-memory store used by the core rate limiter (`core/http/middleware.js`) with fixed window counters in `calm_rate_limits`: `_id` = `<key>:<windowStart>`, `$inc: { count: 1 }`, TTL index on `expiresAt` (the end of the window).\n- Configuration: none here. The limits stay in `config.rateLimit` (`enabled`, `global`, `auth`) and in route options such as `rateLimit: { windowMs, max, key }` or `rateLimit: 'auth'`.\n- Interface to keep: `rateStore.hit(key, windowMs)` resolves `{ count, resetAt }` (ms timestamp); the core compares `count` with `max` and sets the `RateLimit-*` and `Retry-After` headers.\n- Invariant: one atomic `findOneAndUpdate` with `upsert` per hit. Never read then write: concurrent requests on several instances would undercount.\n- Invariant: keys contain IPs and user ids; store nothing but the counter and do not log keys in bulk.\n- Fixed windows allow up to twice `max` around a window boundary. If you need smoother limits, implement a sliding window but keep the `hit()` return shape.\n- Every rate limited request now costs one MongoDB round trip by `_id`; do not add indexes or extra queries to it.\n- Pitfall: when MongoDB is unreachable `hit()` rejects and the request fails in the error handler (fail closed). Wrapping it to fail open is a security decision: discuss it before changing.\n- Pitfall: the TTL monitor runs about once a minute, so finished windows linger briefly; they are never read again because the window start changes.\n- Use it when the API runs on more than one instance; a single instance is fine with the default memory store."
 }

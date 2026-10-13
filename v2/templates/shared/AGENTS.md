@@ -16,7 +16,7 @@ app/resources/<name>/     one folder per resource
   <name>.resource.js      fields + access policy (required)
   <name>.service.js       business logic, extends ResourceService (optional)
   <name>.routes.js        custom endpoints (optional)
-app/blocks/<name>/        blocks installed with `npx calm add`
+app/blocks/<name>/        blocks installed with `npx calm add`, each with its own AGENTS.md
 app/routes.js             app-wide custom routes (optional)
 calm.config.js            config overrides; secrets go in .env
 test/                     node:test tests, use createTestApp from '#calm/testing.js'
@@ -43,7 +43,10 @@ across resources; use `this.service('name')` inside services or `ctx.services.na
    (needs `CALM_ENCRYPTION_KEYS`, see `npx calm keygen --write`). Never log secrets.
 8. Email and push go through `ctx.app.mailer.send()` and `ctx.push.send({ to: userId, title, body, data })`.
    Put ids in push `data`, never secrets or personal details. In tests assert on `t.mails` and `t.pushes`.
-9. Before finishing: `npm test`, `npx calm doctor` (fix every `error`) and, after changing policies or
+9. **Blocks carry their own instructions**: before changing anything in `app/blocks/<name>/`, read
+   `app/blocks/<name>/AGENTS.md` (the rules that block must keep, its options, and links to the official
+   documentation of the service it integrates, e.g. Stripe or Twilio). Follow the official docs, not memory.
+10. Before finishing: `npm test`, `npx calm doctor` (fix every `error`) and, after changing policies or
    fields, `npx calm audit` (it calls every route as every role and must pass).
 
 Docs: https://docs.calmapi.dev (each page also as markdown at its URL plus `.md`, and

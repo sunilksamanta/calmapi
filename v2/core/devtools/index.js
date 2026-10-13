@@ -17,6 +17,8 @@ import { join, dirname, resolve, sep } from 'node:path';
 import { currentRequest } from '../context.js';
 import { serialize } from '../resource/resource.js';
 import { kebab } from '../utils/strings.js';
+import { parseBlockGuide } from '../utils/block-guide.js';
+import { clientOperations } from '../client.js';
 import { maskToken, BEHAVIORS, PLATFORMS } from '../push.js';
 import { recordTraffic, trafficEntry, isReplay, replay, testFromRecord, readTraffic } from '../replay.js';
 
@@ -225,6 +227,8 @@ export function setupDevtools(app, ex) {
   api.get('/about', async (_req, res) => res.json(await app.about()));
   api.get('/doctor', async (_req, res) => res.json(await app.doctor()));
   api.get('/snapshot', async (_req, res) => res.json(await app.snapshot()));
+  // How each route is called with the generated client (calm client): "Copy as client call".
+  api.get('/client', (_req, res) => res.json(clientOperations(app.openapi(), { prefix: app.config.apiPrefix }).map((o) => ({ group: o.group, name: o.name, method: o.method, path: o.path, params: o.params, body: Boolean(o.body), query: o.query.length > 0 }))));
   // Replay recorded traffic against the current code (calm/replay.js), and recorded tests.
   let replaying = null;
   api.get('/budgets', (_req, res) => res.json(app.budgets.report()));
@@ -820,8 +824,20 @@ function describeBlocks(app) {
       options: redact(p.options ?? {}),
       routes: routes.map((r) => ({ method: r.method, path: `${app.config.apiPrefix}${r.path}`, policy: r.policyLabel })),
       panels: (p.uses ?? []).filter((u) => u.kind === 'devtools panel').map((u) => u.name),
+      guide: readGuide(app.root, p),
     };
   });
+}
+
+/** The block's AGENTS.md next to its index.js: instructions for AI agents and official links. */
+function readGuide(root, plugin) {
+  if (!plugin.file) return null;
+  const file = join(dirname(plugin.file), 'AGENTS.md');
+  try {
+    return { file, ...parseBlockGuide(readFileSync(join(root, file), 'utf8')) };
+  } catch {
+    return null;
+  }
 }
 
 function describeField(name, field) {

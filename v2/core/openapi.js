@@ -80,6 +80,8 @@ function operation(route, registry) {
       if (field.opts.required) required.push(k);
     }
     op.requestBody = { required: true, content: { 'application/json': { schema: { type: 'object', properties, ...(required.length ? { required } : {}) } } } };
+  } else if (route.openapi?.body) {
+    op.requestBody = { required: true, content: { 'application/json': { schema: route.openapi.body } } };
   } else if (['POST', 'PUT', 'PATCH'].includes(route.method) && route.source !== 'crud') {
     op.requestBody = { content: { 'application/json': { schema: { type: 'object' } } } };
   }
@@ -104,7 +106,7 @@ function operation(route, registry) {
   } else if (route.output === 'item' && name) {
     op.responses[ok] = { description: 'The record', content: { 'application/json': { schema: { type: 'object', properties: { data: ref(name) } } } } };
   } else {
-    op.responses[ok] = { description: 'Success', content: { 'application/json': { schema: { type: 'object', properties: { data: {} } } } } };
+    op.responses[ok] = { description: 'Success', content: { 'application/json': { schema: { type: 'object', properties: { data: route.openapi?.response ?? {} } } } } };
   }
 
   const err = (description) => ({ description, content: { 'application/json': { schema: ref('Error') } } });

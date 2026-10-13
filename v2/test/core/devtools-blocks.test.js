@@ -11,6 +11,17 @@ const files = {
   'calm.config.js': `import { defineConfig } from '#calm';
 export default defineConfig({ blocks: { mine: { apiKey: 'from-config-123', label: 'Mine' } } });
 `,
+  'app/blocks/mine/AGENTS.md': `# Mine (block: mine)
+
+## For AI agents
+
+- Never log MINE_TOKEN.
+
+## Official documentation
+
+- [Mine API](https://mine.example.com/docs)
+- [Not a link](javascript:alert(1))
+`,
   'app/blocks/mine/index.js': `import { definePlugin } from '#calm';
 export default definePlugin({
   name: 'mine',
@@ -62,6 +73,8 @@ test('overview.blocks: origin, changed files, extension points, env and options'
   assert.equal(mine.env.find((v) => v.key === 'MINE_MODE').value, 'fast');
   assert.equal(mine.options.apiKey, '[redacted]', 'secret-looking options are redacted');
   assert.equal(mine.options.label, 'Mine');
+  assert.deepEqual(mine.guide, { file: 'app/blocks/mine/AGENTS.md', agents: '- Never log MINE_TOKEN.', links: [{ title: 'Mine API', url: 'https://mine.example.com/docs' }] }, 'AGENTS.md next to the block: notes and http(s) links only');
+  assert.equal(idem.guide.file, 'app/blocks/idempotency/AGENTS.md', 'official blocks ship one');
   assert.ok(!JSON.stringify(blocks).includes('very-secret-value'));
   assert.ok(!JSON.stringify(blocks).includes('from-config-123'));
 });

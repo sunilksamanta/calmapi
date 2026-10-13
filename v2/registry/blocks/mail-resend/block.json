@@ -5,5 +5,12 @@
   "version": "1.0.1",
   "categories": ["mail"],
   "envVars": { "RESEND_API_KEY": "", "MAIL_FROM": "My App <no-reply@example.com>" },
-  "docs": "Set RESEND_API_KEY and MAIL_FROM (a sender on a domain verified in Resend). In development without a key, emails still go to devtools."
+  "docs": "Set RESEND_API_KEY and MAIL_FROM (a sender on a domain verified in Resend). In development without a key, emails still go to devtools.",
+  "links": [
+    { "title": "Resend: Introduction", "url": "https://resend.com/docs/introduction" },
+    { "title": "Resend API: Send email", "url": "https://resend.com/docs/api-reference/emails/send-email" },
+    { "title": "Resend API reference (authentication, rate limits)", "url": "https://resend.com/docs/api-reference/introduction" },
+    { "title": "Resend: Domains", "url": "https://resend.com/docs/dashboard/domains/introduction" }
+  ],
+  "agents": "- Read first: `app/blocks/mail-resend/index.js` (one `calm.mailer.use` transport, about 30 lines).\n- Configuration: env `RESEND_API_KEY` (secret) and `MAIL_FROM`. No `calm.config.js` options. Without the key the block registers nothing: development mail stays in the devtools Mail panel and `calm doctor` reports an error in production.\n- Send mail with `app.mailer.send({ to, subject, text, html })` (`calm.mailer` inside blocks). Never call the Resend API directly from features, so tests and devtools keep seeing every message.\n- Invariant: never log or echo `RESEND_API_KEY`. Errors contain only the HTTP status and the first 300 characters of Resend's answer.\n- `MAIL_FROM` overrides the per message `from` and must be an address on a domain verified in Resend, otherwise Resend refuses the request.\n- The transport forwards only `from`, `to`, `subject`, `text` and `html`. To support `reply_to`, `cc`, `bcc`, `attachments`, `headers` or `tags`, map them in `send()` using Resend's field names. `meta` is stripped by the core before the transport sees it.\n- Only one mail transport is active: `calm.mailer.use` replaces the previous one, so do not install mail-smtp next to it.\n- Pitfall: Resend rate limits API requests (429). Send bulk mail from a job (jobs block) with retries, not in a loop inside a request.\n- Pitfall: `send()` throws on any non 2xx answer. The notifications block catches it; your own callers should too, or send from a job."
 }

@@ -67,6 +67,8 @@ export async function loadConfig(root, overrides = {}) {
     invariants: [],
     // What a route may cost: { 'GET /api/feed': { queries: 4, p95: '150ms', response: '200kb' }, '*': { queries: 12 } } (calm/budgets.js)
     budgets: {},
+    // A typed client for your frontend (calm client): client: { out: '../web/src/api/calm-client.ts' }. calm dev keeps it current.
+    client: { out: null },
     agents: { scope: 'full', protected: ['calm/security/**', 'calm/auth/**', 'calm.config.js'] }, // AI agents over calm mcp: default scope (read | scaffold | full) and paths they must not edit without you
     log: { level: env.LOG_LEVEL || (mode === 'test' ? 'silent' : 'info'), format: mode === 'production' ? 'json' : 'pretty' },
     shutdownTimeoutMs: 10_000,

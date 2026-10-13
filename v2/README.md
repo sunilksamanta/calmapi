@@ -139,6 +139,7 @@ calm block list|check|pack              your blocks: what changed, a safety revi
 calm seed [resource...]                 sample records that look real (--count, --seed)
 calm routes                             every route with its policy and source file
 calm openapi                            write openapi.json
+calm client [--out file] [--js]         typed, dependency-free client for your web or mobile app
 calm doctor [--prod] [--ci] [--audit]   security and correctness checks
 calm audit [--ci]                       test every route as every role on a throwaway database
 calm audit --accept --reason "..."      accept the exposure matrix as the budget (security.snapshot.json)

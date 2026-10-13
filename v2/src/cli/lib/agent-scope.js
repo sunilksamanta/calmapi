@@ -29,6 +29,7 @@ export const TOOL_SETS = { read: READ, scaffold: SCAFFOLD };
 /** The lowest scope that allows this call. */
 export function neededScope(tool, args = {}) {
   if (tool === 'calm_http') return String(args.method ?? 'GET').toUpperCase() === 'GET' ? 'read' : 'scaffold';
+  if (tool === 'calm_client') return args.out ? 'scaffold' : 'read'; // writing the file is scaffolding, reading the source is not
   if (READ.includes(tool)) return 'read';
   if (SCAFFOLD.includes(tool)) return 'scaffold';
   return 'full';

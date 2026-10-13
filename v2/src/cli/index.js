@@ -9,6 +9,7 @@ const COMMANDS = {
   add: () => import('./commands/add.js'),
   routes: () => import('./commands/routes.js'),
   openapi: () => import('./commands/openapi.js'),
+  client: () => import('./commands/client.js'),
   doctor: () => import('./commands/doctor.js'),
   diff: () => import('./commands/diff.js'),
   review: () => import('./commands/review.js'),
@@ -48,6 +49,7 @@ const HELP = `
   ${c.bold('Inspect')}
     routes                       every route with its access policy
     openapi                      write openapi.json
+    client                       typed client for your web or mobile app (TypeScript or JS)
     doctor                       security and correctness checks (--ci for pipelines)
     diff [ref]                   what changed in behavior since a git ref (--ci fails on wider access)
     review                       read and sign what changed since the last signature (--sign, --ci)

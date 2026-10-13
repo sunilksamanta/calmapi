@@ -38,6 +38,7 @@ try {
   result.exposure = await app.exposure();
   result.invariants = app.invariants ? await app.invariants() : [];
   result.budgets = app.config.budgets ?? {};
+  result.client = app.config.client ?? null;
   result.snapshot = app.snapshot ? await app.snapshot() : null;
   result.about = await app.about?.();
   await app.mongoose.disconnect();

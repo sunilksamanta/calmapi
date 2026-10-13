@@ -74,6 +74,8 @@ export class RouteBuilder {
       input: opts.input ?? null,
       status: opts.status ?? 200,
       output: opts.output ?? null,
+      /** Documentation only, for handlers that validate on their own: { body, response } as JSON Schema (response is the `data` payload). */
+      openapi: opts.openapi ?? null,
       rateLimit: opts.rateLimit ?? null,
       hidden: Boolean(opts.hidden),
       /** Express middleware run after the policy pre-check, before the handler (e.g. multer). */

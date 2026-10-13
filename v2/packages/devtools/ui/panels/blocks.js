@@ -2,7 +2,7 @@
 // changed since, the extension points it uses, its env vars (set or missing, secret values
 // never leave the server), its options and its routes.
 
-import { h, mount, fileLink, empty, bar, plural, joined, methodTag, policyText, jsonViewer } from '../lib.js';
+import { h, mount, fileLink, empty, bar, plural, joined, methodTag, policyText, jsonViewer, richText } from '../lib.js';
 import { store } from '../store.js';
 
 const DOCS = 'https://docs.calmapi.dev/blocks';
@@ -100,6 +100,7 @@ function blockSection(b, ov) {
       b.changed.length ? h('span', { class: 'b-changed', title: b.changed.join('\n') }, `${plural(b.changed.length, 'file')} changed by you`) : null,
     ])),
     h('span', { class: 'spacer' }),
+    b.installed && String(b.installed.key).startsWith('@calmapi/') ? h('a', { class: 'btn ghost', href: `${DOCS}/${b.name}`, target: '_blank', rel: 'noopener', title: 'This block on docs.calmapi.dev' }, 'Docs ↗') : null,
     b.file ? fileLink(ov.app.root, b.file) : null,
     ...b.panels.map((p) => h('a', { class: 'btn ghost', href: `#/panel:${p}` }, `Open ${p}`)),
   );
@@ -110,11 +111,51 @@ function blockSection(b, ov) {
   if (b.uses.length) main.push(sect('Hooks into', usesList(b.uses)));
   if (b.routes.length) main.push(sect('Routes', routesTable(b.routes)));
   const side = [];
+  if (b.guide?.links?.length) side.push(sect('Official documentation', linkList(b.guide.links), 'Read these before changing the block'));
+  if (b.guide?.agents) side.push(sect('For AI agents', agentNotes(b.guide.agents, ov.app.root, b.guide.file), 'Agents read the same notes in AGENTS.md'));
   if (Object.keys(b.options).length) side.push(sect('Options', jsonViewer(b.options, { open: 1 }), `Change them in calm.config.js: blocks: { '${b.name}': { ... } }`));
   if (b.changed.length) side.push(sect('Changed since install', h('ul', { class: 'blk-files' }, b.changed.map((f) => h('li', null, fileLink(ov.app.root, f)))), 'Your edits are yours: the block is plain code in your project'));
 
   const columns = [main, side].filter((c) => c.length).map((c) => h('div', { class: 'blk-col' }, c));
   return h('section', { class: 'res blk', id: `blk-${b.name}` }, head, columns.length ? h('div', { class: ['blk-grid', columns.length === 1 && 'one'] }, columns) : h('p', { class: 'muted' }, 'Nothing to configure.'));
+}
+
+function linkList(links) {
+  return h('ul', { class: 'blk-links' }, links.map((l) => h('li', null, h('a', { href: l.url, target: '_blank', rel: 'noopener noreferrer', title: l.url }, l.title, h('span', { class: 'muted' }, ' ↗')), h('span', { class: 'blk-host muted' }, hostOf(l.url)))));
+}
+
+const hostOf = (url) => {
+  try {
+    return new URL(url).host.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+};
+
+/** The "For AI agents" notes: markdown lists and paragraphs, `code` and **bold**, collapsed after a few lines. */
+function agentNotes(text, root, file) {
+  const inline = (line) => line.split(/(\*\*[^*]+\*\*)/g).map((part) => (/^\*\*[^*]+\*\*$/.test(part) ? h('strong', null, richText(part.slice(2, -2))) : richText(part)));
+  const blocks = [];
+  let list = null;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    const item = /^(?:[-*]|\d+\.)\s+(.*)$/.exec(line);
+    if (item) {
+      if (!list) blocks.push((list = h('ul', null)));
+      list.append(h('li', null, inline(item[1])));
+    } else {
+      list = null;
+      if (line) blocks.push(h('p', null, inline(line.replace(/^#+\s*/, ''))));
+    }
+  }
+  const body = h('div', { class: 'blk-agents' }, blocks);
+  const long = text.split('\n').length > 6;
+  return h(
+    'div',
+    null,
+    long ? h('details', { class: 'blk-agents-more' }, h('summary', null, `${plural(text.split('\n').filter((l) => l.trim()).length, 'line')}: show`), body) : body,
+    file ? h('div', { class: 'blk-agents-file' }, fileLink(root, file)) : null,
+  );
 }
 
 const sect = (title, content, note) => h('section', { class: 'sect' }, h('h3', { class: 'sect-title' }, title, note ? h('span', { class: 'sect-note' }, note) : null), content);

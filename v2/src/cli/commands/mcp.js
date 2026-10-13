@@ -95,6 +95,12 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {} },
   },
   {
+    name: 'calm_client',
+    description:
+      'A typed, dependency-free API client for a web or mobile frontend, generated from this API (every route a function with input and output types, typed errors). Without out: returns the TypeScript source. With out: writes the file (a .js path writes JavaScript plus a .d.ts). Use it instead of hand-writing fetch calls, and generate it again after the API changes.',
+    inputSchema: { type: 'object', properties: { out: { type: 'string', description: 'File to write, relative to the project, e.g. ../web/src/api/calm-client.ts' }, js: { type: 'boolean', description: 'JavaScript plus .d.ts instead of TypeScript' } } },
+  },
+  {
     name: 'calm_recent_requests',
     description: 'Recent HTTP requests handled by the running dev server (method, path, status, duration, query count, error code). Use to debug what just happened.',
     inputSchema: {
@@ -455,6 +461,8 @@ async function callTool(root, name, args) {
       const flags = ['--yes', ...(args.dryRun ? ['--dry-run'] : []), ...(args.install === false ? ['--no-install'] : [])];
       return cli(root, ['add', ...args.blocks, ...flags]);
     }
+    case 'calm_client':
+      return args.out ? cli(root, ['client', '--out', String(args.out), ...(args.js ? ['--js'] : [])]) : cli(root, ['client', '--stdout', ...(args.js ? ['--js'] : [])]);
     case 'calm_openapi':
       return json(root, ['openapi', '--stdout']);
     case 'calm_recent_requests': {

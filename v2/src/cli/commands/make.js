@@ -6,6 +6,7 @@ import { writeFile, PKG } from '../lib/files.js';
 import { parseFieldSpec, fieldCode } from '../lib/field-spec.js';
 import { kebab, pascal, pluralize } from '../lib/strings.js';
 import { c, ok, out, info } from '../lib/ui.js';
+import { blockGuide } from '../lib/blocks.js';
 
 export const help = `
 ${c.bold('calm make resource <name> [fields...]')}
@@ -252,8 +253,7 @@ export default definePlugin({
   },
 });
 `);
-  put(`app/blocks/${name}/block.json`, `${JSON.stringify(
-    {
+  const blockMeta = {
       name,
       title,
       description: `What ${title} adds, in one sentence.`,
@@ -266,10 +266,12 @@ export default definePlugin({
       dependencies: [],
       files: [],
       docs: `GET /api/${name}/hello says hello.\nSettings: blocks: { '${name}': { greeting } } in calm.config.js.`,
-    },
-    null,
-    2,
-  )}\n`);
+      links: [{ title: 'Building blocks (CalmAPI docs)', url: 'https://docs.calmapi.dev/building-blocks' }],
+      agents: `- Read app/blocks/${name}/index.js first: options, env vars and routes are declared there.\n- Keep the block self-contained: other code talks to it through its routes or calm.provide, never through its models.\n- Add the official documentation of any service this block calls to "links" in block.json.`,
+  };
+  put(`app/blocks/${name}/block.json`, `${JSON.stringify(blockMeta, null, 2)}\n`);
+  // Instructions for AI agents and official links, next to the code (rewrite it when block.json changes).
+  put(`app/blocks/${name}/AGENTS.md`, blockGuide(blockMeta));
   put(`app/blocks/${name}/README.md`, `# ${title}
 
 A [CalmAPI](https://docs.calmapi.dev) block.

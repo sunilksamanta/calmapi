@@ -360,6 +360,7 @@ function mountRequests(root, params) {
             'span',
             { class: 'dt-actions' },
             h('button', { class: 'btn ghost', onclick: () => copy(toCurl(rec), 'curl command copied') }, 'Copy as curl'),
+            h('button', { class: 'btn ghost', title: 'The same call with the typed client from npx calm client', onclick: () => toClientCall(rec).then((code) => (code ? copy(code, 'Client call copied') : toast('No client function for this route (run npx calm client after adding it)', { tone: 'error' }))) }, 'Copy as client call'),
             h('button', { class: 'btn ghost', onclick: () => openInPlayground(rec), title: 'Edit and resend in the Playground' }, 'Edit in Playground'),
             rec.route && !rec.replay ? h('button', { class: 'btn ghost', onclick: () => saveAsTest(rec), title: 'Write test/recorded/<name>.test.js: the same request as the same kind of user, on a throwaway database' }, 'Save as test') : null,
             h('button', { class: 'btn primary', onclick: () => replay(rec), title: store.actAs ? `Replay as ${store.actAs.user.name}` : 'Replay this request' }, replayLabel),
@@ -804,6 +805,29 @@ function toCurl(rec) {
     parts.push(`--data ${shq(JSON.stringify(rec.requestBody))}`);
   }
   return parts.join(' \\\n  ');
+}
+
+let clientOps = null;
+
+/** The request as a call of the generated client: await api.products.update('64f...', { price: 30 }). */
+async function toClientCall(rec) {
+  clientOps ??= await api('/client').catch(() => null);
+  const [pathname, search = ''] = rec.path.split('?');
+  for (const op of clientOps ?? []) {
+    if (op.method !== rec.method) continue;
+    const names = [];
+    const re = new RegExp(`^${op.path.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\\?\{([^}]+)\\?\}/g, (_, n) => (names.push(n), '([^/]+)'))}$`);
+    const m = re.exec(pathname);
+    if (!m) continue;
+    const args = m.slice(1).map((v) => JSON.stringify(decodeURIComponent(v)).replace(/^"|"$/g, "'"));
+    if (op.body) args.push(hasBody(rec) ? JSON.stringify(rec.requestBody, null, 2) : '{}');
+    const query = Object.fromEntries(new URLSearchParams(search));
+    if (op.query && Object.keys(query).length) args.push(JSON.stringify(query));
+    const key = /^[A-Za-z_$][\w$]*$/;
+    const ref = (k) => (key.test(k) ? `.${k}` : `[${JSON.stringify(k)}]`);
+    return `await api${ref(op.group)}${ref(op.name)}(${args.join(', ')});`;
+  }
+  return null;
 }
 
 function openInPlayground(rec) {

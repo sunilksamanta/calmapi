@@ -29,6 +29,7 @@ import { trace } from './context.js';
 import { parseKeys, createCipher } from './security/encryption.js';
 import { createCheckpoint, listCheckpoints, readCheckpoint, restoreCheckpoint, deleteCheckpoint } from './checkpoints.js';
 import { aboutReport } from './about.js';
+import { writeClientFile } from './client.js';
 
 /**
  * Build a CalmAPI application from a project folder.
@@ -159,6 +160,14 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
       });
       installShutdown(app);
       printBanner(app);
+      if (config.mode === 'development' && config.client?.out) {
+        try {
+          const written = writeClientFile(app);
+          if (written?.changed) log.info(`Typed client written to ${config.client.out}`);
+        } catch (err) {
+          log.warn(`Could not write the typed client (client.out): ${err.message}`);
+        }
+      }
       return app.server;
     },
 

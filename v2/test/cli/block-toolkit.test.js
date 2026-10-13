@@ -27,7 +27,7 @@ after(() => {
 test('make block, check, pack, add it to another project', async () => {
   const made = calm(author.dir, 'make', 'block', 'hello-world');
   assert.equal(made.code, 0, made.out);
-  for (const f of ['app/blocks/hello-world/index.js', 'app/blocks/hello-world/block.json', 'app/blocks/hello-world/README.md', 'test/blocks/hello-world.test.js']) assert.ok(existsSync(join(author.dir, f)), f);
+  for (const f of ['app/blocks/hello-world/index.js', 'app/blocks/hello-world/block.json', 'app/blocks/hello-world/README.md', 'app/blocks/hello-world/AGENTS.md', 'test/blocks/hello-world.test.js']) assert.ok(existsSync(join(author.dir, f)), f);
 
   // The new block is live in the app right away, with options from calm.config.js.
   writeFileSync(join(author.dir, 'calm.config.js'), "import { defineConfig } from '#calm';\nexport default defineConfig({ blocks: { 'hello-world': { greeting: 'Hi' } } });\n");
@@ -54,7 +54,7 @@ test('make block, check, pack, add it to another project', async () => {
   assert.equal(packed.code, 0, packed.out);
   assert.match(packed.out, /calm add gh:<you>\/<repo>\/hello-world/);
   const item = JSON.parse(readFileSync(join(author.dir, 'r', 'hello-world.json'), 'utf8'));
-  assert.deepEqual(item.files.map((f) => f.target).sort(), ['app/blocks/hello-world/README.md', 'app/blocks/hello-world/index.js', 'app/jobs/hello-digest.js']);
+  assert.deepEqual(item.files.map((f) => f.target).sort(), ['app/blocks/hello-world/AGENTS.md', 'app/blocks/hello-world/README.md', 'app/blocks/hello-world/index.js', 'app/jobs/hello-digest.js']);
   assert.equal(item.meta.calmapi.minVersion.length > 0, true);
   assert.deepEqual(JSON.parse(readFileSync(join(author.dir, 'r', 'index.json'), 'utf8')).items.map((i) => i.name), ['hello-world']);
 
