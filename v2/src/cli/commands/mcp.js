@@ -198,6 +198,12 @@ const TOOLS = [
       'Why a request got its answer: the path it took through the code, step by step (rate limit, authentication, guards, the policy decision token by token, input validation, service hooks, the handler with file and line, events, the error). Use it on any 401, 403, 404 or 422 instead of guessing. The id comes from calm_recent_requests or the requestId of calm_http.',
     inputSchema: { type: 'object', properties: { id: str('Request id') }, required: ['id'] },
   },
+  {
+    name: 'calm_about',
+    description:
+      'The transparency report: what the framework does on every request (the middleware pipeline in order), the headers it sets, what it stores and for how long, what it logs, which hosts the code can reach, and the files the CLI writes. Read it before changing middleware, auth or storage.',
+    inputSchema: { type: 'object', properties: {} },
+  },
 ];
 
 export async function run(argv) {
@@ -506,6 +512,11 @@ async function callTool(root, name, args) {
         request: { method: record.method, path: record.path, status: record.status, user: record.user, route: record.route ?? null, error: record.error ? { code: record.error.code, message: record.error.message } : null },
         steps: record.steps ?? [],
       };
+    }
+    case 'calm_about': {
+      const info = await introspect(root);
+      if (info.error) throw new Error(info.error.message);
+      return info.about;
     }
     default:
       throw new Error(`Unknown tool ${name}`);

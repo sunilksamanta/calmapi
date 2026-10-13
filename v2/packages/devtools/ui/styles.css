@@ -1560,3 +1560,22 @@ textarea.input.mono { font-family: var(--mono); }
 .pt-bad .pt-name, .pt-bad .pt-glyph { color: var(--red); }
 .pt-answered .pt-glyph { color: var(--accent, inherit); }
 .pt-stop { margin: 0; color: var(--text-3); font-style: italic; }
+
+/* ---- About (transparency report) ------------------------------------------------------ */
+
+.ab { padding: 16px; display: grid; gap: 16px; align-content: start; }
+.ab-head p { margin: 0 0 4px; }
+.ab-card { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 8px; min-width: 0; }
+.ab-title { margin: 0; font-size: var(--fs-2); font-weight: 600; }
+.ab-card p { margin: 0; }
+.ab-pipe { margin: 0; padding-left: 22px; display: grid; gap: 4px; }
+.ab-pipe li { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.ab-name { font-weight: 600; min-width: 130px; }
+.ab-purpose { flex: 1 1 320px; color: var(--text-2); }
+.ab-table { border-collapse: collapse; width: 100%; font-size: var(--fs-3); }
+.ab-table td { padding: 4px 8px 4px 0; vertical-align: top; border-bottom: 1px solid var(--line); }
+.ab-table tr:last-child td { border-bottom: 0; }
+.ab-table td a { margin-right: 8px; }
+.ab-promise.ok { color: var(--green, #2f7d4f); }
+.ab-promise.bad { color: var(--red); }
+@media (max-width: 720px) { .ab-table td:nth-child(n + 4) { display: none; } }

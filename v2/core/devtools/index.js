@@ -20,8 +20,11 @@ import { maskToken, BEHAVIORS, PLATFORMS } from '../push.js';
 
 const SKIP_COMMANDS = new Set(['hello', 'ismaster', 'isMaster', 'ping', 'endSessions', 'saslStart', 'saslContinue', 'buildInfo', 'getParameter', 'listIndexes', 'createIndexes']);
 const EXPLAINABLE = new Set(['find', 'aggregate', 'count', 'distinct', 'update', 'delete', 'findAndModify']);
-const SECRET_KEYS = /pass(word)?|secret|token|otp|api[-_]?key/i;
+/** Keys whose values are redacted in recorded bodies and options. Shared with the transparency report. */
+export const SECRET_KEYS = /pass(word)?|secret|token|otp|api[-_]?key/i;
 const MAX_BODY = 64 * 1024;
+/** How much devtools keeps in memory (newest wins). Listed by `calm about`. */
+export const RING_SIZES = { requests: 300, orphanQueries: 200, logs: 1000, mails: 100, pushes: 100, activity: 500, securityEvents: 300 };
 
 function ring(size) {
   const items = [];
@@ -38,13 +41,13 @@ function ring(size) {
 }
 
 export function setupDevtools(app, ex) {
-  const requests = ring(300);
-  const orphanQueries = ring(200);
-  const logs = ring(1000);
-  const mails = ring(100);
-  const pushes = ring(100);
-  const activity = ring(500);
-  const securityEvents = ring(300);
+  const requests = ring(RING_SIZES.requests);
+  const orphanQueries = ring(RING_SIZES.orphanQueries);
+  const logs = ring(RING_SIZES.logs);
+  const mails = ring(RING_SIZES.mails);
+  const pushes = ring(RING_SIZES.pushes);
+  const activity = ring(RING_SIZES.activity);
+  const securityEvents = ring(RING_SIZES.securityEvents);
   const clients = new Set();
   const inflight = new Map(); // driver requestId -> { record, query }
   let seq = 0;
@@ -210,6 +213,8 @@ export function setupDevtools(app, ex) {
   });
 
   api.get('/overview', (_req, res) => res.json(overview(app)));
+  // What the framework does that you did not write (calm about, the About panel).
+  api.get('/about', async (_req, res) => res.json(await app.about()));
   api.get('/doctor', async (_req, res) => res.json(await app.doctor()));
   api.get('/snapshot', async (_req, res) => res.json(await app.snapshot()));
   api.get('/invariants', async (_req, res) => res.json(await app.invariants()));
