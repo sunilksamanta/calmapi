@@ -1508,3 +1508,20 @@ textarea.input.mono { font-family: var(--mono); }
   .np-compose-form { border-right: 0; border-bottom: 1px solid var(--line); }
   .np-phone-view { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---- checkpoints (Data toolbar popovers, Activity rows) ----------------------------- */
+
+.cp-pop { display: grid; gap: 8px; padding: 8px; font-size: var(--fs-2); }
+.cp-pop .np-actions { padding-top: 0; }
+.cp-list { display: grid; max-height: 320px; overflow: auto; }
+.cp-row { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; column-gap: 8px; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+.cp-row:last-child { border-bottom: 0; }
+.cp-main { display: grid; gap: 1px; min-width: 0; }
+.cp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-meta { color: var(--text-3); font-size: var(--fs-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-actions { display: flex; gap: 2px; }
+.cp-confirm { grid-column: 1 / -1; display: grid; gap: 8px; padding: 6px 4px 4px; color: var(--text-2); }
+.cp-confirm b { color: var(--text); }
+.cp-empty { padding: 8px 4px; color: var(--text-3); }
+.act-desc .cp-icon { color: var(--text-3); align-self: center; }
+.act-desc .cp-restore { padding: 0 6px; min-height: 20px; height: 20px; font-size: var(--fs-3); }

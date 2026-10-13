@@ -18,6 +18,8 @@ const COMMANDS = {
   block: () => import('./commands/block.js'),
   seed: () => import('./commands/seed.js'),
   blocks: () => import('./commands/block.js'),
+  checkpoint: () => import('./commands/checkpoint.js'),
+  restore: () => import('./commands/restore.js'),
 };
 const ALIASES = { new: 'create', init: 'create', generate: 'make', g: 'make', m: 'make' };
 
@@ -46,6 +48,8 @@ const HELP = `
     keygen [--write]             encryption key for .encrypted() fields (rotates)
 
   ${c.bold('Maintain')}
+    checkpoint [name]            snapshot the dev database (checkpoint list, checkpoint delete <id>)
+    restore [id]                 put the dev database back (the latest checkpoint by default)
     upgrade                      merge framework updates into calm/, keeping your edits
     mcp                          MCP server for AI coding agents
 

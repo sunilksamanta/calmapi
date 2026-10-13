@@ -20,6 +20,7 @@ import { exposureMatrix, exposureFindings } from './security/exposure.js';
 import { canRead, inScope } from './resource/visibility.js';
 import { toHttpError, notFound } from './errors.js';
 import { parseKeys, createCipher } from './security/encryption.js';
+import { createCheckpoint, listCheckpoints, readCheckpoint, restoreCheckpoint, deleteCheckpoint } from './checkpoints.js';
 
 /**
  * Build a CalmAPI application from a project folder.
@@ -93,6 +94,15 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
     canRead: async (resource, doc, user, opts) => canRead(entryOf(resource), doc, user, opts),
     /** Is `doc` inside the service scope() for `user`? Skips the read policy (admin feeds). */
     inScope: async (resource, doc, user, opts) => inScope(entryOf(resource), doc, user, opts),
+
+    /** Snapshots of the development database in .calm/checkpoints (see checkpoints.js). */
+    checkpoints: {
+      create: (options) => createCheckpoint(app, options),
+      list: () => listCheckpoints(root),
+      read: (id) => readCheckpoint(root, id),
+      restore: (id, options) => restoreCheckpoint(app, id, options),
+      delete: (id, options) => deleteCheckpoint(root, id, options),
+    },
 
     /** Run work after the response, tracked so tests and shutdown can wait for it. */
     background(fn) {

@@ -203,6 +203,8 @@ export function connect() {
     }
     emit('security', event);
   });
+  // A checkpoint was created, restored or deleted (here, from the CLI or by an agent).
+  es.addEventListener('checkpoint', (e) => emit('checkpoint', JSON.parse(e.data)));
   es.addEventListener('audit', (e) => {
     // An audit finished (here, in another tab, or from an agent via calm_audit).
     if (store.auditRunning) return;

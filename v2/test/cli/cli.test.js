@@ -262,8 +262,8 @@ describe('mcp', () => {
       send({ jsonrpc: '2.0', method: 'notifications/initialized' });
       send({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
       const tools = (await wait(2)).result.tools.map((t) => t.name);
-      assert.ok(tools.includes('calm_routes') && tools.includes('calm_make_resource') && tools.includes('calm_recent_requests') && tools.includes('calm_pushes'));
-      assert.equal(tools.length, 18);
+      assert.ok(tools.includes('calm_routes') && tools.includes('calm_make_resource') && tools.includes('calm_recent_requests') && tools.includes('calm_pushes') && tools.includes('calm_checkpoint') && tools.includes('calm_restore'));
+      assert.equal(tools.length, 20);
 
       send({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'calm_make_resource', arguments: { name: 'ticket', fields: ['title:string!', 'priority:enum:low,high=low'] } } });
       const made = await wait(3);
