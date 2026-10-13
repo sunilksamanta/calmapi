@@ -1,0 +1,21 @@
+{
+  "name": "export",
+  "title": "Data export and import",
+  "description": "Admins export any resource as CSV, NDJSON or JSON, streamed from a cursor (memory safe), with the list route's filters and the API's field visibility (hidden, write-only and encrypted fields never leave). Import from CSV, NDJSON or JSON through the resource's own validation, with a dry run that reports per row errors. Optional self export of owned records.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-beta.1",
+  "categories": ["data", "admin"],
+  "envVars": {},
+  "dependencies": [],
+  "conflicts": [],
+  "docs": "Export: GET /api/admin/export/:resource?format=csv|ndjson|json plus the list filters (?status=live&sort=-createdAt&fields=title,price). GET /api/admin/export lists resources and columns.\nImport: POST /api/admin/import/:resource?dryRun=true with a CSV (text/csv), NDJSON (application/x-ndjson) or JSON array body -> { total, valid, invalid, created, updated, errors: [{ row, errors }] }. ?mode=upsert updates rows whose id exists, ?skipInvalid=true imports the valid rows.\nSelf export (option self: true or ['note']): GET /api/export/:resource, the caller's own records.\nOptions (calm.config.js blocks.export): resources, exclude, self, batchSize, exportLimit, importLimitMb, importMaxRows, maxErrors.",
+  "links": [
+    { "title": "RFC 4180: Common Format for CSV Files", "url": "https://www.rfc-editor.org/rfc/rfc4180" },
+    { "title": "OWASP CSV Injection", "url": "https://owasp.org/www-community/attacks/CSV_Injection" },
+    { "title": "NDJSON specification", "url": "https://github.com/ndjson/ndjson-spec" },
+    { "title": "MongoDB cursors (iterate a cursor)", "url": "https://www.mongodb.com/docs/manual/tutorial/iterate-a-cursor/" },
+    { "title": "Node.js stream backpressure", "url": "https://nodejs.org/en/learn/modules/backpressuring-in-streams" },
+    { "title": "MDN: Content-Disposition header", "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Disposition" }
+  ],
+  "agents": "- Read `app/blocks/export/index.js` (routes, export stream, import) and `app/blocks/export/csv.js` (escaping) first.\n- Options live in `calm.config.js` under `blocks.export`: `resources`, `exclude`, `self`, limits.\n- Never load a whole collection: exports iterate `model.find(...).lean().cursor()` and write through `writer(res)`, which waits for `drain`. Keep both.\n- Field rules: only `isOutput && !opts.encrypted` fields are selected and every record goes through `serialize()` with the caller as viewer. Do not add `+field` selects or skip `serialize`.\n- Filters, sort and `?fields=` must keep going through `parseListQuery` (from '#calm'): no raw Mongo filters from query strings.\n- CSV cells go through `csvCell`: RFC 4180 quoting plus a leading `'` before = + - @ tab and CR. Do not write cells by hand.\n- Import validates every row with `validateInput` before writing anything; writes go through `service.create`/`service.update` so hooks run. Keep the all or nothing default (`skipInvalid` opts out).\n- Read-only columns from an export (id, timestamps, computed fields) are skipped on import and listed in `ignoredColumns`; hidden or unknown columns are row errors.\n- Admin import keeps the owner field of each row on create (a restore); it never changes owners on update.\n- Self export (`GET /api/export/:resource`) is limited to the owner scope and the resource's read policy; keep both checks.\n- A failure after the first byte destroys the response, so a partial file never looks complete.\n- Tests in the CalmAPI repo: `test/blocks/export.test.js` (streaming 5000 records, escaping, injection, dry run, permissions)."
+}

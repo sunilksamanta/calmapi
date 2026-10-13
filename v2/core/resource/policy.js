@@ -22,13 +22,21 @@ const ALIASES = { auth: 'authenticated', user: 'authenticated', self: 'owner', n
 const BUILT_IN = new Set(['public', 'authenticated', 'owner', 'none']);
 
 // Named policies added by blocks with calm.policy(name, fn), e.g. 'member' from an
-// organizations block. They resolve to their function when a policy is parsed.
+// organizations block. They resolve to their function when a policy is parsed. Names may be
+// namespaced with ':' ('team:admin'); 'role:' stays reserved for roles ('role:admin' is 'admin').
+//
+// A rule that depends on data the exposure matrix cannot invent (a membership, a plan) passes
+// { simulate }: simulate({ user, action }) answers 'allow' | 'deny' | 'custom' for a persona,
+// and the matrix (and so `calm audit`) uses that instead of calling fn with a fake record.
 const named = new Map();
-export function registerPolicy(name, fn) {
-  if (typeof name !== 'string' || !/^[a-z][\w-]*$/i.test(name)) throw new Error(`calm.policy(name, fn): invalid name "${name}"`);
+export function registerPolicy(name, fn, { simulate } = {}) {
+  if (typeof name !== 'string' || !/^[a-z][\w-]*(:[a-z][\w-]*)*$/i.test(name)) throw new Error(`calm.policy(name, fn): invalid name "${name}"`);
   if (BUILT_IN.has(name) || name in ALIASES) throw new Error(`calm.policy: "${name}" is a built-in policy`);
+  if (/^role:/i.test(name)) throw new Error(`calm.policy: "${name}": the role: prefix is reserved for roles`);
   if (typeof fn !== 'function') throw new Error(`calm.policy('${name}', fn): fn must be a function`);
+  if (simulate !== undefined && typeof simulate !== 'function') throw new Error(`calm.policy('${name}', fn, { simulate }): simulate must be a function`);
   Object.defineProperty(fn, 'name', { value: name });
+  if (simulate) Object.defineProperty(fn, 'calmSimulate', { value: simulate, configurable: true });
   named.set(name, fn);
 }
 

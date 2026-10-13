@@ -1,0 +1,20 @@
+{
+  "name": "email-verification",
+  "title": "Email verification",
+  "description": "Prove that people own their email address: a single use link (stored hashed, 24 hour expiry) after registration and after every address change, resend with a per address cooldown, emailVerified on the user and in /auth/me, a 'verified' policy token, and optional enforcement at sign-in or on every route.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-beta.1",
+  "categories": ["auth", "security"],
+  "envVars": {},
+  "dependencies": [],
+  "conflicts": [],
+  "docs": "Registering sends a link to APP_URL/verify-email?token=... (option linkUrl). That page calls POST /api/auth/verify-email { token } -> { verified, email }.\nResend: POST /api/auth/verify-email/resend (signed in) or { email } (signed out) -> 202. Admins: POST /api/admin/users/:userId/verify-email.\nThe user gets emailVerified and emailVerifiedAt (GET /api/auth/me). Protect routes with policy: 'verified' (or 'verified | admin'): 403 EMAIL_NOT_VERIFIED.\nOptions (calm.config.js blocks['email-verification']): required (false | 'routes' | 'login'), ttlHours, cooldownSeconds, linkUrl, sendOnRegister, sendOnEmailChange, notifyOldEmail, allow.",
+  "links": [
+    { "title": "OWASP Authentication Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html" },
+    { "title": "OWASP Forgot Password Cheat Sheet (token handling)", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html" },
+    { "title": "NIST SP 800-63B Digital Identity Guidelines", "url": "https://pages.nist.gov/800-63-3/sp800-63b.html" },
+    { "title": "MongoDB TTL indexes", "url": "https://www.mongodb.com/docs/manual/core/index-ttl/" },
+    { "title": "MDN: Retry-After header", "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After" }
+  ],
+  "agents": "- Read `app/blocks/email-verification/index.js` first: the header comment lists every route and the security rules.\n- Options live in `calm.config.js` under `blocks['email-verification']`; `required` is `false`, `'routes'` or `'login'`, nothing else.\n- Never store or log a raw token: only `hashToken(token)` goes to `calm_email_verifications`. The raw token only exists in the email.\n- Tokens are claimed with one atomic `findOneAndUpdate` on `usedAt: null`; keep that, a read then a write lets two clicks both pass.\n- A link proves the address it was sent to (`email` on the record). Keep the check `user.email === claimed.email` in the verify route.\n- `emailVerified` and `emailVerifiedAt` are added to the user resource in `calm.onResource` and are read-only: never make them writable by clients. Use `app.ext.emailVerification.markVerified(userId)` from other code.\n- The resend route must answer the same body for known and unknown addresses and do the lookup in `calm.app.background`. Do not add 'user not found' errors.\n- Protect a route with `policy: 'verified'` (or `'verified | admin'`); the guard turns the denial into `403 EMAIL_NOT_VERIFIED`.\n- With `required` on, unverified users can still call the routes in `ALWAYS_ALLOWED` plus `options.allow` ('METHOD /path' as written in the route, without /api).\n- Changing the email (PATCH /api/auth/me or the user CRUD) resets verification in `beforeUpdate` of the user service; do not move that to an event listener, it must be the same update.\n- A sign-in through `POST /auth/magic-link/verify` marks the user verified in the login challenge (the link proved the inbox); keep that path check in sync if the magic-link prefix changes.\n- Accounts created before the block have no `emailVerified` field and count as unverified; `calm doctor` reports how many.\n- Tests: `test/blocks/email-verification.test.js` in the CalmAPI repo shows every flow; in a project, use `t.mails` and `t.idle()` to read the link."
+}

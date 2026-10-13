@@ -55,7 +55,11 @@ export class ResourceService {
   /** Build the full Mongo filter for this request: your scope(), owner scoping, then `extra`. */
   filterFor(ctx = {}, extra = {}) {
     // { system: true } marks trusted internal calls (jobs, scripts): no scope() applied.
-    const parts = [ctx.system ? {} : this.scope(ctx), extra];
+    const own = ctx.system ? {} : this.scope(ctx);
+    // A pending scope has no keys and would read as "no filter": refuse it instead of leaking.
+    // (app.canRead/inScope await scope(), so async scopes work there; here they cannot.)
+    if (typeof own?.then === 'function') throw new Error(`${this.def.name}: scope() returned a Promise where a filter is needed now. Load what it needs earlier (a calm.guard) or pass { system: true } with your own filter.`);
+    const parts = [own, extra];
     if (ctx.scope === 'owner') {
       if (!ctx.user) return { _id: null }; // matches nothing
       parts.push({ [this.def.ownerField]: ctx.user.id });

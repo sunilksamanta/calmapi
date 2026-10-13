@@ -396,10 +396,13 @@ function pluginApi(app, plugin, options = {}, uses = []) {
       app.hooks.guards.push(fromBlock(fn, plugin));
       app.hooks.guards.sort((a, b) => (a.calmOrder ?? 0) - (b.calmOrder ?? 0));
     },
-    /** A named policy usable in resources and routes: calm.policy('member', (ctx) => ...). */
-    policy: (name, fn) => {
+    /**
+     * A named policy usable in resources and routes: calm.policy('member', (ctx) => ...).
+     * { simulate } tells the exposure matrix how a data-dependent rule looks per persona.
+     */
+    policy: (name, fn, options) => {
       note('policy', name);
-      registerPolicy(name, fn);
+      registerPolicy(name, fn, options);
     },
     routes: (fn, options = {}) => app.hooks.routes.push({ fn, options: { source: `block:${plugin.name}`, file: plugin.file, ...options } }),
     use: (fn) => {

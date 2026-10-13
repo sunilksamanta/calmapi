@@ -97,6 +97,12 @@ export async function runAudit({ root, config = {}, baseUri } = {}) {
             ok = null;
             note = 'hidden by the service scope()';
           }
+          if (!ok && allowedExpected && action === 'create' && res.status === 422) {
+            // The body is guessed from field definitions; refusing it as invalid is not an access
+            // decision (e.g. a team-scoped record needs a team the persona belongs to).
+            ok = null;
+            note = `the audit could not build a valid ${r.name}: ${Object.keys(res.body?.error?.details ?? {}).join(', ') || 'validation failed'}`;
+          }
           if (expected === 'custom') {
             ok = null;
             note = 'custom policy function';
@@ -154,6 +160,11 @@ export async function runAudit({ root, config = {}, baseUri } = {}) {
       if (r.actions.list.admin !== 'off' && (reader || r.actions.list.anonymous === 'allow')) {
         for (const [label, q] of [['operator injection', 'x[$ne]=1'], ['limit cap', 'limit=100000'], ['unknown filter', 'definitelyNotAField=1']]) {
           const res = await t.get(`${base}?${q}`, reader);
+          // A custom list rule (a team membership...) may refuse the auditor: then the query was never parsed.
+          if (r.actions.list[reader ? 'admin' : 'anonymous'] === 'custom' && [401, 403].includes(res.status)) {
+            notes.push(`${r.name}: ${label} not probed (its custom list policy refused the auditor: ${res.status})`);
+            continue;
+          }
           probes.push({ name: `${label}: ${r.name}`, ok: res.status === 400, detail: `${q} -> ${res.status}` });
         }
         const res = await t.get(`${base}/not-an-id`, reader);

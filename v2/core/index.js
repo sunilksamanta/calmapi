@@ -10,6 +10,7 @@ export { definePlugin } from './loader.js';
 export { Reply } from './http/router.js';
 export { hasRole, isOwner, evaluatePolicy, parsePolicy } from './resource/policy.js';
 export { matchesFilter } from './resource/visibility.js';
+export { parseListQuery } from './resource/query.js';
 export { createToken, hashToken } from './auth/tokens.js';
 export { isEncrypted } from './security/encryption.js';
 export { maskToken, providerPayloads } from './push.js';

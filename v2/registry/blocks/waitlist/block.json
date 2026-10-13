@@ -1,0 +1,20 @@
+{
+  "name": "waitlist",
+  "title": "Waitlist",
+  "description": "A launch waitlist: public join (idempotent per email) with a place in line, referral codes that move people up, admin list, stats, single use email invites (hashed tokens) in batches, and an optional gate so only invited addresses can register.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-beta.1",
+  "categories": ["growth", "auth"],
+  "envVars": {},
+  "dependencies": [],
+  "conflicts": [],
+  "docs": "Join: POST /api/waitlist { email, name?, referralCode? } -> { status, position, waiting, referrals, referralCode, referralUrl } (201 new, 200 already on the list). Check: GET /api/waitlist/:referralCode.\nAdmins: GET /api/admin/waitlist?status=waiting|invited|registered|all&q=, GET /api/admin/waitlist/stats, POST /api/admin/waitlist/invite { count } or { ids }, POST /api/admin/waitlist/:id/invite, DELETE /api/admin/waitlist/:id.\nInvites link to APP_URL/signup?invite=...&email=... (option signupUrl). With gate: true, POST /api/auth/register needs { ...user, inviteToken }.\nOptions (calm.config.js blocks.waitlist): gate, referralBoost, maxReferrals, inviteTtlDays, referralUrl, signupUrl, confirmationEmail, joinLimit, maxInviteBatch.",
+  "links": [
+    { "title": "OWASP Forgot Password Cheat Sheet (single use token handling)", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html" },
+    { "title": "OWASP Authentication Cheat Sheet (account enumeration)", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html" },
+    { "title": "MongoDB unique indexes", "url": "https://www.mongodb.com/docs/manual/core/index-unique/" },
+    { "title": "MongoDB findOneAndUpdate", "url": "https://www.mongodb.com/docs/manual/reference/method/db.collection.findOneAndUpdate/" },
+    { "title": "MongoDB aggregation $group", "url": "https://www.mongodb.com/docs/manual/reference/operator/aggregation/group/" }
+  ],
+  "agents": "- Read `app/blocks/waitlist/index.js` first: the header lists every route and the rules of the line.\n- Options live in `calm.config.js` under `blocks.waitlist`. `gate: true` makes registration invitation only.\n- The place in line is computed, never stored: `score` (join number minus `referralBoost` per referral) then `seq`. Keep the index `{ status, score, seq }` if you change the query.\n- Joining is idempotent per email: an existing entry is returned unchanged. Never let a second join change name, referrer or status.\n- Invite tokens are stored as `hashToken(token)` only; the raw token exists only in the invite email. A new invite replaces the old token.\n- The register gate is a `calm.guard` on `POST /auth/register` that checks and removes `inviteToken` from the body; the `beforeCreate` wrapper on the user service is the backstop for other sign-up paths (magic-link, OAuth). Keep both.\n- Admin creates (`hasRole(ctx.user, 'admin')`) and trusted code (`{ system: true }`) are not gated, on purpose.\n- `auth.registered` marks the entry `registered` and clears the token; that plus the unique user email makes invites single use.\n- Referral counting is capped by `maxReferrals` in the update filter; do not move the cap to application code (races).\n- The join route is public: keep `joinLimit` and leave `confirmationEmail` off unless you accept emails to unverified addresses.\n- Use `app.ext.waitlist` (`join`, `invite`, `validInvite`, `positionOf`, `Entry`) from jobs and scripts.\n- Events: waitlist.joined, waitlist.referred, waitlist.invited, waitlist.registered, waitlist.removed, security.invite_refused."
+}

@@ -170,6 +170,10 @@ describe('list queries', () => {
     const q = parseListQuery(product, { q: '(a+)+$' }, opts);
     assert.equal(q.filter.$or[0].name.source, '\\(a\\+\\)\\+\\$');
   });
+  test('is exported from #calm, so blocks filter exactly like the list route', async () => {
+    const calm = await import('../../core/index.js');
+    assert.equal(calm.parseListQuery, parseListQuery);
+  });
 });
 
 describe('errors', () => {

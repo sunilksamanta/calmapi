@@ -40,6 +40,18 @@ const fakeDoc = (def, owns) => {
 };
 
 async function decide(tokens, persona, def, action) {
+  const simulated = tokens?.filter((t) => typeof t === 'function' && t.calmSimulate) ?? [];
+  if (simulated.length) {
+    // Rules registered with { simulate } (calm.policy) depend on data no fake record has, such
+    // as a team membership: they describe themselves per persona, the other tokens are decided
+    // as usual. Any 'allow' wins; otherwise 'custom' (unknown) beats 'own' and 'deny'.
+    const answers = simulated.map((t) => t.calmSimulate({ user: persona.user, action }));
+    const rest = tokens.filter((t) => !simulated.includes(t));
+    const base = rest.length ? await decide(rest, persona, def, action) : { result: 'deny' };
+    if (answers.includes('allow') || base.result === 'allow') return { result: 'allow', custom: true };
+    if (answers.includes('custom') || base.result === 'custom') return { result: 'custom', custom: true };
+    return base;
+  }
   if (tokens?.some((t) => typeof t === 'function')) {
     // Custom rules may depend on data: evaluate, but flag as "custom".
     try {
@@ -109,6 +121,8 @@ export async function exposureMatrix(app) {
 }
 
 function hasOwnScope(service) {
+  // Blocks may install a scope() on the instance (calm.onService), e.g. team scoping.
+  if (Object.prototype.hasOwnProperty.call(service, 'scope')) return true;
   let proto = Object.getPrototypeOf(service);
   while (proto && proto.constructor.name !== 'ResourceService') {
     if (Object.prototype.hasOwnProperty.call(proto, 'scope')) return true;

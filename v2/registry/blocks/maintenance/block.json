@@ -1,0 +1,20 @@
+{
+  "name": "maintenance",
+  "title": "Maintenance mode",
+  "description": "Maintenance and read-only mode switched at runtime by admins: stored in MongoDB and cached briefly so every instance agrees, 503 with Retry-After and a message, reads kept in read-only mode, scheduled windows, an allowlist (admins, IPs, sign-in, health checks, devtools), a public status route for banners, and an env override for deploys.",
+  "version": "1.0.0",
+  "minVersion": "2.0.0-beta.1",
+  "categories": ["operations", "admin"],
+  "envVars": { "MAINTENANCE_MODE": "" },
+  "dependencies": [],
+  "conflicts": [],
+  "docs": "Admins: PATCH /api/admin/maintenance { mode: 'maintenance' | 'read-only' | 'off', message?, retryAfterSeconds?, until?, allowIps? }; POST /api/admin/maintenance/windows { start, end, mode?, message? }; DELETE /api/admin/maintenance/windows/:id; GET /api/admin/maintenance.\nEveryone: GET /api/maintenance -> { mode, message, until, retryAfterSeconds, upcoming } for banners.\nBlocked requests get 503 MAINTENANCE (or READ_ONLY for writes) with Retry-After. Admins, allowlisted IPs, sign-in, /health/* and devtools pass.\nMAINTENANCE_MODE=maintenance|read-only in .env forces a mode without the database. Options (blocks.maintenance): cacheMs, retryAfterSeconds, message, readOnlyMessage, allowIps, bypassRoles, allow.",
+  "links": [
+    { "title": "RFC 9110: 503 Service Unavailable", "url": "https://www.rfc-editor.org/rfc/rfc9110#name-503-service-unavailable" },
+    { "title": "RFC 9110: Retry-After", "url": "https://www.rfc-editor.org/rfc/rfc9110#name-retry-after" },
+    { "title": "MDN: 503 Service Unavailable", "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503" },
+    { "title": "Express: behind proxies (req.ip and trust proxy)", "url": "https://expressjs.com/en/guide/behind-proxies.html" },
+    { "title": "MongoDB update operators", "url": "https://www.mongodb.com/docs/manual/reference/operator/update/" }
+  ],
+  "agents": "- Read `app/blocks/maintenance/index.js` first: the header lists routes, what is let through and how instances agree.\n- Options live in `calm.config.js` under `blocks.maintenance`; the runtime state lives in the `calm_maintenance` collection (one document, `_id: 'state'`).\n- Enforcement is one `calm.guard` with `order: -100`, so it runs before every other guard. Keep it first, and keep it cheap: it reads the cached state, never MongoDB per request.\n- Windows are evaluated against the clock on every request (`effective()`); only the stored document is cached (`cacheMs`). Do not cache the computed mode.\n- Read-only mode lets GET, HEAD and OPTIONS through and refuses everything else; routes that write on GET are your bug, not the block's.\n- Always allowed: `GET /maintenance`, `POST /auth/login`, `POST /auth/logout`, plus `options.allow` ('METHOD /path' without /api). Admins pass by `bypassRoles`.\n- IP allowlists compare `req.ip`, which depends on `config.trustProxy` (TRUST_PROXY). Behind a load balancer set it, or every client shares the proxy's address.\n- `/health/*` and devtools are mounted before the API router and are never blocked; do not move them behind it.\n- `MAINTENANCE_MODE` (env) overrides the stored state and needs no database; doctor reports it while set.\n- From code: `app.ext.maintenance.set({ mode: 'read-only', until })` and `await app.ext.maintenance.status()`.\n- Events: `maintenance.changed` with the new state and who changed it."
+}
