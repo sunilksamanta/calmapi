@@ -1,6 +1,6 @@
 {
   "name": "calmapi",
-  "version": "2.0.0-alpha.1",
+  "version": "2.0.0-alpha.2",
   "description": "The backend framework you own. Resources, policies, auth, devtools and an upgrade path for Node.js + MongoDB, with every line of framework code in your repo.",
   "type": "module",
   "bin": {

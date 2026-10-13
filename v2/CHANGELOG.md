@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0-alpha.2 (unreleased)
+## 2.0.0-alpha.2
 
 Agents write more and more of the code; the person who ships it still answers for it. This
 release is about seeing what changed, proving what you promised, bounding what an agent may
