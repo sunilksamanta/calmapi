@@ -123,7 +123,7 @@ frontend a typed client, and adds 14 official blocks: 35 in all, each with its o
 - `calm dev` records changes to `test/`, `README.md`, `AGENTS.md`, `package.json` and the other
   project files in Activity, not only `app/` and `calm/`.
 - `calm seed` names what it made in plurals.
-- MCP: 28 tools.
+- MCP: 29 tools (`calm_review`, `calm_declare`, `calm_replay`, `calm_budgets` and `calm_client` are new).
 
 ## 2.0.0-alpha.2
 

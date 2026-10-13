@@ -156,7 +156,7 @@ function print(state) {
 
   if (state.declared) {
     const d = state.declared;
-    out('', `  ${c.bold('Declared by agents')} ${c.dim(`(${state.declarations.length} declaration${state.declarations.length === 1 ? '' : 's'}, ${d.declared} changes)`)}`);
+    out('', `  ${c.bold('Declared by agents')} ${c.dim(`(${state.declarations.length} declaration${state.declarations.length === 1 ? '' : 's'}, ${d.declared} change${d.declared === 1 ? '' : 's'})`)}`);
     for (const decl of state.declarations) out(`    ${c.magenta(decl.client)} ${decl.intent}`);
     if (d.ok) out(`    ${c.green('✔')} What changed matches what was declared.`);
     for (const x of d.undeclared) out(`    ${c.red('✖ not declared')}  ${x.kind} ${x.key} ${c.dim(x.detail)}`);
