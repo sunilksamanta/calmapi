@@ -18,6 +18,7 @@ import { currentRequest } from '../context.js';
 import { serialize } from '../resource/resource.js';
 import { kebab } from '../utils/strings.js';
 import { maskToken, BEHAVIORS, PLATFORMS } from '../push.js';
+import { recordTraffic, trafficEntry, isReplay, replay, testFromRecord, readTraffic } from '../replay.js';
 
 const SKIP_COMMANDS = new Set(['hello', 'ismaster', 'isMaster', 'ping', 'endSessions', 'saslStart', 'saslContinue', 'buildInfo', 'getParameter', 'listIndexes', 'createIndexes']);
 const EXPLAINABLE = new Set(['find', 'aggregate', 'count', 'distinct', 'update', 'delete', 'findAndModify']);
@@ -180,7 +181,9 @@ export function setupDevtools(app, ex) {
     const started = performance.now();
 
     const originalJson = res.json.bind(res);
+    let rawBody;
     res.json = (body) => {
+      rawBody = body;
       record.responseBody = truncate(redact(body, 0, true)); // tokens and keys in responses too
       return originalJson(body);
     };
@@ -196,6 +199,9 @@ export function setupDevtools(app, ex) {
         record.error = { status: http.status, code: http.code, message: http.message, internal: original?.message, stack: original?.stack, details: http.details };
       }
       // Wait a tick so the access log line (written on the same 'finish' event) is included.
+      // API traffic (not replays) is kept on disk for calm replay: shapes only, secrets redacted.
+      if (record.route && !isReplay(req)) recordTraffic(app.root, trafficEntry(record, rawBody));
+      if (isReplay(req)) record.replay = true;
       setImmediate(() => {
         record.logs = logs.list().filter((l) => l.requestId === record.id).slice(-50);
         requests.push(record);
@@ -218,6 +224,41 @@ export function setupDevtools(app, ex) {
   api.get('/about', async (_req, res) => res.json(await app.about()));
   api.get('/doctor', async (_req, res) => res.json(await app.doctor()));
   api.get('/snapshot', async (_req, res) => res.json(await app.snapshot()));
+  // Replay recorded traffic against the current code (calm/replay.js), and recorded tests.
+  let replaying = null;
+  api.get('/traffic', (req, res) => {
+    const all = readTraffic(app.root, { limit: 100_000, writes: true });
+    res.json({ total: all.length, reads: all.filter((e) => e.method === 'GET').length, newest: all.at(-1)?.time ?? null });
+  });
+  api.post('/replay', async (req, res) => {
+    if (replaying) return res.status(409).json({ error: 'A replay is already running' });
+    const limit = Math.min(Math.max(Number(req.body?.limit) || 200, 1), 1000);
+    try {
+      replaying = replay(app, { limit, writes: req.body?.writes === true });
+      const report = await replaying;
+      broadcast('replay', { total: report.total, identical: report.identical, changed: report.changed.length });
+      res.json(report);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    } finally {
+      replaying = null;
+    }
+  });
+  api.post('/requests/:id/test', (req, res) => {
+    const record = requests.find((r) => r.id === req.params.id);
+    if (!record) return res.status(404).json({ error: 'Request not found (it may have rotated out)' });
+    try {
+      const { file, content } = testFromRecord(app, record);
+      let target = file;
+      for (let n = 2; existsSync(join(app.root, target)); n++) target = file.replace(/\.test\.js$/, `-${n}.test.js`);
+      mkdirSync(dirname(join(app.root, target)), { recursive: true });
+      writeFileSync(join(app.root, target), content);
+      app.log.info(`Devtools: recorded test ${target}`);
+      res.status(201).json({ file: target, content });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
   // Reviews (calm/review.js): what changed since the last signature, and signing it here.
   const gitValue = (args) => {
     try {

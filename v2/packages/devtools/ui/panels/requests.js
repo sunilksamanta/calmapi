@@ -4,7 +4,7 @@
 import {
   h, icon, mount, clear, api, fmtMs, relTime, clock, fullDate, methodTag, statusTag, statusClass, pathView, STATUS_TEXT,
   codeBlock, jsonLine, jsonViewer, empty, loading, errorBox, searchBox, segmented, tabs, copy, toast, plural, editorUrl, relPath,
-  bar, joined, hoverTip, hideTip, storage, actorMark, fileLink,
+  bar, joined, hoverTip, hideTip, storage, actorMark, fileLink, popover,
 } from '../lib.js';
 import { store, on, getRecord, clearRequests, authHeader, startActAs } from '../store.js';
 import { logRow } from './logs.js';
@@ -156,6 +156,7 @@ function mountRequests(root, params) {
         h('span', { class: 'spacer' }),
         summary,
         bgBtn,
+        h('button', { class: 'btn ghost', type: 'button', title: 'Send the recorded reads again against the code as it is now, as the users who made them, and see which answers changed', onclick: (e) => replayTraffic(e.currentTarget) }, 'Replay all'),
         h('button', { class: 'btn ghost', type: 'button', title: 'Clear all recorded requests', onclick: () => clearRequests() }, 'Clear'),
       ),
       split,
@@ -360,6 +361,7 @@ function mountRequests(root, params) {
             { class: 'dt-actions' },
             h('button', { class: 'btn ghost', onclick: () => copy(toCurl(rec), 'curl command copied') }, 'Copy as curl'),
             h('button', { class: 'btn ghost', onclick: () => openInPlayground(rec), title: 'Edit and resend in the Playground' }, 'Edit in Playground'),
+            rec.route && !rec.replay ? h('button', { class: 'btn ghost', onclick: () => saveAsTest(rec), title: 'Write test/recorded/<name>.test.js: the same request as the same kind of user, on a throwaway database' }, 'Save as test') : null,
             h('button', { class: 'btn primary', onclick: () => replay(rec), title: store.actAs ? `Replay as ${store.actAs.user.name}` : 'Replay this request' }, replayLabel),
           ),
           h(
@@ -865,4 +867,36 @@ function pathTraceView(rec) {
     h('ol', { class: 'pt-list' }, items),
     ran ? null : h('p', { class: 'pt-stop' }, 'The service and hooks did not run.'),
   );
+}
+
+// ---- recorded tests and replay (calm/replay.js) --------------------------------------
+
+async function saveAsTest(rec) {
+  try {
+    const out = await api(`/requests/${encodeURIComponent(rec.id)}/test`, { method: 'POST', body: {} });
+    toast(`Wrote ${out.file}. Run it with npm test.`, { timeout: 7000 });
+  } catch (err) {
+    toast(err.message, { tone: 'error' });
+  }
+}
+
+async function replayTraffic(btn) {
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = 'Replaying…';
+  try {
+    const r = await api('/replay', { method: 'POST', body: { limit: 200 } });
+    if (!r.total) return toast('Nothing recorded yet: use the API first. Requests are kept in .calm/traffic.jsonl.');
+    const lines = [h('p', null, h('b', null, `${r.identical} of ${r.total}`), ' answers are identical', r.skipped.length ? `, ${r.skipped.length} skipped` : '', r.failed.length ? `, ${r.failed.length} failed` : '', '.')];
+    for (const c of r.changed.slice(0, 20)) {
+      lines.push(h('div', { class: ['rp-row', c.newFields && 'bad'] }, h('div', { class: 'mono' }, c.request), c.differences.slice(0, 6).map((d) => h('div', { class: ['rp-diff', d.kind === 'added' && 'bad'] }, d.text))));
+    }
+    if (r.changed.length > 20) lines.push(h('p', { class: 'muted' }, `…and ${r.changed.length - 20} more: npx calm replay --json`));
+    popover(btn, h('div', { class: 'rp-pop' }, h('h3', null, r.changed.length ? `${r.changed.length} answer${r.changed.length === 1 ? '' : 's'} changed` : 'Nothing changed'), lines), { align: 'end', width: 460 });
+  } catch (err) {
+    toast(err.message, { tone: 'error' });
+  } finally {
+    btn.disabled = false;
+    btn.textContent = old;
+  }
 }

@@ -31,6 +31,8 @@ export const CLI_FILES = [
   { path: '.calm/checkpoints/**', by: 'calm checkpoint, calm mcp, devtools', when: 'snapshots of the development database, restored with calm restore' },
   { path: '.calm/agent-session.json, .calm/proposals/**', by: 'calm mcp', when: 'what an agent is doing and the changes it proposes, for devtools' },
   { path: '.calm/reviews/<date>-<id>.json, .calm/reviews/baseline.json', by: 'calm review --sign, devtools Review', when: 'a signature and the behavior it accepted; meant to be committed' },
+  { path: '.calm/traffic.jsonl', by: 'calm dev (devtools)', when: 'API requests as shapes (keys and types, never values; bodies with secrets redacted) for calm replay; trimmed at 2 MB' },
+  { path: 'test/recorded/*.test.js', by: 'devtools: Save as test', when: 'a recorded request as a node:test file you can edit' },
   { path: 'security.snapshot.json', by: 'calm audit --accept', when: 'the exposure budget: who may do what, and who accepted each widening and why; meant to be committed' },
   { path: '.calm/declarations/<id>.json', by: 'calm mcp (calm_declare)', when: 'what an agent said it would change, compared in the review' },
   { path: '.gitignore', by: 'calm review --sign', when: 'once, in projects created before reviews: .calm/ becomes .calm/* and !.calm/reviews/ so reviews are committed' },

@@ -21,7 +21,7 @@ const READ = [
   'calm_project', 'calm_routes', 'calm_resource', 'calm_doctor', 'calm_blocks', 'calm_openapi', 'calm_recent_requests', 'calm_request', 'calm_logs',
   'calm_test', 'calm_audit', 'calm_security', 'calm_activity', 'calm_mails', 'calm_pushes', 'calm_diff', 'calm_explain', 'calm_about', 'calm_propose', 'calm_review', 'calm_declare',
 ];
-const SCAFFOLD = ['calm_make_resource', 'calm_add_block', 'calm_checkpoint'];
+const SCAFFOLD = ['calm_make_resource', 'calm_add_block', 'calm_checkpoint', 'calm_replay'];
 
 /** Tool names by the lowest scope that allows them. Anything else (calm_restore, new tools) is full only. */
 export const TOOL_SETS = { read: READ, scaffold: SCAFFOLD };

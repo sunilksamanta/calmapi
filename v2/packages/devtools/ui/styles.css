@@ -1607,3 +1607,12 @@ textarea.input.mono { font-family: var(--mono); }
 .rt-file { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .rt-file > .file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .unsigned-badge { flex-shrink: 0; margin-left: 6px; font-size: var(--fs-3); color: var(--agent, #6a4cb6); border: 1px solid currentColor; border-radius: 4px; padding: 0 5px; text-decoration: none; white-space: nowrap; }
+
+/* ---- replay ------------------------------------------------------------------------- */
+
+.rp-pop { padding: 10px 12px; display: grid; gap: 8px; max-height: 70vh; overflow: auto; font-size: var(--fs-2); }
+.rp-pop h3 { margin: 0; font-size: var(--fs-2); }
+.rp-pop p { margin: 0; }
+.rp-row { display: grid; gap: 2px; padding: 6px 0; border-top: 1px solid var(--line); }
+.rp-diff { color: var(--text-2); font-size: var(--fs-3); padding-left: 8px; }
+.rp-diff.bad, .rp-row.bad .mono { color: var(--red); }
