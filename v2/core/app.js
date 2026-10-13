@@ -137,8 +137,12 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
       return p;
     },
     async idle() {
-      while (background.size) await Promise.allSettled([...background]);
-      await events.idle();
+      // Background tasks emit events whose listeners start more background tasks (and so on):
+      // done only when both are quiet at the same time.
+      while (background.size || events.busy) {
+        while (background.size) await Promise.allSettled([...background]);
+        await events.idle();
+      }
     },
 
     async start() {

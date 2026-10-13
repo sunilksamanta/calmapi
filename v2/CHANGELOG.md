@@ -3,7 +3,60 @@
 ## 2.0.0-beta.1
 
 The first beta. alpha.2 showed what changed; this release asks a person to accept it, holds
-the API to what was accepted, and keeps an agent's experiments away from your data.
+the API to what was accepted, keeps an agent's experiments away from your data, gives your
+frontend a typed client, and doubles the official blocks: 26, each with its own guide.
+
+### 12 new official blocks
+- `oauth`: sign in with Google, GitHub or any OpenID Connect provider. PKCE, state and nonce,
+  ID tokens verified against the provider's keys, flows bound to the browser that started
+  them, accounts linked by email only when the provider verified it, link and unlink.
+- `payments-stripe`: Checkout, subscriptions and the customer portal without the SDK. Webhooks
+  verified on the raw body and processed once per event, safe when events arrive out of order;
+  plans from allowlisted prices, required with `meta: { plan: 'pro' }`, `plan-pro` policies or
+  `requirePlan()`.
+- `teams`: organizations with roles (owner, admin, member, your own), invitations bound to the
+  invited email, transfers and the last owner rule, and team-scoped resources (`team: true`):
+  every query is filtered to the caller's teams, records never move between teams, policies
+  `member`, `team:admin`, `team:owner`.
+- `email-verification`: verification links after sign-up and email changes, the `verified`
+  policy, and `required: 'routes' | 'login'`.
+- `captcha`: Cloudflare Turnstile, hCaptcha or reCAPTCHA v3 on sign-up, sign-in and password
+  reset (any routes you list), failing closed when the provider is down.
+- `cache`: GET responses cached per identity (MongoDB with TTL, or memory), invalidated by
+  resource events and tags, ETag and 304, stampede protection, a devtools panel.
+- `sms-twilio`: an SMS transport and phone verification with hashed one-time codes.
+- `slack`: app events and security alerts to Slack, with escaped templates and digests.
+- `sentry`: 5xx and background errors to Sentry without the SDK, secrets scrubbed.
+- `mail-postmark`: a Postmark mail transport.
+- `search-meilisearch`: resources in sync with Meilisearch; results are loaded through the
+  resource's own policy, so search never shows what the caller cannot read.
+- `waitlist`, `export` (streamed CSV, NDJSON or JSON with validated imports) and `maintenance`
+  (maintenance and read-only modes, scheduled windows).
+
+### Every block brings its own guide
+- `block.json` has `links` (the official documentation of what the block integrates: Stripe,
+  Twilio, OpenID Connect, OWASP...) and `agents` (instructions for AI coding agents: the rules
+  the block keeps, its options, common tasks). They become `app/blocks/<name>/AGENTS.md`, next
+  to the code, and the devtools Blocks panel shows both. All 26 official blocks have them,
+  `calm make block` writes one for yours, and the project AGENTS.md tells agents to read them.
+
+### Typed client
+- `calm client`: one file for your web or mobile app, generated from the API itself: every
+  route a function with its input and output types (`api.products.list()` returns
+  `Page<Product>`), typed `CalmApiError`s, no dependencies. TypeScript, or JavaScript with a
+  `.d.ts`. With `client: { out }` in calm.config.js, `calm dev` writes it again whenever the
+  API changes. `calm_client` for agents; devtools Requests has **Copy as client call**.
+- The `openapi: { body, response }` route option documents handlers that validate on their own.
+  The auth routes use it, so the session and the second-factor challenge are typed.
+
+### Core
+- Route option `rawBody: true` (`ctx.rawBody`, the exact bytes) for signed webhooks.
+- Named policies may be namespaced (`team:admin`) and describe themselves to the exposure
+  matrix with `{ simulate }`.
+- Mail transports receive the message's `meta` as a second argument (it is never sent).
+- `app.idle()` waits for chains of events and background tasks.
+- A `scope()` that returns a Promise where a filter is needed now throws instead of matching
+  every record.
 
 ### Review and sign
 - `calm review`: what changed since the last signature, for a person to read. The behavior

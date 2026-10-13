@@ -174,9 +174,19 @@ calm mcp                                MCP server for coding agents (claude mcp
 | `soft-delete` | `softDelete: true` per resource, trash and restore |
 | `totp` | two-factor authentication with authenticator apps |
 | `api-docs` | interactive reference at `/docs` |
-| `mail-resend` / `mail-smtp` | email delivery |
+| `mail-resend` / `mail-smtp` / `mail-postmark` | email delivery |
 | `push-expo` / `push-fcm` | push notification delivery through Expo or Firebase Cloud Messaging |
 | `rate-limit-mongo` | shared rate limits across instances |
+| `oauth` | sign in with Google, GitHub or any OpenID Connect provider (PKCE, verified ID tokens, safe account linking) |
+| `payments-stripe` | Stripe Checkout, subscriptions and the customer portal, verified webhooks, plan-gated routes |
+| `teams` | organizations, roles, invitations and team-scoped resources (`team: true`) with strict isolation |
+| `email-verification` | verify emails after sign-up and changes; a `verified` policy |
+| `captcha` | Turnstile, hCaptcha or reCAPTCHA v3 on sign-up, sign-in and reset |
+| `cache` | per-identity response caching with invalidation, ETag and 304 |
+| `sms-twilio` | SMS and phone verification codes |
+| `slack` / `sentry` | events and security alerts to Slack; errors to Sentry |
+| `search-meilisearch` | full-text search that respects your policies |
+| `waitlist` / `export` / `maintenance` | launch waitlists with invites; CSV and JSON export and import; maintenance and read-only modes |
 
 ### Your own blocks
 

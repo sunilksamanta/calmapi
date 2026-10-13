@@ -32,6 +32,10 @@ export function createEvents(log) {
       }
       trace({ kind: 'event', name, detail: `${count} listener${count === 1 ? '' : 's'}` });
     },
+    /** True while a listener is still running. */
+    get busy() {
+      return pending.size > 0;
+    },
     /** Resolves when every listener started so far has finished (tests, shutdown). */
     async idle() {
       while (pending.size) await Promise.allSettled([...pending]);
