@@ -280,7 +280,7 @@ export function setupDevtools(app, ex) {
       res.status(500).json({ error: err.message });
     }
   });
-  api.get('/review/signer', (_req, res) => res.json({ name: gitValue(['config', 'user.name']), email: gitValue(['config', 'user.email']) }));
+  api.get('/review/signer', (_req, res) => res.json({ name: process.env.GIT_AUTHOR_NAME?.trim() || gitValue(['config', 'user.name']), email: process.env.GIT_AUTHOR_EMAIL?.trim() || gitValue(['config', 'user.email']) }));
   api.post('/review/sign', async (req, res) => {
     const { name, email, note } = req.body ?? {};
     if (typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'Who is signing? Give your name.' });

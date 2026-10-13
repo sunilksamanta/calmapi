@@ -4,7 +4,7 @@ import { c, out, ok, warn, table } from '../lib/ui.js';
 import { introspect } from '../lib/introspect.js';
 import { detectAgentEnv } from '../lib/attribution.js';
 import { readBudget, compareBudget, acceptBudget, BUDGET_FILE } from '../../../core/security/budget.js';
-import { parseSigner } from './review.js';
+import { parseSigner, gitIdentity } from './review.js';
 
 export const help = `
 ${c.bold('calm audit')} [--json] [--ci]
@@ -103,12 +103,7 @@ function printBudget(budget) {
 async function accept(root, values) {
   const agent = detectAgentEnv(process.env);
   if (agent) throw new Error(`Accepting wider access is for a person, and this shell belongs to an AI agent (${agent}). Run it in your own terminal.`);
-  let by = values.as ? parseSigner(values.as) : null;
-  if (!by) {
-    const name = (await capture('git', ['config', 'user.name'], { cwd: root }).catch(() => null))?.stdout.trim();
-    const email = (await capture('git', ['config', 'user.email'], { cwd: root }).catch(() => null))?.stdout.trim();
-    if (name) by = { name, email: email || null };
-  }
+  const by = values.as ? parseSigner(values.as) : await gitIdentity(root);
   if (!by?.name) throw new Error('Who accepts it? Set git config user.name, or pass --as "Your Name <you@example.com>".');
   const info = await introspect(root);
   if (info.error) throw new Error(info.error.message);

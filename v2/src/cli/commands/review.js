@@ -58,6 +58,13 @@ async function git(root, args) {
 }
 
 /** "Ada Lovelace <ada@example.com>" or "Ada Lovelace". */
+/** Who is at the keyboard, as git would put it in a commit: GIT_AUTHOR_NAME/EMAIL, then git config. */
+export async function gitIdentity(root, env = process.env) {
+  const name = env.GIT_AUTHOR_NAME?.trim() || (await git(root, ['config', 'user.name']));
+  const email = env.GIT_AUTHOR_EMAIL?.trim() || (await git(root, ['config', 'user.email']));
+  return name ? { name, email: email || null } : null;
+}
+
 export function parseSigner(text) {
   const m = /^\s*(.+?)\s*(?:<([^>]+)>)?\s*$/.exec(String(text ?? ''));
   return m && m[1] ? { name: m[1], email: m[2] ?? null } : null;
@@ -99,7 +106,7 @@ export async function run(argv) {
 async function sign(root, values) {
   const agent = detectAgentEnv(process.env);
   if (agent) throw new Error(`Signing is for a person, and this shell belongs to an AI agent (${agent}). Sign in your own terminal, or in devtools: Review.`);
-  const signer = values.as ? parseSigner(values.as) : (await git(root, ['config', 'user.name'])) ? { name: await git(root, ['config', 'user.name']), email: await git(root, ['config', 'user.email']) } : null;
+  const signer = values.as ? parseSigner(values.as) : await gitIdentity(root);
   if (!signer?.name) throw new Error('Who is signing? Set git config user.name, or pass --as "Your Name <you@example.com>".');
   const head = await git(root, ['rev-parse', '--short', 'HEAD']);
   const dirty = head && (await git(root, ['status', '--porcelain']))?.length > 0;
