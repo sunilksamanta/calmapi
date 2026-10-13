@@ -11,6 +11,7 @@
 import express from 'express';
 import { randomBytes, createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync, watchFile, unwatchFile, openSync, readSync, closeSync, readdirSync, writeFileSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join, dirname, resolve, sep } from 'node:path';
 import { currentRequest } from '../context.js';
@@ -217,6 +218,36 @@ export function setupDevtools(app, ex) {
   api.get('/about', async (_req, res) => res.json(await app.about()));
   api.get('/doctor', async (_req, res) => res.json(await app.doctor()));
   api.get('/snapshot', async (_req, res) => res.json(await app.snapshot()));
+  // Reviews (calm/review.js): what changed since the last signature, and signing it here.
+  const gitValue = (args) => {
+    try {
+      return execFileSync('git', args, { cwd: app.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 }).trim() || null;
+    } catch {
+      return null;
+    }
+  };
+  api.get('/review', async (_req, res) => {
+    try {
+      res.json(await app.review());
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+  api.get('/review/signer', (_req, res) => res.json({ name: gitValue(['config', 'user.name']), email: gitValue(['config', 'user.email']) }));
+  api.post('/review/sign', async (req, res) => {
+    const { name, email, note } = req.body ?? {};
+    if (typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'Who is signing? Give your name.' });
+    const head = gitValue(['rev-parse', '--short', 'HEAD']);
+    const dirty = head && gitValue(['status', '--porcelain']);
+    try {
+      const out = await app.signReview({ signer: { name, email: typeof email === 'string' ? email : null }, note: typeof note === 'string' ? note : null, via: 'devtools', commit: head ? `${head}${dirty ? '+changes' : ''}` : null });
+      app.log.info(`Devtools: review ${out.review.id} signed by ${out.review.signer.name}`);
+      broadcast('review', { id: out.review.id });
+      res.status(201).json(out);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
   api.get('/invariants', async (_req, res) => res.json(await app.invariants()));
   api.get('/requests', (_req, res) => res.json(requests.list().map(summary).reverse()));
   api.delete('/requests', (_req, res) => {

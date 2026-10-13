@@ -25,6 +25,7 @@ export const store = {
   activitySeen: storage.get('activity-seen', null), // ISO time of the newest event seen in the panel
   security: null, // { matrix, events, posture } from GET /security
   audit: null, // last audit report (or { summary } when it ran elsewhere)
+  review: null, // GET /review: changes since the last signature, agent files not signed, declarations
   auditRunning: false,
 };
 
@@ -119,6 +120,22 @@ export async function runAudit() {
   }
 }
 
+export async function loadReview() {
+  store.review = await api('/review');
+  emit('review');
+  return store.review;
+}
+
+// A file change, a declaration or a signature changes the review: refresh it, at most every second.
+let reviewTimer = null;
+const refreshReview = () => {
+  clearTimeout(reviewTimer);
+  reviewTimer = setTimeout(() => loadReview().catch(() => {}), 1000);
+};
+
+/** Files an agent wrote that nobody has signed, as a Set of paths (for badges in other panels). */
+export const unsignedAgentFiles = () => new Set((store.review?.unreviewed ?? []).map((f) => f.path));
+
 export async function loadDoctor() {
   store.doctor = await api('/doctor');
   emit('doctor');
@@ -196,7 +213,9 @@ export function connect() {
     store.activity.unshift(event);
     if (store.activity.length > MAX_ACTIVITY) store.activity.length = MAX_ACTIVITY;
     emit('activity', event);
+    if (['file', 'review', 'declaration', 'restart'].includes(event.type)) refreshReview();
   });
+  es.addEventListener('review', () => refreshReview());
   es.addEventListener('security', (e) => {
     const event = JSON.parse(e.data);
     if (store.security) {

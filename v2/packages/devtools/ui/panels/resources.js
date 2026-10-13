@@ -1,8 +1,8 @@
 // Resources: a relationship diagram from ref fields, then one section per resource with
 // its policies and a dense field table.
 
-import { h, s, mount, policyText, fileLink, empty, bar, plural, joined } from '../lib.js';
-import { store } from '../store.js';
+import { h, s, mount, policyText, fileLink, empty, bar, plural, joined, unsignedBadge } from '../lib.js';
+import { store, unsignedAgentFiles } from '../store.js';
 
 const ACTIONS = ['list', 'read', 'create', 'update', 'delete'];
 
@@ -73,6 +73,7 @@ function resourceSection(r, ov) {
       ])),
       h('span', { class: 'spacer' }),
       resFile ? fileLink(appRoot, resFile) : null,
+      Object.values(r.files ?? {}).some((f) => f && unsignedAgentFiles().has(f)) ? unsignedBadge() : null,
       h('a', { class: 'btn ghost', href: `#/data/${r.name}` }, 'Browse data'),
     ),
     h(

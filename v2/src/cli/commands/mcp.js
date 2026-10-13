@@ -15,6 +15,7 @@ import { appendActivity, readActivity } from '../lib/activity.js';
 import { runAuditInProject } from './audit.js';
 import { introspect } from '../lib/introspect.js';
 import { explainText } from '../lib/explain-text.js';
+import { writeDeclaration } from '../../../core/review.js';
 import { parseScopeArgs, resolveAgentSession, allowedIn, refusalText, annotateTools, scopeSentence, writeAgentSession, clearAgentSession } from '../lib/agent-scope.js';
 import { writeProposal } from '../lib/proposals.js';
 
@@ -203,6 +204,25 @@ const TOOLS = [
     description:
       'The transparency report: what the framework does on every request (the middleware pipeline in order), the headers it sets, what it stores and for how long, what it logs, which hosts the code can reach, and the files the CLI writes. Read it before changing middleware, auth or storage.',
     inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'calm_review',
+    description:
+      'What the developer will review: behavior changes since their last signature (routes, policies, field visibility, env vars, hosts, events, invariants), the files agents changed that nobody signed, and your declarations next to what you actually changed. Call it before you say you are done, and show the developer anything that widens access. You cannot sign: signing is for a person.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'calm_declare',
+    description:
+      'Before you change behavior, declare what you are about to do, in the words the review uses. The review compares it with what you actually change and flags the difference. changes: strings like "route POST /api/refunds", "field order.total", "env STRIPE_SECRET_KEY", "host api.stripe.com", or objects { kind, key, policy } to promise a route policy ({ kind: "route", key: "POST /api/refunds", policy: "admin" }).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        intent: str('What you are about to do, one line'),
+        changes: { type: 'array', items: {}, description: 'The behavior changes you will make' },
+      },
+      required: ['intent', 'changes'],
+    },
   },
 ];
 
@@ -517,6 +537,12 @@ async function callTool(root, name, args) {
       const info = await introspect(root);
       if (info.error) throw new Error(info.error.message);
       return info.about;
+    }
+    case 'calm_review':
+      return json(root, ['review', '--json']);
+    case 'calm_declare': {
+      const d = writeDeclaration(root, { intent: args.intent, changes: args.changes, client: clientName });
+      return `Declared ${d.changes.length} change${d.changes.length === 1 ? '' : 's'} (${d.id}). The developer's review will compare them with what you actually change: call calm_review when you are done.`;
     }
     default:
       throw new Error(`Unknown tool ${name}`);

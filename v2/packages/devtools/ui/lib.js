@@ -764,3 +764,8 @@ export const storage = {
     }
   },
 };
+
+/** "agent, unsigned": a file an AI agent wrote that nobody has signed in Review. */
+export function unsignedBadge() {
+  return h('a', { class: 'unsigned-badge', href: '#/review', title: 'Written by an AI agent and not signed yet. Open Review.' }, 'unsigned');
+}

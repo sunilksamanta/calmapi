@@ -11,6 +11,7 @@ const COMMANDS = {
   openapi: () => import('./commands/openapi.js'),
   doctor: () => import('./commands/doctor.js'),
   diff: () => import('./commands/diff.js'),
+  review: () => import('./commands/review.js'),
   about: () => import('./commands/about.js'),
   upgrade: () => import('./commands/upgrade.js'),
   admin: () => import('./commands/admin.js'),
@@ -47,6 +48,7 @@ const HELP = `
     openapi                      write openapi.json
     doctor                       security and correctness checks (--ci for pipelines)
     diff [ref]                   what changed in behavior since a git ref (--ci fails on wider access)
+    review                       read and sign what changed since the last signature (--sign, --ci)
     about                        what the framework does that you did not write
     audit                        test every route as every role on a throwaway database
     admin <email>                give a user the admin role (--revoke to remove)

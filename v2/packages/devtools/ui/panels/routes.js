@@ -1,8 +1,8 @@
 // Routes: one dense table of every endpoint, grouped by resource or source, with its
 // policy, summary and file.
 
-import { h, mount, methodTag, policyText, routePath, fileLink, empty, searchBox, segmented, bar, plural } from '../lib.js';
-import { store } from '../store.js';
+import { h, mount, methodTag, policyText, routePath, fileLink, empty, searchBox, segmented, bar, plural, unsignedBadge } from '../lib.js';
+import { store, unsignedAgentFiles } from '../store.js';
 
 const state = { filter: '', hidden: false, policy: 'all' };
 
@@ -74,6 +74,7 @@ function mountRoutes(root) {
       groups.get(k).push(r);
     }
     const appRoot = ov.app.root;
+    const unsigned = unsignedAgentFiles();
     mount(
       body,
       h(
@@ -94,7 +95,7 @@ function mountRoutes(root) {
                 h('span', { class: 'rt-path', role: 'cell', title: `${r.method} ${r.path}${r.hidden ? '\nHidden from OpenAPI (an alias)' : ''}` }, routePath(r.path, ov.app.apiPrefix), r.hidden ? h('span', { class: 'muted rt-alias' }, 'alias') : null),
                 h('span', { class: 'rt-policy', role: 'cell' }, policyText(r.policy, { explicit: isExplicit(r, ov) })),
                 h('span', { class: 'rt-summary', role: 'cell', title: r.summary ?? r.action ?? null }, r.summary ?? h('span', { class: 'muted' }, r.action)),
-                h('span', { class: 'rt-file', role: 'cell' }, r.file ? fileLink(appRoot, r.file) : null),
+                h('span', { class: 'rt-file', role: 'cell' }, r.file ? fileLink(appRoot, r.file) : null, r.file && unsigned.has(r.file) ? unsignedBadge() : null),
                 h('span', { class: 'row-actions', role: 'cell' }, h('button', { class: 'btn', type: 'button', onclick: () => tryIt(r), 'aria-label': `Try ${r.method} ${r.path} in the Playground` }, 'Try')),
               ),
             ),

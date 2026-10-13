@@ -19,6 +19,7 @@ import { runtimeChecks, hookFindings } from './doctor.js';
 import { exposureMatrix, exposureFindings } from './security/exposure.js';
 import { describeInvariants, checkInvariants, invariantFindings, formatBroken } from './invariants.js';
 import { behaviorSnapshot } from './snapshot.js';
+import { reviewState, signReview } from './review.js';
 import { canRead, inScope } from './resource/visibility.js';
 import { toHttpError, notFound } from './errors.js';
 import { trace } from './context.js';
@@ -96,6 +97,9 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
     invariants: () => checkInvariants(app),
     /** What the app does, as data (routes and who may call them, fields and who may see them...). */
     snapshot: () => behaviorSnapshot(app),
+    /** Reviews (calm/review.js): what changed since the last signature, and signing it. */
+    review: () => reviewState(app),
+    signReview: (options) => signReview(app, options),
     /** The transparency report: what the framework does that you did not write (calm about). */
     about: () => aboutReport(app),
     /**

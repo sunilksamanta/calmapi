@@ -1579,3 +1579,31 @@ textarea.input.mono { font-family: var(--mono); }
 .ab-promise.ok { color: var(--green, #2f7d4f); }
 .ab-promise.bad { color: var(--red); }
 @media (max-width: 720px) { .ab-table td:nth-child(n + 4) { display: none; } }
+
+/* ---- Review (signatures) and authorship ---------------------------------------------- */
+
+.rv { padding: 16px; display: grid; gap: 14px; align-content: start; }
+.rv-card { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 8px; min-width: 0; }
+.rv-card h2 { margin: 0; font-size: var(--fs-2); font-weight: 600; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.rv-card p { margin: 0; }
+.rv-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.rv-change, .rv-file, .rv-mismatch { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--line); font-size: var(--fs-3); }
+.rv-change:last-child, .rv-file:last-child, .rv-mismatch:last-child { border-bottom: 0; }
+.rv-mark { font-family: var(--mono); width: 12px; }
+.rv-added { color: var(--green, #2f7d4f); }
+.rv-removed { color: var(--red); }
+.rv-changed { color: var(--amber, #a86a00); }
+.rv-what { font-weight: 600; }
+.rv-detail { color: var(--text-2); flex: 1 1 240px; }
+.rv-dir { font-size: var(--fs-3); }
+.rv-change.looser .rv-dir, .rv-widen, .rv-bad, .rv-mismatch.bad b { color: var(--red); }
+.rv-change.tighter .rv-dir, .rv-ok { color: var(--green, #2f7d4f); }
+.rv-tag { font-size: var(--fs-3); padding: 0 6px; border-radius: 4px; background: var(--red-tint); color: var(--red); }
+.rv-tag.warn { background: transparent; color: var(--amber, #a86a00); border: 1px solid currentColor; }
+.rv-agent { color: var(--agent, #6a4cb6); }
+.rv-warn { margin: 0; color: var(--amber, #a86a00); }
+.rv-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 640px) { .rv-fields { grid-template-columns: minmax(0, 1fr); } }
+.rt-file { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rt-file > .file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.unsigned-badge { flex-shrink: 0; margin-left: 6px; font-size: var(--fs-3); color: var(--agent, #6a4cb6); border: 1px solid currentColor; border-radius: 4px; padding: 0 5px; text-decoration: none; white-space: nowrap; }

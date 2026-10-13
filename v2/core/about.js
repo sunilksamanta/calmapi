@@ -30,6 +30,9 @@ export const CLI_FILES = [
   { path: '.calm/activity.jsonl', by: 'calm dev, calm mcp, calm agent-hook, checkpoints', when: 'file changes with diffs, restarts, crashes, agent tool calls and the files agents are about to edit, for the Activity panel; trimmed at 4 MB' },
   { path: '.calm/checkpoints/**', by: 'calm checkpoint, calm mcp, devtools', when: 'snapshots of the development database, restored with calm restore' },
   { path: '.calm/agent-session.json, .calm/proposals/**', by: 'calm mcp', when: 'what an agent is doing and the changes it proposes, for devtools' },
+  { path: '.calm/reviews/<date>-<id>.json, .calm/reviews/baseline.json', by: 'calm review --sign, devtools Review', when: 'a signature and the behavior it accepted; meant to be committed' },
+  { path: '.calm/declarations/<id>.json', by: 'calm mcp (calm_declare)', when: 'what an agent said it would change, compared in the review' },
+  { path: '.gitignore', by: 'calm review --sign', when: 'once, in projects created before reviews: .calm/ becomes .calm/* and !.calm/reviews/ so reviews are committed' },
   { path: '~/.calm/cache/calmapi-<version>/**', by: 'calm upgrade', when: 'the released calm/ to merge against, downloaded with npm pack (outside the project)' },
 ];
 

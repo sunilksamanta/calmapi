@@ -28,10 +28,11 @@ export default {
 // Ids are assigned by the dev server and change when it restarts; this key does not.
 const keyOf = (e) => `${e.time}|${e.type}|${e.path ?? e.tool ?? ''}`;
 const actorKind = (e) => (typeof e.actor === 'string' ? e.actor : e.actor?.kind) ?? 'human';
-export const isAgentEvent = (e) => e.type === 'agent' || e.type === 'proposal' || ((e.type === 'file' || e.type === 'checkpoint') && actorKind(e) === 'agent');
+export const isAgentEvent = (e) => e.type === 'agent' || e.type === 'proposal' || e.type === 'declaration' || ((e.type === 'file' || e.type === 'checkpoint') && actorKind(e) === 'agent');
 
 function actorName(e) {
-  if (e.type === 'agent' || e.type === 'proposal') return e.client ?? 'agent';
+  if (e.type === 'agent' || e.type === 'proposal' || e.type === 'declaration') return e.client ?? 'agent';
+  if (e.type === 'review') return e.signer ?? 'you';
   if (e.type === 'file' || e.type === 'checkpoint') return actorKind(e) === 'agent' ? (e.actor?.name ?? e.client ?? 'agent') : 'you';
   return 'server';
 }
@@ -135,6 +136,10 @@ function describe(e, readyIn) {
       return [h('span', null, e.note ?? 'Session started'), readyIn.has(e) ? h('span', { class: 'muted' }, `ready in ${fmtMs(readyIn.get(e))}`) : null];
     case 'crash':
       return [h('span', { class: 't-red act-strong' }, 'Crashed'), h('span', { class: 'mono act-err' }, firstErrorLine(e.text))];
+    case 'review':
+      return [h('span', { class: 'act-strong' }, `Signed by ${e.signer ?? 'someone'}`), h('span', { class: 'muted' }, `${plural(e.changes ?? 0, 'change')}${e.widen ? `, ${e.widen} widening access` : ''}${e.agentFiles ? `, ${plural(e.agentFiles, 'agent file')}` : ''}${e.via === 'devtools' ? ' · in devtools' : ''}`)];
+    case 'declaration':
+      return [h('span', null, 'Declared: ', h('b', null, e.intent ?? '')), h('span', { class: 'muted' }, plural(e.changes ?? 0, 'change'))];
     case 'checkpoint':
       return [
         h('span', { class: 'cp-icon', 'aria-hidden': 'true' }, icon(e.action === 'restored' ? 'undo' : 'bookmark', 12)),
@@ -165,7 +170,7 @@ function markFor(e) {
   if (e.type === 'agent' && e.ok === false) return actorMark('agent-fail', `${e.client ?? 'Agent'} (tool call failed)`);
   if (isAgentEvent(e)) return actorMark('agent', `AI agent: ${actorName(e)}${VIA[e.via] ? ` (${VIA[e.via]})` : ''}`);
   if (e.type === 'file') return actorMark('human', 'You (a human edit)');
-  if (e.type === 'checkpoint') return actorMark('human', 'You');
+  if (e.type === 'checkpoint' || e.type === 'review') return actorMark('human', 'You');
   return actorMark('server', 'Dev server');
 }
 
