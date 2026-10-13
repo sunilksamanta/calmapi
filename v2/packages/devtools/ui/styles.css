@@ -1616,3 +1616,18 @@ textarea.input.mono { font-family: var(--mono); }
 .rp-row { display: grid; gap: 2px; padding: 6px 0; border-top: 1px solid var(--line); }
 .rp-diff { color: var(--text-2); font-size: var(--fs-3); padding-left: 8px; }
 .rp-diff.bad, .rp-row.bad .mono { color: var(--red); }
+
+/* ---- budgets ------------------------------------------------------------------------- */
+
+.rq-over { margin-left: 8px; font-size: var(--fs-3); color: var(--amber); border: 1px solid currentColor; border-radius: 4px; padding: 0 5px; text-decoration: none; white-space: nowrap; }
+.bg { padding: 16px; display: grid; gap: 12px; align-content: start; }
+.bg-intro { margin: 0; }
+.bg-table { width: 100%; border-collapse: collapse; font-size: var(--fs-3); }
+.bg-table th { text-align: left; font-weight: 500; color: var(--text-3); padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); }
+.bg-table td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.bg-table .num { text-align: right; font-family: var(--mono); white-space: nowrap; }
+.bg-table .lim { color: var(--text-3); }
+.bg-table tr.over td:first-child { box-shadow: inset 2px 0 var(--red); padding-left: 6px; }
+.bg-table .bad { color: var(--red); }
+.bg-over { color: var(--red); }
+pre.bg-code { margin: 0; padding: 10px; border-radius: 6px; background: var(--sunk, rgba(127,127,127,0.08)); font-size: var(--fs-3); overflow-x: auto; }

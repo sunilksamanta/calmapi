@@ -202,6 +202,7 @@ export function setupDevtools(app, ex) {
       // API traffic (not replays) is kept on disk for calm replay: shapes only, secrets redacted.
       if (record.route && !isReplay(req)) recordTraffic(app.root, trafficEntry(record, rawBody));
       if (isReplay(req)) record.replay = true;
+      if (req.calmBudget?.over?.length) record.budget = { key: req.calmBudget.key, over: req.calmBudget.over.map((o) => o.text) };
       setImmediate(() => {
         record.logs = logs.list().filter((l) => l.requestId === record.id).slice(-50);
         requests.push(record);
@@ -226,6 +227,11 @@ export function setupDevtools(app, ex) {
   api.get('/snapshot', async (_req, res) => res.json(await app.snapshot()));
   // Replay recorded traffic against the current code (calm/replay.js), and recorded tests.
   let replaying = null;
+  api.get('/budgets', (_req, res) => res.json(app.budgets.report()));
+  api.delete('/budgets', (_req, res) => {
+    app.budgets.meter?.clear();
+    res.status(204).end();
+  });
   api.get('/traffic', (req, res) => {
     const all = readTraffic(app.root, { limit: 100_000, writes: true });
     res.json({ total: all.length, reads: all.filter((e) => e.method === 'GET').length, newest: all.at(-1)?.time ?? null });
@@ -851,6 +857,7 @@ const summary = (r) => ({
   queryMs: Math.round(r.queries.reduce((s, q) => s + (q.durationMs ?? 0), 0) * 10) / 10,
   error: r.error ? r.error.code : null,
   agent: r.agent ?? null,
+  overBudget: r.budget?.over ?? null,
 });
 
 function redactHeaders(headers) {

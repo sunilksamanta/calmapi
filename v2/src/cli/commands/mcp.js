@@ -230,6 +230,12 @@ const TOOLS = [
       'Replay the requests recorded by the dev server (real traffic, as the users who made them) against the code as it is now, and get which answers changed: status, fields newly returned (a possible leak), fields gone, list sizes. Run it after a change, before you say you are done. writes: true also replays writes between a checkpoint and its restore.',
     inputSchema: { type: 'object', properties: { limit: { type: 'integer', description: 'Default 200' }, writes: { type: 'boolean' } } },
   },
+  {
+    name: 'calm_budgets',
+    description:
+      'What each route costs on the running dev server (MongoDB queries per request, p95 time, largest response) next to its budget in calm.config.js. Check it after changing a route: an N+1 query shows up here as max queries going up.',
+    inputSchema: { type: 'object', properties: {} },
+  },
 ];
 
 export async function run(argv) {
@@ -553,6 +559,8 @@ async function callTool(root, name, args) {
     }
     case 'calm_replay':
       return devtoolsPost(root, '/replay', { limit: args.limit ?? 200, writes: args.writes === true });
+    case 'calm_budgets':
+      return devtools(root, '/budgets');
     default:
       throw new Error(`Unknown tool ${name}`);
   }

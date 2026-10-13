@@ -21,6 +21,8 @@ import { budgetFindings } from './security/budget.js';
 import { describeInvariants, checkInvariants, invariantFindings, formatBroken } from './invariants.js';
 import { behaviorSnapshot } from './snapshot.js';
 import { reviewState, signReview } from './review.js';
+import { parseBudgets, budgetFor, overBudget, createMeter, writeSamples } from './budgets.js';
+import { currentRequest } from './context.js';
 import { canRead, inScope } from './resource/visibility.js';
 import { toHttpError, notFound } from './errors.js';
 import { trace } from './context.js';
@@ -181,12 +183,17 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
       clearTimeout(timer);
       app.server = null;
       await app.idle();
+      if (app.budgets?.meter) writeSamples(app, app.budgets.meter);
       await db.disconnect();
       app.started = false;
     },
   };
 
   describeInvariants(config); // unknown rules fail now, with a readable message
+  const budgets = parseBudgets(config.budgets); // a mistake in budgets fails now too
+  // Requests are measured in development (devtools) and in `calm budgets` runs, never in production.
+  const metering = config.mode !== 'production' && (config.devtools.enabled || Boolean(process.env.CALM_BUDGETS_DIR));
+  app.budgets = { list: budgets, metering, meter: metering ? createMeter(budgets) : null, report: () => (metering ? app.budgets.meter.report() : { configured: budgets.length > 0, routes: [], over: 0 }) };
 
   // 1. Resources and blocks from disk
   const loaded = await loadResources(root);
@@ -429,6 +436,9 @@ async function buildExpress(app) {
   const blockOf = (fn) => ({ file: fn.calmFile ?? 'calm.config.js', from: fn.calmBlock ? `block:${fn.calmBlock}` : 'calm.config.js' });
 
   wire(ex, 'requestContext', requestContext({ trace: config.devtools.enabled }), 'X-Request-Id on the response (a UUID, or a sane incoming one) and the per-request context');
+  if (app.budgets.metering) {
+    wire(ex, 'budgets', measureBudgets(app), 'measures time, MongoDB queries and response size per route, against the budgets in calm.config.js', { when: 'development and calm budgets runs only' });
+  }
   if (config.devtools.enabled) {
     const { setupDevtools } = await import('./devtools/index.js');
     note('devtools', 'records requests, queries, logs, mail, push and security events for /_calm, in memory', { file: 'calm/devtools/index.js', when: 'development only' });
@@ -556,8 +566,9 @@ async function connect(app) {
   const retries = config.db.connectRetries;
   for (let attempt = 1; ; attempt++) {
     try {
-      await db.connect(config.db.uri, { serverSelectionTimeoutMS: 5000, monitorCommands: Boolean(config.devtools.enabled) });
+      await db.connect(config.db.uri, { serverSelectionTimeoutMS: 5000, monitorCommands: Boolean(config.devtools.enabled || app.budgets?.metering) });
       app.hooks.devtools.onConnect?.(db);
+      if (app.budgets?.metering) countQueries(db);
       return;
     } catch (err) {
       if (attempt >= retries) {
@@ -619,4 +630,37 @@ function printBanner(app) {
     '',
   );
   process.stdout.write(`${lines.join('\n')}\n`);
+}
+
+// ---- budgets: what each request costs (calm/budgets.js) ------------------------------------
+
+const NOT_QUERIES = new Set(['hello', 'ismaster', 'isMaster', 'ping', 'endSessions', 'saslStart', 'saslContinue', 'buildInfo', 'getParameter', 'listIndexes', 'createIndexes']);
+
+/** Count MongoDB commands per request on the request context. */
+function countQueries(db) {
+  db.connection.getClient().on('commandStarted', (ev) => {
+    if (NOT_QUERIES.has(ev.commandName)) return;
+    const store = currentRequest();
+    if (store) store.queryCount = (store.queryCount ?? 0) + 1;
+  });
+}
+
+function measureBudgets(app) {
+  const { meter, list } = app.budgets;
+  return (req, res, next) => {
+    const store = currentRequest();
+    const started = performance.now();
+    res.on('finish', () => {
+      const route = req.calmRoute;
+      if (!route || req.get('x-calm-replay') === '1') return; // API routes only; replays would skew the numbers
+      const label = `${app.config.apiPrefix}${route.path}`;
+      const sample = { ms: Math.round((performance.now() - started) * 10) / 10, queries: store?.queryCount ?? 0, bytes: Number(res.getHeader('content-length')) || 0, status: res.statusCode };
+      meter.record(req.method, label, sample);
+      const budget = budgetFor(list, req.method, label);
+      const over = budget ? overBudget(budget.limits, sample) : [];
+      if (budget && budget.limits.p95Ms !== undefined && sample.ms > budget.limits.p95Ms) over.push({ limit: 'time', value: sample.ms, max: budget.limits.p95Ms, text: `${sample.ms}ms (p95 budget ${budget.limits.p95Ms}ms)` });
+      req.calmBudget = { key: budget?.key ?? null, sample, over };
+    });
+    next();
+  };
 }

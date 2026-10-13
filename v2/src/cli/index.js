@@ -13,6 +13,7 @@ const COMMANDS = {
   diff: () => import('./commands/diff.js'),
   review: () => import('./commands/review.js'),
   replay: () => import('./commands/replay.js'),
+  budgets: () => import('./commands/budgets.js'),
   about: () => import('./commands/about.js'),
   upgrade: () => import('./commands/upgrade.js'),
   admin: () => import('./commands/admin.js'),
@@ -51,6 +52,7 @@ const HELP = `
     diff [ref]                   what changed in behavior since a git ref (--ci fails on wider access)
     review                       read and sign what changed since the last signature (--sign, --ci)
     replay                       replay recorded requests against the code as it is now
+    budgets                      what each route costs in your tests, against its budget (--ci)
     about                        what the framework does that you did not write
     audit                        test every route as every role on a throwaway database
     admin <email>                give a user the admin role (--revoke to remove)
