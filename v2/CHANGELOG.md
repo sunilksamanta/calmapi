@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0-beta.0
+## 2.0.0-beta.1
 
 The first beta. alpha.2 showed what changed; this release asks a person to accept it, holds
 the API to what was accepted, and keeps an agent's experiments away from your data.
