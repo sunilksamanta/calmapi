@@ -1,5 +1,57 @@
 # Changelog
 
+## 2.0.0-alpha.2 (unreleased)
+
+Agents write more and more of the code; the person who ships it still answers for it. This
+release is about seeing what changed, proving what you promised, bounding what an agent may
+do, and undoing it.
+
+### See
+- `calm diff [ref]`: what changed in behavior since a git ref, not in lines. Routes added or
+  removed, policies loosened or tightened, fields visible to more people, environment variables,
+  hosts the code can reach, events, blocks and invariants. `--ci` fails the build when access
+  widens; `--save` writes a snapshot file to compare against later. `app.snapshot()`,
+  `/_calm/api/snapshot` and the `calm_diff` MCP tool return the same data.
+- Explain this request: with devtools on, every request records the path it took through the
+  code (rate limits, authentication, guards, the policy decision token by token with its file and
+  line, the record lookup and the 401/403/404 reasoning, validation, the handler, your service
+  hooks, events, the error). Devtools shows it in a **Path** tab; agents read it with
+  `calm_explain`. `trace()` from `#calm` adds your own steps. Nothing is collected without
+  devtools.
+- `calm about`: the transparency report. The request pipeline in the order it is wired, the
+  headers the framework sets, every collection with its owner and lifetime, what it logs and
+  redacts, the hosts the code can reach (and the check that `calm/` reaches none), and every file
+  the CLI writes. Devtools **About** panel and `calm_about`.
+
+### Prove
+- Invariants in `calm.config.js`: `'no public write routes'`, `'personal data is never public'`,
+  `'auth routes are rate limited'`, `'every route has an explicit policy'`,
+  `'resource <name> requires idempotency'`, `'routes under <prefix> require <role>'`,
+  `{ rule, except }`, or your own function. `calm doctor` and devtools report a broken one as an
+  error, and in production the app refuses to start. Removing one shows in `calm diff`.
+
+### Bound
+- `calm mcp --scope read | scaffold | full` (default from `agents.scope`). Tools outside the scope
+  stay listed but are refused with a sentence the agent can act on, logged in Activity.
+- Protected paths (`agents.protected`, default `calm/security/**`, `calm/auth/**`,
+  `calm.config.js`) and policy or visibility lines in resource files are flagged when an agent
+  edits them, in Activity and by `calm doctor` until committed.
+- `calm_propose`: an agent describes a change as a reviewable diff; you apply it from devtools.
+- Agents that edit files with their own tools are recognized too: `calm agent-hook` takes the
+  agent's hook payload, and new projects ship `.claude/settings.json`, which runs it before every
+  Claude Code edit. `calm dev` also knows when it runs in Claude Code's shell. Activity says how
+  it knew (hook, MCP or environment).
+
+### Undo
+- `calm checkpoint [name]` snapshots every collection of the development database to
+  `.calm/checkpoints/` as Extended JSON; `calm restore [id]` puts it back exactly. A checkpoint is
+  taken automatically when an agent connects over MCP (the five newest are kept). The Data panel
+  has a Checkpoints menu and Activity a Restore button on each one; agents get `calm_checkpoint`
+  and `calm_restore`. Development only.
+
+### Also
+- MCP: 24 tools. `lineDiff` no longer counts a final newline as a line.
+
 ## 2.0.0-alpha.1
 
 ### Push notifications
