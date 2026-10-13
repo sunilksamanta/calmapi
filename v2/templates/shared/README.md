@@ -15,7 +15,7 @@ Needs MongoDB. Set `MONGODB_URI` in `.env` (defaults to a local server).
 ## Common tasks
 
 ```bash
-npx calm make resource product title:string! price:number
+npx calm make resource product title:string+required price:number
 npx calm add @calmapi/jobs
 npx calm routes
 npx calm doctor

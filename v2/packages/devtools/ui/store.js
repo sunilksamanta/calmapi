@@ -95,7 +95,9 @@ export function markActivitySeen() {
   emit('activity:seen');
 }
 
-export const unseenActivity = () => (store.activitySeen ? store.activity.filter((e) => e.time > store.activitySeen) : []);
+// Hook notes (calm agent-hook) are attribution signals, not events of their own.
+const isHookNote = (e) => e.type === 'agent' && String(e.tool ?? '').startsWith('hook:');
+export const unseenActivity = () => (store.activitySeen ? store.activity.filter((e) => e.time > store.activitySeen && !isHookNote(e)) : []);
 
 export async function loadSecurity() {
   store.security = await api('/security');

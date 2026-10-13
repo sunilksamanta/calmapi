@@ -132,7 +132,7 @@ visibility, realtime events and MCP tool calls alike.
 ```
 calm create [dir]                       new project (npm create calmapi@latest)
 calm dev                                watch mode + devtools
-calm make resource <name> [fields...]   e.g. product name:string! price:number status:enum:draft,live=draft category:ref:category
+calm make resource <name> [fields...]   e.g. product name:string+required price:number status:enum:draft,live=draft category:ref:category
 calm add <block...>                     copy blocks into your project (calm add --list, gh:user/repo/name)
 calm make block <name>                  start your own block
 calm block list|check|pack              your blocks: what changed, a safety review, a file to share

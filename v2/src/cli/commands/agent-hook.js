@@ -59,7 +59,10 @@ export async function run(argv) {
     let path = null;
     if (file) {
       const rel = relative(root, resolve(base, file)).split(sep).join('/');
-      if (rel && !rel.startsWith('..') && !isAbsolute(rel)) path = rel;
+      // Outside the project (the agent's own notes, plans, other repos): not ours to record.
+      if (!rel || rel.startsWith('..') || isAbsolute(rel)) return;
+      if (rel.split('/').some((p) => p === 'node_modules' || p === '.git')) return;
+      path = rel;
     }
     appendActivity(root, {
       type: 'agent',
@@ -68,7 +71,7 @@ export async function run(argv) {
       ...(path ? { path } : {}),
       ok: true,
       ms: 0,
-      summary: path ? `${client} is editing ${path}` : `${client} used ${tool}`,
+      summary: path ? `${client} is about to edit ${path}` : `${client} used ${tool}`,
     });
   } catch {
     // never fail the agent's tool call over a log line

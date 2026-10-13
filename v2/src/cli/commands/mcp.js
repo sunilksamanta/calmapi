@@ -53,7 +53,7 @@ const TOOLS = [
   },
   {
     name: 'calm_make_resource',
-    description: 'Scaffold a new resource. Field specs: name:type[!][=default][+modifier], e.g. "title:string!+searchable", "price:number=0", "status:enum:draft,live=draft", "category:ref:category", "tags:string[]". Adds an owner field and a test automatically when the project has users.',
+    description: 'Scaffold a new resource. Field specs: name:type[:arg][=default][+modifier...], e.g. "title:string+required+searchable", "price:number=0", "status:enum:draft,live=draft", "category:ref:category", "tags:string+array". Modifiers: required, array, searchable, sortable, filterable, unique, index, hidden, writeOnly, readOnly, immutable, populate, owner. Adds an owner field and a test automatically when the project has users.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -485,7 +485,7 @@ async function callTool(root, name, args) {
     case 'calm_diff':
       return json(root, ['diff', ...(args.ref ? [String(args.ref)] : []), '--json']);
     case 'calm_activity':
-      return readActivity(root, args.limit ?? 30).map((e) =>
+      return readActivity(root, (args.limit ?? 30) * 3).filter((e) => !(e.type === 'agent' && String(e.tool ?? '').startsWith('hook:'))).slice(-(args.limit ?? 30)).map((e) =>
         e.type === 'file' && e.diff
           ? { ...e, diff: { added: e.diff.added, removed: e.diff.removed, text: e.diff.hunks.map((h) => h.lines.join('\n')).join('\n...\n').slice(0, 3000) } }
           : e,

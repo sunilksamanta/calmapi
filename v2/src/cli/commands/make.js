@@ -14,13 +14,17 @@ ${c.bold('calm make block <name>')}
   Create app/resources/<name>/ with a resource definition (and optionally a
   service, custom routes and a test).
 
-  Field syntax  name:type[!][=default][+modifier...]
-    title:string!                   required string
+  Field syntax  name:type[:arg][=default][+modifier...]
+    title:string+required           required string
     price:number=0                  number with a default
     status:enum:draft,live=draft    enum
     category:ref:category           reference to another resource
-    tags:string[]                   array
-    name:string!+searchable         extra modifiers: searchable sortable filterable unique hidden ...
+    tags:string+array               array
+    name:string+required+searchable more modifiers: searchable sortable filterable unique
+                                    index hidden writeOnly readOnly immutable populate owner
+
+  Every form above is safe to type unquoted in bash, zsh and fish. The short forms
+  title:string! and tags:string[] work too, but quote them in zsh: 'title:string!'
 
   Types  string text email url password number integer boolean date enum ref id json
 
@@ -32,7 +36,7 @@ ${c.bold('calm make block <name>')}
     --force       overwrite existing files
 
   Example
-    calm make resource product name:string!+searchable price:number! category:ref --service
+    calm make resource product name:string+required+searchable price:number+required category:ref --service
 
   ${c.bold('calm make block <name>')} creates app/blocks/<name>/ (index.js, block.json, README.md)
   and test/blocks/<name>.test.js. Share it later with ${c.bold('calm block pack')}.

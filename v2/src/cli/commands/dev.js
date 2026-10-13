@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, statSync, watch } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { join, sep } from 'node:path';
 import { requireProject } from '../lib/project.js';
 import { walk } from '../lib/files.js';
 import { appendActivity, readActivity, lineDiff } from '../lib/activity.js';
@@ -21,6 +21,10 @@ ${c.bold('calm dev')}
 `;
 
 const TEXT = /\.(m?js|cjs|ts|json|md|txt|ya?ml|html|css)$/;
+// Recorded in Activity (with diffs) but not watched for restarts: tests and project files an
+// agent may edit too. Folders are recursive; files are at the project root.
+const RECORDED_DIRS = ['app', 'calm', 'test'];
+const RECORDED_FILES = new Set(['calm.config.js', 'server.js', '.env', '.env.example', 'package.json', 'calm.lock', 'README.md', 'AGENTS.md', 'CLAUDE.md', 'Dockerfile', 'eslint.config.js']);
 const MAX_SNAPSHOT = 256 * 1024;
 
 export async function run(argv) {
@@ -70,8 +74,8 @@ export async function run(argv) {
       return undefined; // deleted
     }
   };
-  for (const dir of ['app', 'calm']) for (const rel of walk(join(root, dir))) snapshots.set(`${dir}/${rel}`, readText(`${dir}/${rel}`));
-  for (const f of ['calm.config.js', 'server.js']) if (existsSync(join(root, f))) snapshots.set(f, readText(f));
+  for (const dir of RECORDED_DIRS) for (const rel of walk(join(root, dir), { ignore: ['node_modules'] })) snapshots.set(`${dir}/${rel}`, readText(`${dir}/${rel}`));
+  for (const f of RECORDED_FILES) if (f !== '.env' && existsSync(join(root, f))) snapshots.set(f, readText(f));
 
   // Started from an agent's shell (Claude Code sets CLAUDECODE=1): the weakest signal.
   const envAgent = detectAgentEnv(process.env);
@@ -108,22 +112,23 @@ export async function run(argv) {
   };
 
   const watchers = [];
-  for (const target of watched) {
-    const abs = join(root, target);
-    const isDir = statSync(abs).isDirectory();
+  const safeWatch = (abs, recursive, fn) => {
     try {
-      watchers.push(
-        watch(abs, { recursive: isDir }, (_ev, filename) => {
-          if (!filename) return;
-          const rel = isDir ? `${target}/${String(filename).split(sep).join('/')}` : target;
-          if (rel.includes('node_modules') || rel.split('/').some((p) => p.startsWith('.') && p !== '.env')) return;
-          onChange(isDir ? rel : relative(root, abs).split(sep).join('/'));
-        }),
-      );
+      watchers.push(watch(abs, { recursive }, (_ev, filename) => filename && fn(String(filename).split(sep).join('/'))));
     } catch {
       // recursive watch unsupported: restarts still work, the activity log just has fewer details
     }
+  };
+  for (const dir of RECORDED_DIRS) {
+    if (!existsSync(join(root, dir))) continue;
+    safeWatch(join(root, dir), true, (name) => {
+      const rel = `${dir}/${name}`;
+      if (rel.includes('node_modules') || rel.split('/').some((p) => p.startsWith('.'))) return;
+      onChange(rel);
+    });
   }
+  // The project root, not recursive: only the files listed in RECORDED_FILES.
+  safeWatch(root, false, (name) => RECORDED_FILES.has(name) && onChange(name));
   appendActivity(root, { type: 'session', note: 'calm dev started' });
 
   const stop = (signal) => {

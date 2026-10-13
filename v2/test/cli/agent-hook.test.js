@@ -37,14 +37,16 @@ test('the Claude Code payload is recorded with the file relative to the project'
   assert.equal(e.client, 'claude-code');
   assert.equal(e.tool, 'hook:Edit');
   assert.equal(e.path, 'app/resources/post/post.resource.js');
+  assert.equal(e.summary, 'claude-code is about to edit app/resources/post/post.resource.js');
 });
 
-test('a generic payload with another client; files outside the project have no path; bad input never fails', () => {
+test('a generic payload with another client; files outside the project are not logged; bad input never fails', () => {
   hook({ tool: 'write', path: 'app/routes.js' }, '--client', 'cursor');
   assert.equal(lastEvent().client, 'cursor');
   assert.equal(lastEvent().path, 'app/routes.js');
+  const before = lastEvent();
   hook({ tool_name: 'Write', tool_input: { file_path: '/etc/hosts' }, cwd: app });
-  assert.equal(lastEvent().path, undefined);
+  assert.deepEqual(lastEvent(), before, 'an edit outside the project is not logged');
   execFileSync(process.execPath, [CALM, 'agent-hook'], { cwd: app, env, input: 'not json' });
   assert.ok(existsSync(join(app, '.calm', 'activity.jsonl')));
 });
@@ -62,4 +64,56 @@ test('attribution: the hook names the file, MCP claims a window, the environment
   assert.equal(attribute('app/a.js', [{ ...hookEvent, time: at(600) }], { now }), null, 'old hook events expire');
   assert.equal(detectAgentEnv({ CLAUDECODE: '1' }), 'claude-code');
   assert.equal(detectAgentEnv({}), null);
+});
+
+test('calm dev credits a hooked edit to the agent, records test/ files, and ignores edits outside the project', { timeout: 60_000 }, async () => {
+  const { makeProject } = await import('../helpers.js');
+  const { spawn } = await import('node:child_process');
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const project = await makeProject();
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const port = 5900 + Math.floor(Math.random() * 90);
+  const envFile = join(project.dir, '.env');
+  writeFileSync(envFile, readFileSync(envFile, 'utf8').replace(/^PORT=.*$/m, `PORT=${port}`).replace(/^MONGODB_URI=.*$/m, `MONGODB_URI=mongodb://127.0.0.1:27017/calm_hook_${Date.now()}`));
+  const { NODE_TEST_CONTEXT: _c, CLAUDECODE: _cc, ...childEnv } = { ...process.env, NO_COLOR: '1' };
+  const dev = spawn(process.execPath, [CALM, 'dev'], { cwd: project.dir, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] });
+  const log = () => readFileSync(join(project.dir, '.calm', 'activity.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const waitFor = async (fn) => {
+    for (let i = 0; i < 100; i++) {
+      try {
+        const v = fn();
+        if (v) return v;
+      } catch {
+        // not yet
+      }
+      await sleep(200);
+    }
+    throw new Error('timed out');
+  };
+  try {
+    await waitFor(() => log().some((e) => e.type === 'session'));
+    await sleep(500);
+    const hookIn = (payload) => execFileSync(process.execPath, [CALM, 'agent-hook'], { cwd: project.dir, env: childEnv, input: JSON.stringify(payload) });
+    const testFile = join(project.dir, 'test', 'extra.test.js');
+    hookIn({ tool_name: 'Write', tool_input: { file_path: testFile }, cwd: project.dir });
+    writeFileSync(testFile, "import { test } from 'node:test';\ntest('x', () => {});\n");
+    const byAgent = await waitFor(() => log().find((e) => e.type === 'file' && e.path === 'test/extra.test.js'));
+    assert.deepEqual(byAgent.actor, { kind: 'agent', name: 'claude-code' });
+    assert.equal(byAgent.via, 'hook');
+
+    // A human edit with no hook note, 30 seconds of quiet is not needed: hooks only claim their own file.
+    writeFileSync(join(project.dir, 'README.md'), '# changed by a person\n');
+    const byHuman = await waitFor(() => log().find((e) => e.type === 'file' && e.path === 'README.md'));
+    assert.equal(byHuman.actor.kind, 'human');
+
+    const outside = join(project.dir, '..', `plan-${Date.now()}.md`);
+    mkdirSync(join(project.dir, '..'), { recursive: true });
+    const before = log().length;
+    hookIn({ tool_name: 'Write', tool_input: { file_path: outside }, cwd: project.dir });
+    assert.equal(log().length, before, 'an edit outside the project is not logged');
+  } finally {
+    dev.kill('SIGTERM');
+    await new Promise((r) => dev.once('exit', r));
+    project.cleanup();
+  }
 });

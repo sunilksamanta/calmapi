@@ -36,6 +36,11 @@ function actorName(e) {
   return 'server';
 }
 
+// `calm agent-hook` notes ("claude-code is about to edit x") only tell calm dev who made the next
+// change; the change itself is the row, so the notes are not shown on their own.
+export const isSignal = (e) => e.type === 'agent' && String(e.tool ?? '').startsWith('hook:');
+const shown = () => store.activity.filter((e) => !isSignal(e));
+
 const FILTERS = {
   all: () => true,
   agent: isAgentEvent,
@@ -261,7 +266,7 @@ function mountActivity(root) {
     mount(sessionEl, actorMark('agent'), h('span', { class: 'act-session-text', title: tip }, `${s.client ?? 'agent'} · scope ${s.scope}`));
   };
   const followBtn = h('button', { class: 'btn ghost', type: 'button', title: 'Keep the newest event in view', onclick: () => setFollow(!state.follow) });
-  const counts = () => Object.fromEntries(Object.entries(FILTERS).map(([k, fn]) => [k, store.activity.filter(fn).length]));
+  const counts = () => Object.fromEntries(Object.entries(FILTERS).map(([k, fn]) => [k, shown().filter(fn).length]));
 
   function setFollow(v) {
     state.follow = v;
@@ -321,13 +326,13 @@ function mountActivity(root) {
 
   function render() {
     seg.setOptions(segOptions());
-    const agentCalls = store.activity.filter((e) => e.type === 'agent' && e.tool !== 'connect').length;
+    const agentCalls = shown().filter((e) => e.type === 'agent' && e.tool !== 'connect').length;
     const files = new Set(store.activity.filter((e) => e.type === 'file').map((e) => e.path)).size;
     mount(summary, store.activity.length ? joined([agentCalls ? plural(agentCalls, 'agent call') : null, files ? plural(files, 'file') + ' changed' : null, `last ${relTime(store.activity[0].time)}`]) : '');
     if (!store.activity.length) {
       return mount(list, empty('No activity yet. `calm dev` records file changes, restarts and crashes; connect an agent with', { code: 'claude mcp add calm -- npx calm mcp' }));
     }
-    const { list: events, readyIn } = fold(store.activity.filter(FILTERS[state.filter]));
+    const { list: events, readyIn } = fold(shown().filter(FILTERS[state.filter]));
     if (!events.length) return mount(list, empty('Nothing here for this filter.'));
     const newest = store.activity[0];
     const top = scroller.scrollTop;

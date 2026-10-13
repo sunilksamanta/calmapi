@@ -28,7 +28,7 @@ across resources; use `this.service('name')` inside services or `ctx.services.na
 ## Golden rules
 
 1. **Add a resource with the CLI**, then edit it:
-   `npx calm make resource product title:string! price:number category:ref:category`
+   `npx calm make resource product title:string+required price:number category:ref:category`
 2. **Declare fields once** in `<name>.resource.js` with `f.*()`. Visibility and validation come from there:
    `.hidden()` never returned, `.writeOnly()` input only, `.readOnly()` output only, `.immutable()`,
    `.writableBy('admin')`, `.visibleTo('owner | admin')`, `.filterable()`, `.sortable()`, `.searchable()`.
