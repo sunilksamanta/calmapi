@@ -63,6 +63,8 @@ export async function loadConfig(root, overrides = {}) {
     openapi: { enabled: true, path: '/openapi.json' },
     devtools: { enabled: mode === 'development' },
     blocks: {}, // per-block settings: blocks: { jobs: { pollMs: 500 } } (see each block's options)
+    // Promises that must stay true: 'no public write routes', 'personal data is never public'... (calm/invariants.js)
+    invariants: [],
     log: { level: env.LOG_LEVEL || (mode === 'test' ? 'silent' : 'info'), format: mode === 'production' ? 'json' : 'pretty' },
     shutdownTimeoutMs: 10_000,
   };

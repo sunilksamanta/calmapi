@@ -35,6 +35,8 @@ try {
   result.openapi = app.openapi();
   result.doctor = await app.doctor();
   result.exposure = await app.exposure();
+  result.invariants = app.invariants ? await app.invariants() : [];
+  result.snapshot = app.snapshot ? await app.snapshot() : null;
   await app.mongoose.disconnect();
 } catch (err) {
   result.error = { message: err.message, code: err.code || null, stack: err.stack };

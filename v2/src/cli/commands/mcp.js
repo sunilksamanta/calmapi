@@ -149,6 +149,12 @@ const TOOLS = [
       'Push notifications the dev server sent or captured (app.push.send), newest first: title, body, data, target devices and platforms, warnings (payload too large, text cut off on iOS or Android, sensitive data in the payload) and the delivery log. Use it to check notifications your code sends.',
     inputSchema: { type: 'object', properties: { limit: { type: 'integer' } } },
   },
+  {
+    name: 'calm_diff',
+    description:
+      'What changed in behavior (not lines) between a git ref (default HEAD) and the working tree: routes added or removed, policies loosened or tightened, fields visible to more people, env vars, hosts the code can reach, events, blocks and invariants, with a count of changes that widen access. Run it before you finish, and show the developer the result.',
+    inputSchema: { type: 'object', properties: { ref: str('Git ref to compare with, e.g. "main" (default HEAD)') } },
+  },
 ];
 
 export async function run(argv) {
@@ -415,6 +421,8 @@ async function callTool(root, name, args) {
       }
       return { exposure: info.exposure, findings: info.doctor.filter((f) => security.test(f.id)), recentEvents: events };
     }
+    case 'calm_diff':
+      return json(root, ['diff', ...(args.ref ? [String(args.ref)] : []), '--json']);
     case 'calm_activity':
       return readActivity(root, args.limit ?? 30).map((e) =>
         e.type === 'file' && e.diff

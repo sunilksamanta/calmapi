@@ -17,6 +17,8 @@ import { setupAuth } from './auth/index.js';
 import { buildOpenAPI } from './openapi.js';
 import { runtimeChecks, hookFindings } from './doctor.js';
 import { exposureMatrix, exposureFindings } from './security/exposure.js';
+import { describeInvariants, checkInvariants, invariantFindings, formatBroken } from './invariants.js';
+import { behaviorSnapshot } from './snapshot.js';
 import { canRead, inScope } from './resource/visibility.js';
 import { toHttpError, notFound } from './errors.js';
 import { parseKeys, createCipher } from './security/encryption.js';
@@ -83,8 +85,12 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
     model: (name) => services.get(name).model,
     service: (name) => services.get(name),
     openapi: () => buildOpenAPI(app),
-    doctor: async () => [...runtimeChecks(app), ...(await hookFindings(app)), ...exposureFindings(await exposureMatrix(app))],
+    doctor: async () => [...runtimeChecks(app), ...(await hookFindings(app)), ...exposureFindings(await exposureMatrix(app)), ...(await invariantFindings(app))],
     exposure: () => exposureMatrix(app),
+    /** The invariants from calm.config.js, checked: [{ rule, ok, violations }]. */
+    invariants: () => checkInvariants(app),
+    /** What the app does, as data (routes and who may call them, fields and who may see them...). */
+    snapshot: () => behaviorSnapshot(app),
     /**
      * May `user` read `doc`, by the rules of GET /api/<resource>/:id (read policy, owner,
      * service scope())? For work outside a request: webhooks, streams, notifications.
@@ -112,6 +118,7 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
       if (app.started) return app;
       await connect(app);
       await Promise.all([...registry.values()].map((entry) => entry.model.init()));
+      await holdInvariants(app);
       for (const fn of hooks.start) await fn(app);
       app.started = true;
       return app;
@@ -154,6 +161,8 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
       app.started = false;
     },
   };
+
+  describeInvariants(config); // unknown rules fail now, with a readable message
 
   // 1. Resources and blocks from disk
   const loaded = await loadResources(root);
@@ -215,6 +224,25 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
 
   app.express = await buildExpress(app);
   return app;
+}
+
+/**
+ * The promises in calm.config.js (invariants) are checked before the app serves. In production
+ * a broken one stops the boot: serving would mean silently doing what you promised never to do.
+ * Elsewhere it is logged, and doctor shows it in red.
+ */
+async function holdInvariants(app) {
+  if (!app.config.invariants?.length) return;
+  const results = await checkInvariants(app);
+  const broken = results.filter((r) => !r.ok);
+  if (!broken.length) return;
+  const text = formatBroken(results);
+  if (app.config.mode === 'production') {
+    const err = new Error(`Refusing to start: ${broken.length} invariant${broken.length === 1 ? ' is' : 's are'} broken (calm.config.js)\n${text}`);
+    err.code = 'CALM_INVARIANT';
+    throw err;
+  }
+  app.log.warn(`${broken.length} invariant${broken.length === 1 ? ' is' : 's are'} broken (the app would not start in production)\n${text}`);
 }
 
 /** Which declared env vars a block has, for devtools. Never includes secret values. */

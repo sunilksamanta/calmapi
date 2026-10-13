@@ -16,6 +16,8 @@ export { maskToken, providerPayloads } from './push.js';
 export { resourceJSONSchema } from './resource/resource.js';
 export { hashPassword, verifyPassword } from './auth/password.js';
 export { currentRequest } from './context.js';
+export { checkInvariants } from './invariants.js';
+export { behaviorSnapshot } from './snapshot.js';
 export {
   CalmError,
   badRequest,

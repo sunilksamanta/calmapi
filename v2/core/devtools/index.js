@@ -210,6 +210,8 @@ export function setupDevtools(app, ex) {
 
   api.get('/overview', (_req, res) => res.json(overview(app)));
   api.get('/doctor', async (_req, res) => res.json(await app.doctor()));
+  api.get('/snapshot', async (_req, res) => res.json(await app.snapshot()));
+  api.get('/invariants', async (_req, res) => res.json(await app.invariants()));
   api.get('/requests', (_req, res) => res.json(requests.list().map(summary).reverse()));
   api.delete('/requests', (_req, res) => {
     requests.clear();
