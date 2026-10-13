@@ -12,7 +12,7 @@ import { existsSync } from 'node:fs';
 import { requireProject, capture } from '../lib/project.js';
 import { PKG, PKG_ROOT, readJson, readText } from '../lib/files.js';
 import { appendActivity, readActivity } from '../lib/activity.js';
-import { runAuditInProject } from './audit.js';
+import { runAuditInProject, checkBudget } from './audit.js';
 import { introspect } from '../lib/introspect.js';
 import { explainText } from '../lib/explain-text.js';
 import { writeDeclaration } from '../../../core/review.js';
@@ -488,6 +488,7 @@ async function callTool(root, name, args) {
         leaks: report.leaks,
         failedProbes: report.probes.filter((p) => !p.ok),
         notes: report.notes,
+        budget: await checkBudget(root).catch((err) => ({ error: err.message })),
       };
     }
     case 'calm_security': {

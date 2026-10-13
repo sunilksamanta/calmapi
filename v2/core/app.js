@@ -17,6 +17,7 @@ import { setupAuth } from './auth/index.js';
 import { buildOpenAPI } from './openapi.js';
 import { runtimeChecks, hookFindings } from './doctor.js';
 import { exposureMatrix, exposureFindings } from './security/exposure.js';
+import { budgetFindings } from './security/budget.js';
 import { describeInvariants, checkInvariants, invariantFindings, formatBroken } from './invariants.js';
 import { behaviorSnapshot } from './snapshot.js';
 import { reviewState, signReview } from './review.js';
@@ -91,7 +92,10 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
     model: (name) => services.get(name).model,
     service: (name) => services.get(name),
     openapi: () => buildOpenAPI(app),
-    doctor: async () => [...runtimeChecks(app), ...(await hookFindings(app)), ...exposureFindings(await exposureMatrix(app)), ...(await invariantFindings(app))],
+    doctor: async () => {
+      const matrix = await exposureMatrix(app);
+      return [...runtimeChecks(app), ...(await hookFindings(app)), ...exposureFindings(matrix), ...budgetFindings(root, matrix), ...(await invariantFindings(app))];
+    },
     exposure: () => exposureMatrix(app),
     /** The invariants from calm.config.js, checked: [{ rule, ok, violations }]. */
     invariants: () => checkInvariants(app),
