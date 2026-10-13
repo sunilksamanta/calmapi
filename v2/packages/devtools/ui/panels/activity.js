@@ -2,8 +2,8 @@
 // restarts and crashes come from `calm dev`; tool calls come from `calm mcp`, so you can
 // watch an AI agent work and see exactly what it changed.
 
-import { h, icon, mount, clock, fullDate, relTime, empty, bar, segmented, plural, fileLink, actorMark, joined, fmtMs, methodTag, statusTag, codeBlock } from '../lib.js';
-import { store, on, markActivitySeen, unseenActivity } from '../store.js';
+import { h, icon, mount, clock, fullDate, relTime, empty, bar, segmented, plural, fileLink, actorMark, joined, fmtMs, methodTag, statusTag, codeBlock, api, toast, loading } from '../lib.js';
+import { store, on, markActivitySeen, unseenActivity, loadOverview } from '../store.js';
 import { restoreCheckpoint } from './checkpoints.js';
 
 const SERVER = new Set(['restart', 'ready', 'session', 'crash']);
@@ -28,10 +28,10 @@ export default {
 // Ids are assigned by the dev server and change when it restarts; this key does not.
 const keyOf = (e) => `${e.time}|${e.type}|${e.path ?? e.tool ?? ''}`;
 const actorKind = (e) => (typeof e.actor === 'string' ? e.actor : e.actor?.kind) ?? 'human';
-export const isAgentEvent = (e) => e.type === 'agent' || ((e.type === 'file' || e.type === 'checkpoint') && actorKind(e) === 'agent');
+export const isAgentEvent = (e) => e.type === 'agent' || e.type === 'proposal' || ((e.type === 'file' || e.type === 'checkpoint') && actorKind(e) === 'agent');
 
 function actorName(e) {
-  if (e.type === 'agent') return e.client ?? 'agent';
+  if (e.type === 'agent' || e.type === 'proposal') return e.client ?? 'agent';
   if (e.type === 'file' || e.type === 'checkpoint') return actorKind(e) === 'agent' ? (e.actor?.name ?? e.client ?? 'agent') : 'you';
   return 'server';
 }
@@ -105,12 +105,23 @@ function agentLine(e) {
   return [tool(e.tool ?? 'tool'), args ? h('span', { class: 'mono muted act-args' }, args) : null];
 }
 
+// "Refused: scope "read" cannot run calm_make_resource. Ask the developer..." without the advice.
+const refusalReason = (e) => String(e.summary ?? '').split('\n')[0].replace(/^Refused:\s*/, '').split('. ')[0];
+
 function describe(e, readyIn) {
   switch (e.type) {
     case 'agent':
+      if (e.refused) return [agentLine(e), h('span', { class: 'badge b-red', title: e.summary ?? '' }, 'refused'), h('span', { class: 't-red act-fail' }, refusalReason(e))];
       return [agentLine(e), e.ok === false ? h('span', { class: 't-red act-fail' }, `failed: ${String(e.summary ?? '').split('\n')[0]}`) : null];
     case 'file':
-      return [h('span', { class: `act-change act-${e.change}` }, e.change), h('span', { class: 'mono act-path' }, e.path), e.note ? h('span', { class: 'muted' }, e.note) : null];
+      return [
+        h('span', { class: `act-change act-${e.change}` }, e.change),
+        h('span', { class: 'mono act-path' }, e.path),
+        e.protected ? h('span', { class: 'badge b-amber', title: e.reason === 'access rules' ? 'An agent changed a policy or field visibility line. Review it before committing.' : 'An agent changed a protected path (agents.protected in calm.config.js). Review it before committing.' }, e.reason ?? 'protected') : null,
+        e.note ? h('span', { class: 'muted' }, e.note) : null,
+      ];
+    case 'proposal':
+      return [h('span', { class: 'act-strong' }, 'Proposal'), h('span', { class: 'act-path' }, e.title ?? e.id), h('span', { class: 'mono muted act-args' }, (e.files ?? []).join('  '))];
     case 'restart':
       return [h('span', null, 'Server restarted'), readyIn.has(e) ? h('span', { class: 'muted' }, `ready in ${fmtMs(readyIn.get(e))}`) : null];
     case 'ready':
@@ -136,13 +147,18 @@ function describe(e, readyIn) {
 function meta(e) {
   if (e.type === 'agent') return h('span', { class: 'mono muted' }, e.ms != null && e.tool !== 'connect' ? fmtMs(e.ms) : '');
   if (e.type === 'file' && e.diff) return h('span', { class: 'mono act-stat' }, h('span', { class: 't-green' }, `+${e.diff.added ?? 0}`), ' ', h('span', { class: 't-red' }, `-${e.diff.removed ?? 0}`));
+  if (e.type === 'proposal') return h('span', { class: 'mono muted' }, plural((e.files ?? []).length, 'file'));
   return h('span');
 }
 
+// How calm dev knew an agent made a file change (see src/cli/lib/attribution.js).
+const VIA = { hook: 'its edit hook named this file', mcp: 'it was calling calm mcp tools', env: 'calm dev runs in its shell' };
+
 function markFor(e) {
   if (e.type === 'crash') return actorMark('crash', 'Crash');
+  if (e.type === 'agent' && e.refused) return actorMark('agent-fail', `${e.client ?? 'Agent'} (refused by scope ${e.scope ?? ''})`);
   if (e.type === 'agent' && e.ok === false) return actorMark('agent-fail', `${e.client ?? 'Agent'} (tool call failed)`);
-  if (isAgentEvent(e)) return actorMark('agent', `AI agent: ${actorName(e)}`);
+  if (isAgentEvent(e)) return actorMark('agent', `AI agent: ${actorName(e)}${VIA[e.via] ? ` (${VIA[e.via]})` : ''}`);
   if (e.type === 'file') return actorMark('human', 'You (a human edit)');
   if (e.type === 'checkpoint') return actorMark('human', 'You');
   return actorMark('server', 'Dev server');
@@ -191,14 +207,43 @@ function details(e) {
     const rid = /"requestId":\s*"([^"]+)"/.exec(String(e.summary ?? ''))?.[1];
     return [
       h('div', { class: 'act-io' }, h('span', { class: 'act-io-label' }, 'Arguments'), args && Object.keys(args).length ? codeBlock(args) : h('span', { class: 'muted' }, 'none')),
-      h('div', { class: 'act-io' }, h('span', { class: 'act-io-label' }, e.ok === false ? 'Error' : 'Result'), h('pre', { class: ['code plain', e.ok === false && 't-red'] }, e.summary || ' ')),
+      h('div', { class: 'act-io' }, h('span', { class: 'act-io-label' }, e.refused ? `Refused (scope ${e.scope ?? '?'})` : e.ok === false ? 'Error' : 'Result'), h('pre', { class: ['code plain', e.ok === false && 't-red'] }, e.summary || ' ')),
       rid ? h('div', { class: 'act-foot' }, h('a', { href: `#/requests/${rid}` }, 'Open the request')) : null,
     ];
   }
+  if (e.type === 'proposal') return proposalView(e);
   return null;
 }
 
-const expandable = (e) => e.type === 'file' || e.type === 'crash' || (e.type === 'agent' && e.tool !== 'connect');
+/** A proposal's reason, per-file diffs and the Apply button; the full record comes from the API. */
+function proposalView(e) {
+  const box = h('div', { class: 'prop' }, loading('Loading proposal'));
+  const show = (p) => {
+    const apply = h('button', { class: 'btn primary', type: 'button', disabled: Boolean(p.appliedAt) }, p.appliedAt ? 'Applied' : 'Apply');
+    apply.addEventListener('click', async () => {
+      apply.disabled = true;
+      try {
+        const out = await api(`/proposals/${encodeURIComponent(p.id)}/apply`, { method: 'POST' });
+        toast(`Applied ${plural(out.applied.length, 'file')} from "${p.title}"`);
+        show({ ...p, appliedAt: out.appliedAt });
+      } catch (err) {
+        toast(err.message, { tone: 'error' });
+        apply.disabled = false;
+      }
+    });
+    mount(
+      box,
+      h('div', { class: 'prop-head' }, h('span', { class: 'prop-title' }, p.title), h('span', { class: 'spacer' }), p.appliedAt ? h('span', { class: 'muted', title: fullDate(p.appliedAt) }, `applied ${relTime(p.appliedAt)}`) : null, apply),
+      p.reason ? h('p', { class: 'prop-reason' }, p.reason) : null,
+      (p.files ?? []).map((f) => h('div', { class: 'act-io' }, h('span', { class: 'act-io-label mono' }, f.path, ' ', h('span', { class: 't-green' }, `+${f.diff?.added ?? 0}`), ' ', h('span', { class: 't-red' }, `-${f.diff?.removed ?? 0}`)), f.diff ? diffView(f.diff) : null)),
+      h('p', { class: 'muted prop-note' }, 'Applying writes these files as you (the agent proposed, you decide). The dev server restarts as for any edit.'),
+    );
+  };
+  api(`/proposals/${encodeURIComponent(e.id)}`).then(show, (err) => mount(box, h('p', { class: 't-red' }, err.message)));
+  return box;
+}
+
+const expandable = (e) => e.type === 'file' || e.type === 'crash' || e.type === 'proposal' || (e.type === 'agent' && e.tool !== 'connect');
 
 // ---- panel -----------------------------------------------------------------------------
 
@@ -206,6 +251,15 @@ function mountActivity(root) {
   const list = h('div', { class: 'act-list', role: 'list', 'aria-label': 'Project activity' });
   const scroller = h('div', { class: 'scroll act-scroll' }, list);
   const summary = h('span', { class: 'bar-meta' });
+  // The agent connected over MCP right now (.calm/agent-session.json, via the overview).
+  const sessionEl = h('span', { class: 'act-session' });
+  const renderSession = () => {
+    const s = store.overview?.agentSession;
+    if (!s) return mount(sessionEl);
+    const paths = (s.protected ?? []).filter((p) => !(s.allow ?? []).includes(p));
+    const tip = [`Connected ${relTime(s.startedAt)} in scope ${s.scope}.`, paths.length ? `Protected paths: ${paths.join(', ')}.` : 'No protected paths.', s.allow?.length ? `Allowed this session: ${s.allow.join(', ')}.` : null].filter(Boolean).join('\n');
+    mount(sessionEl, actorMark('agent'), h('span', { class: 'act-session-text', title: tip }, `${s.client ?? 'agent'} · scope ${s.scope}`));
+  };
   const followBtn = h('button', { class: 'btn ghost', type: 'button', title: 'Keep the newest event in view', onclick: () => setFollow(!state.follow) });
   const counts = () => Object.fromEntries(Object.entries(FILTERS).map(([k, fn]) => [k, store.activity.filter(fn).length]));
 
@@ -288,16 +342,19 @@ function mountActivity(root) {
     if (atTop !== state.follow) setFollow(atTop);
   });
 
-  mount(root, h('div', { class: 'panel' }, bar('Activity', seg, h('span', { class: 'spacer' }), summary, followBtn), scroller));
+  mount(root, h('div', { class: 'panel' }, bar('Activity', seg, h('span', { class: 'spacer' }), sessionEl, summary, followBtn), scroller));
   setFollow(state.follow);
   render();
+  renderSession();
   markActivitySeen();
 
   const offs = [
-    on('activity', () => {
+    on('activity', (e) => {
       render();
       markActivitySeen();
+      if (e?.type === 'agent' && e.tool === 'connect') loadOverview().catch(() => {});
     }),
+    on('overview', renderSession),
     on('activity:reset', () => {
       render();
       markActivitySeen();

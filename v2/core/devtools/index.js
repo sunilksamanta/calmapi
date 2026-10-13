@@ -11,8 +11,8 @@
 import express from 'express';
 import { randomBytes, createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { existsSync, readFileSync, statSync, watchFile, unwatchFile, openSync, readSync, closeSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { existsSync, readFileSync, statSync, watchFile, unwatchFile, openSync, readSync, closeSync, readdirSync, writeFileSync, appendFileSync, mkdirSync } from 'node:fs';
+import { join, dirname, resolve, sep } from 'node:path';
 import { currentRequest } from '../context.js';
 import { serialize } from '../resource/resource.js';
 import { kebab } from '../utils/strings.js';
@@ -530,6 +530,63 @@ export function setupDevtools(app, ex) {
     res.json(await fn(app));
   });
 
+  // ---- proposals -----------------------------------------------------------------
+  // Changes an agent described with calm_propose instead of making (.calm/proposals/<id>.json).
+  // Applying writes the files and records each one in Activity as a devtools edit.
+  const proposalsDir = join(app.root, '.calm', 'proposals');
+  const readProposal = (id) => {
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) return null;
+    try {
+      return JSON.parse(readFileSync(join(proposalsDir, `${id}.json`), 'utf8'));
+    } catch {
+      return null;
+    }
+  };
+  const summaryOf = ({ files, ...p }) => ({ ...p, files: files.map((f) => f.path) });
+  api.get('/proposals', (_req, res) => {
+    let names = [];
+    try {
+      names = readdirSync(proposalsDir).filter((f) => f.endsWith('.json'));
+    } catch {
+      // no proposals yet
+    }
+    const list = names.map((f) => readProposal(f.slice(0, -5))).filter(Boolean);
+    list.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    res.json(list.map(summaryOf));
+  });
+  api.get('/proposals/:id', (req, res) => {
+    const p = readProposal(req.params.id);
+    if (!p) return res.status(404).json({ error: 'Unknown proposal' });
+    res.json(p);
+  });
+  api.post('/proposals/:id/apply', (req, res) => {
+    const p = readProposal(req.params.id);
+    if (!p) return res.status(404).json({ error: 'Unknown proposal' });
+    if (p.appliedAt) return res.status(409).json({ error: `Already applied at ${p.appliedAt}` });
+    const root = resolve(app.root);
+    const targets = [];
+    for (const f of p.files ?? []) {
+      const target = resolve(root, String(f.path ?? ''));
+      const inside = target.startsWith(root + sep) && !target.slice(root.length).split(sep).some((s) => s === 'node_modules' || s === '.git');
+      if (!inside || typeof f.content !== 'string') return res.status(400).json({ error: `Refusing to write ${f.path}` });
+      targets.push({ ...f, target });
+    }
+    const applied = [];
+    mkdirSync(dirname(activityPath), { recursive: true });
+    for (const f of targets) {
+      const change = existsSync(f.target) ? 'modified' : 'added';
+      mkdirSync(dirname(f.target), { recursive: true });
+      writeFileSync(f.target, f.content);
+      appendFileSync(activityPath, `${JSON.stringify({ time: new Date().toISOString(), type: 'file', path: f.path, change, actor: { kind: 'human', name: 'devtools' }, diff: f.diff ?? null, note: `applied proposal ${p.id}` })}\n`);
+      applied.push(f.path);
+    }
+    p.appliedAt = new Date().toISOString();
+    writeFileSync(join(proposalsDir, `${p.id}.json`), `${JSON.stringify(p, null, 2)}\n`);
+    readNewActivity(false); // show the edits now, not at the next poll
+    app.log.info(`Devtools: applied proposal ${p.id} (${applied.join(', ')})`);
+    res.json({ id: p.id, applied, appliedAt: p.appliedAt });
+  });
+
   api.get('/stream', (req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
     res.write('retry: 2000\n\n');
@@ -622,7 +679,24 @@ function overview(app) {
     })),
     blocks: describeBlocks(app),
     panels: Object.keys(app.hooks.devtools).filter((k) => k !== 'onConnect'),
+    agentSession: readAgentSession(app.root),
   };
+}
+
+/** The MCP session `calm mcp` wrote (.calm/agent-session.json), when its process is still alive. */
+function readAgentSession(root) {
+  let session;
+  try {
+    session = JSON.parse(readFileSync(join(root, '.calm', 'agent-session.json'), 'utf8'));
+  } catch {
+    return null;
+  }
+  try {
+    if (session.pid) process.kill(session.pid, 0);
+  } catch {
+    return null; // the server is gone, the file is stale
+  }
+  return session;
 }
 
 /**

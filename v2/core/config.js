@@ -65,6 +65,7 @@ export async function loadConfig(root, overrides = {}) {
     blocks: {}, // per-block settings: blocks: { jobs: { pollMs: 500 } } (see each block's options)
     // Promises that must stay true: 'no public write routes', 'personal data is never public'... (calm/invariants.js)
     invariants: [],
+    agents: { scope: 'full', protected: ['calm/security/**', 'calm/auth/**', 'calm.config.js'] }, // AI agents over calm mcp: default scope (read | scaffold | full) and paths they must not edit without you
     log: { level: env.LOG_LEVEL || (mode === 'test' ? 'silent' : 'info'), format: mode === 'production' ? 'json' : 'pretty' },
     shutdownTimeoutMs: 10_000,
   };

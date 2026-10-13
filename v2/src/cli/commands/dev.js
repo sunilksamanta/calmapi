@@ -4,6 +4,9 @@ import { join, relative, sep } from 'node:path';
 import { requireProject } from '../lib/project.js';
 import { walk } from '../lib/files.js';
 import { appendActivity, readActivity, lineDiff } from '../lib/activity.js';
+import { protectionReason } from '../lib/protected.js';
+import { attribute, detectAgentEnv } from '../lib/attribution.js';
+import { readAgentSession, DEFAULT_PROTECTED } from '../lib/agent-scope.js';
 import { c, out } from '../lib/ui.js';
 
 export const help = `
@@ -19,7 +22,6 @@ ${c.bold('calm dev')}
 
 const TEXT = /\.(m?js|cjs|ts|json|md|txt|ya?ml|html|css)$/;
 const MAX_SNAPSHOT = 256 * 1024;
-const AGENT_WINDOW_MS = 20_000;
 
 export async function run(argv) {
   if (argv.includes('--help') || argv.includes('-h')) return out(help);
@@ -71,9 +73,17 @@ export async function run(argv) {
   for (const dir of ['app', 'calm']) for (const rel of walk(join(root, dir))) snapshots.set(`${dir}/${rel}`, readText(`${dir}/${rel}`));
   for (const f of ['calm.config.js', 'server.js']) if (existsSync(join(root, f))) snapshots.set(f, readText(f));
 
-  const lastAgent = () => {
-    const recent = readActivity(root, 30).reverse().find((e) => e.type === 'agent');
-    return recent && Date.now() - Date.parse(recent.time) < AGENT_WINDOW_MS ? recent.client : null;
+  // Started from an agent's shell (Claude Code sets CLAUDECODE=1): the weakest signal.
+  const envAgent = detectAgentEnv(process.env);
+  const whoChanged = (rel) => attribute(rel, readActivity(root, 60), { envAgent });
+  // Devtools applied a proposal: it wrote the file and recorded the change itself.
+  const appliedFromDevtools = (rel) => readActivity(root, 10).some((e) => e.type === 'file' && e.path === rel && e.actor?.name === 'devtools' && Date.now() - Date.parse(e.time) < 3000);
+  // Agent edits to protected paths and access rules get a flag the human can see.
+  const guard = (event) => {
+    if (event.actor.kind !== 'agent') return event;
+    const session = readAgentSession(root) ?? {};
+    const reason = protectionReason(event.path, event.diff, { protected: session.protected ?? DEFAULT_PROTECTED, allow: session.allow ?? [] });
+    return { ...event, ...(reason ? { protected: true, reason } : {}), ...(session.scope ? { scope: session.scope } : {}) };
   };
 
   const timers = new Map();
@@ -82,17 +92,19 @@ export async function run(argv) {
     timers.set(rel, setTimeout(() => record(rel), 150));
   };
   const record = (rel) => {
-    const agent = lastAgent();
-    const actor = agent ? { kind: 'agent', name: agent } : { kind: 'human', name: process.env.USER || 'you' };
-    if (rel === '.env') return appendActivity(root, { type: 'file', path: rel, change: 'modified', actor, diff: null, note: 'contents not recorded (secrets)' });
+    const agent = whoChanged(rel);
+    const actor = agent ? { kind: 'agent', name: agent.name } : { kind: 'human', name: process.env.USER || 'you' };
+    const via = agent?.via ?? null;
+    if (rel === '.env') return appendActivity(root, guard({ type: 'file', path: rel, change: 'modified', actor, diff: null, note: 'contents not recorded (secrets)', ...(via ? { via } : {}) }));
     const before = snapshots.get(rel);
     const after = readText(rel);
     if (before === after) return;
     const change = after === undefined ? 'deleted' : before === undefined ? 'added' : 'modified';
     if (after === undefined) snapshots.delete(rel);
     else snapshots.set(rel, after);
+    if (appliedFromDevtools(rel)) return;
     const diff = typeof before === 'string' || typeof after === 'string' ? lineDiff(before ?? '', after ?? '') : null;
-    appendActivity(root, { type: 'file', path: rel, change, actor, diff });
+    appendActivity(root, guard({ type: 'file', path: rel, change, actor, diff, ...(via ? { via } : {}) }));
   };
 
   const watchers = [];

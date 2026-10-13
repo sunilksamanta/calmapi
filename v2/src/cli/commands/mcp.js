@@ -14,17 +14,23 @@ import { PKG, PKG_ROOT, readJson, readText } from '../lib/files.js';
 import { appendActivity, readActivity } from '../lib/activity.js';
 import { runAuditInProject } from './audit.js';
 import { introspect } from '../lib/introspect.js';
+import { parseScopeArgs, resolveAgentSession, allowedIn, refusalText, annotateTools, scopeSentence, writeAgentSession, clearAgentSession } from '../lib/agent-scope.js';
+import { writeProposal } from '../lib/proposals.js';
 
 const PROTOCOLS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const BIN = join(PKG_ROOT, 'bin', 'calm.js');
 const ANSI = /\x1b\[[0-9;]*m/g;
 
 export const help = `
-calm mcp
+calm mcp [--scope read|scaffold|full] [--allow <glob>]...
 
   Start an MCP server on stdio for AI coding agents. Register it once:
     claude mcp add calm -- npx calm mcp
   or add to your agent's MCP config: { "command": "npx", "args": ["calm", "mcp"] }
+
+  --scope    what the agent may do: read (inspect only), scaffold (plus make resource,
+             add block, checkpoints) or full. Default: agents.scope in calm.config.js, else full.
+  --allow    a protected path (agents.protected) the agent may edit in this session, repeatable.
 `;
 
 const str = (description) => ({ type: 'string', description });
@@ -167,11 +173,30 @@ const TOOLS = [
       'Put the development database back exactly as it was in a checkpoint: every stored collection is replaced, collections created since are dropped. Use the id from calm_checkpoint or from the checkpoint events in calm_activity. Needs the dev server (npm run dev).',
     inputSchema: { type: 'object', properties: { id: str('Checkpoint id, e.g. "20260413-141500-before-claude-session"') }, required: ['id'] },
   },
+  {
+    name: 'calm_propose',
+    description:
+      'Describe a change instead of making it: for protected paths (calm/security, calm/auth, calm.config.js), access rules in resources, or anything the current scope refuses. Give the whole content of each file. The developer reviews the diff and applies it from devtools Activity.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: str('What the change does, one line'),
+        reason: str('Why it is needed'),
+        files: {
+          type: 'array',
+          description: 'Files to write, with their full new content',
+          items: { type: 'object', properties: { path: str('Project-relative path'), content: str('Whole file content') }, required: ['path', 'content'] },
+        },
+      },
+      required: ['title', 'files'],
+    },
+  },
 ];
 
 export async function run(argv) {
   if (argv.includes('--help')) return process.stdout.write(help);
   const root = requireProject();
+  session = await resolveAgentSession(root, parseScopeArgs(argv));
   const send = (msg) => process.stdout.write(`${JSON.stringify(msg)}\n`);
   const rl = createInterface({ input: process.stdin });
 
@@ -189,10 +214,13 @@ export async function run(argv) {
       if (reply) send(reply);
     }
   });
+  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => (clearAgentSession(root), process.exit(0)));
   await new Promise((resolve) => rl.on('close', resolve));
+  clearAgentSession(root);
 }
 
 let clientName = 'agent';
+let session = { scope: 'full', allow: [], protected: [] }; // from resolveAgentSession
 const tokens = new Map();
 
 async function handle(root, msg) {
@@ -205,7 +233,8 @@ async function handle(root, msg) {
     case 'initialize': {
       const requested = params?.protocolVersion;
       clientName = String(params?.clientInfo?.name ?? 'agent').slice(0, 60);
-      appendActivity(root, { type: 'agent', client: clientName, tool: 'connect', ok: true, ms: 0, summary: `${clientName} connected over MCP` });
+      appendActivity(root, { type: 'agent', client: clientName, tool: 'connect', ok: true, ms: 0, summary: `${clientName} connected over MCP (scope ${session.scope})` });
+      writeAgentSession(root, { client: clientName, ...session });
       // A checkpoint of the dev database before the agent touches anything (needs the dev server).
       await autoCheckpoint(root, clientName).catch(() => {});
       return result({
@@ -213,20 +242,25 @@ async function handle(root, msg) {
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'calmapi', title: 'CalmAPI', version: PKG.version },
         instructions:
-          'Tools for a CalmAPI project (Node.js + MongoDB REST framework whose code lives in calm/). Start with calm_project; conventions are in AGENTS.md; resources live in app/resources/<name>/. After editing code: calm_activity (did the dev server restart or crash?), calm_http to try endpoints as anonymous/admin/a user, calm_test, then calm_doctor and calm_audit for security. A human may be watching your work live in devtools (/_calm).',
+          `Tools for a CalmAPI project (Node.js + MongoDB REST framework whose code lives in calm/). Start with calm_project; conventions are in AGENTS.md; resources live in app/resources/<name>/. After editing code: calm_activity (did the dev server restart or crash?), calm_http to try endpoints as anonymous/admin/a user, calm_test, then calm_doctor and calm_audit for security. A human may be watching your work live in devtools (/_calm). ${scopeSentence(session)}`,
       });
     }
     case 'ping':
       return result({});
     case 'tools/list':
-      return result({ tools: TOOLS });
+      return result({ tools: annotateTools(TOOLS, session.scope) });
     case 'tools/call': {
       const tool = TOOLS.find((t) => t.name === params?.name);
       if (!tool) return error(-32602, `Unknown tool ${params?.name}`);
       const started = Date.now();
       const args = params.arguments ?? {};
-      const log = (ok, text) =>
-        appendActivity(root, { type: 'agent', client: clientName, tool: tool.name, args: clip(JSON.stringify(args), 400), ok, ms: Date.now() - started, summary: clip(text, 300) });
+      const log = (ok, text, extra = {}) =>
+        appendActivity(root, { type: 'agent', client: clientName, tool: tool.name, args: clip(JSON.stringify(args), 400), ok, ...extra, ms: Date.now() - started, summary: clip(text, 300) });
+      if (!allowedIn(session.scope, tool.name, args)) {
+        const text = refusalText(session.scope, tool.name, args);
+        log(false, text, { refused: true, scope: session.scope });
+        return result({ content: [{ type: 'text', text }], isError: true });
+      }
       try {
         const out = await callTool(root, tool.name, args);
         const text = typeof out === 'string' ? out : JSON.stringify(out, null, 2);
@@ -453,6 +487,10 @@ async function callTool(root, name, args) {
         throw new Error(list.length ? `Pass the id of a checkpoint. Available (newest first): ${list.map((c) => `${c.id} (${c.name})`).join(', ')}` : 'No checkpoints yet. Take one with calm_checkpoint.');
       }
       return checkpointCall(root, 'POST', `/checkpoints/${encodeURIComponent(args.id)}/restore`, { actor: { kind: 'agent', name: clientName } });
+    }
+    case 'calm_propose': {
+      const p = writeProposal(root, { ...args, client: clientName });
+      return `Proposal ${p.id} saved: "${p.title}" (${p.files.map((f) => `${f.path} +${f.diff.added} -${f.diff.removed}`).join(', ')}). The developer can review the diff and apply it from devtools Activity (/_calm); nothing was written to the project.`;
     }
     default:
       throw new Error(`Unknown tool ${name}`);

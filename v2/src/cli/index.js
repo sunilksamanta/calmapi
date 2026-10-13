@@ -21,6 +21,7 @@ const COMMANDS = {
   blocks: () => import('./commands/block.js'),
   checkpoint: () => import('./commands/checkpoint.js'),
   restore: () => import('./commands/restore.js'),
+  'agent-hook': () => import('./commands/agent-hook.js'),
 };
 const ALIASES = { new: 'create', init: 'create', generate: 'make', g: 'make', m: 'make' };
 

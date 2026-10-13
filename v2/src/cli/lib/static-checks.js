@@ -2,12 +2,12 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { PKG_ROOT, walk, readText, readJson, sha256 } from './files.js';
 
-/** Minimal glob: supports `**` (any folders) and `*` (within a segment). */
+/** Minimal glob: supports `**` (any folders; everything below when last) and `*` (within a segment). */
 export function globToRegex(glob) {
   const parts = glob.split('/');
   const re = parts
     .map((seg, i) => {
-      if (seg === '**') return '(?:[^/]+/)*';
+      if (seg === '**') return i === parts.length - 1 ? '.*' : '(?:[^/]+/)*';
       const escaped = seg.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*');
       return i === parts.length - 1 ? escaped : `${escaped}/`;
     })
@@ -154,6 +154,42 @@ export async function gitChecks(root, capture) {
   return tracked.code === 0
     ? [{ level: 'error', id: 'env-committed', title: '.env is committed to git', detail: 'Remove it from the repository (git rm --cached .env), rotate every secret in it, and keep it in .gitignore.' }]
     : [];
+}
+
+/**
+ * Protected files an AI agent changed since the last commit (from the Activity log, where
+ * `calm dev` marks them). Skipped outside git or without an activity file.
+ */
+export async function agentChecks(root, capture) {
+  const activity = join(root, '.calm', 'activity.jsonl');
+  if (!existsSync(activity) || !existsSync(join(root, '.git'))) return [];
+  const last = await capture('git', ['log', '-1', '--format=%cI'], { cwd: root }).catch(() => null);
+  const since = Date.parse(last?.stdout.trim() ?? '');
+  if (last?.code !== 0 || Number.isNaN(since)) return [];
+  const edits = new Map();
+  for (const line of readText(activity).split('\n')) {
+    let e;
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (e?.type !== 'file' || !e.protected || !(Date.parse(e.time) > since)) continue;
+    edits.set(e.path, e);
+  }
+  if (!edits.size) return [];
+  // Only files git still sees as changed: a reverted edit is not a finding.
+  const status = await capture('git', ['status', '--porcelain', '--', ...edits.keys()], { cwd: root }).catch(() => null);
+  const dirty = status?.code === 0 ? new Set(status.stdout.split('\n').map((l) => l.slice(3).trim()).filter(Boolean)) : null;
+  return [...edits.values()]
+    .filter((e) => !dirty || dirty.has(e.path))
+    .map((e) => ({
+      level: 'warn',
+      id: 'agent-protected-edit',
+      title: `${e.path} was changed by an agent (${e.actor?.name ?? 'agent'}) and is not committed`,
+      detail: `${e.reason === 'access rules' ? 'The change touches access rules (policies or field visibility).' : 'The file is a protected path.'} Review the diff in devtools Activity (/_calm) before committing.`,
+      file: e.path,
+    }));
 }
 
 /** npm audit summary for production dependencies. */

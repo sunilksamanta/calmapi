@@ -43,8 +43,10 @@ export function readActivity(root, limit = 100) {
  * Good enough for source files; capped so huge rewrites stay readable.
  */
 export function lineDiff(before, after, { context = 2, maxLines = 160 } = {}) {
-  const a = before ? before.split('\n') : [];
-  const b = after ? after.split('\n') : [];
+  // A final newline ends the last line; it is not an empty line of its own.
+  const split = (text) => (text ? text.replace(/\n$/, '').split('\n') : []);
+  const a = split(before);
+  const b = split(after);
   if (a.length * b.length > 4_000_000) return { added: b.length, removed: a.length, hunks: [], truncated: true };
   const n = a.length;
   const m = b.length;

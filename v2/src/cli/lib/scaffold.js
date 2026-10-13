@@ -39,7 +39,8 @@ export function scaffold({ dir, name, template = 'api', mongoUri, calmVersion = 
   for (const source of ['shared', template]) {
     const base = join(PKG_ROOT, 'templates', source);
     for (const rel of walk(base)) {
-      const target = RENAME[rel] ?? rel;
+      // Dot folders are stored without the dot (claude/settings.json -> .claude/settings.json).
+      const target = RENAME[rel] ?? (rel.startsWith('claude/') ? `.${rel}` : rel);
       if (target.endsWith('.gitkeep')) {
         put(target, '');
         continue;

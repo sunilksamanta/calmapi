@@ -66,3 +66,15 @@ An MCP server is available for agents that support it: `npx calm mcp`. Useful lo
 `calm_http` (call the API as anonymous, admin or a user email), `calm_test`, `calm_doctor`,
 `calm_audit`. `calm_mails` and `calm_pushes` show the emails and push notifications the dev server sent. Your tool calls, diffs and requests appear live in devtools (/_calm) for the human
 you are working with.
+
+The MCP server runs in a scope (`calm mcp --scope read|scaffold|full`): `read` inspects only, `scaffold`
+also scaffolds resources and blocks, `full` does everything. A refused call means the developer chose a
+narrower scope; it is not an error to work around. Some paths are protected (`calm/security/**`, `calm/auth/**`,
+`calm.config.js` by default, see `agents.protected` in `calm.config.js`), and so are policy and field visibility
+lines in resource files: edits there are flagged for review. For anything refused or protected, describe the change
+with `calm_propose` (title, reason, the full content of each file); the developer applies it from devtools.
+
+Your edits are shown to the developer as yours, not theirs: through MCP calls, through the hook in
+`.claude/settings.json` (Claude Code runs `npx calm agent-hook` before each edit), or by piping
+`{ "tool": "edit", "path": "<file>" }` into `npx calm agent-hook --client <your name>` before you change a
+file. Before finishing, run `npx calm diff` (or `calm_diff`) and show the developer what changed in behavior.
