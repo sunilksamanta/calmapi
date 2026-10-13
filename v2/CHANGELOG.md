@@ -1,5 +1,69 @@
 # Changelog
 
+## 2.0.0-beta.0
+
+The first beta. alpha.2 showed what changed; this release asks a person to accept it, holds
+the API to what was accepted, and keeps an agent's experiments away from your data.
+
+### Review and sign
+- `calm review`: what changed since the last signature, for a person to read. The behavior
+  diff (routes, who may call them, fields more people can see, env vars, hosts, events,
+  invariants), the files AI agents changed that nobody has signed, the last test run, and what
+  agents declared they would change next to what they did. `--sign` records the signature in
+  `.calm/reviews/` with the signer (your git user, or `--as`), a note and the commit; commit it
+  with your change. `--list` shows only unsigned agent files; `--ci` fails when access widened
+  since the last signature. Signing refuses to run in an AI agent's shell.
+- Devtools **Review** panel: the same review with a Sign form. Routes and Resources show an
+  **unsigned** badge on what an agent changed and nobody signed yet.
+- `calm_declare`: before an agent changes behavior it declares what it is about to do ("route
+  POST /api/refunds", "field order.total", a route policy). The review lists what it did not
+  declare, what it declared but did not make, and a policy that differs from the promise.
+  `calm_review` gives the agent the same view.
+- New projects keep `.calm/` out of git except `.calm/reviews/`; existing projects are fixed when
+  they first sign.
+
+### Hold the line
+- Exposure budget: `calm audit --accept --reason "..."` writes who may do what to
+  `security.snapshot.json`. From then on any access wider than the snapshot is an error in
+  `calm audit --ci`, `calm doctor` and the Doctor panel until a person accepts it again, with
+  the reason recorded next to their name. Accepting needs no database and refuses to run in an
+  agent's shell.
+- Contract diff: `calm diff <ref> --api` compares the OpenAPI contract your clients see and
+  sorts every change into breaking, minor or patch (routes removed, auth added, required
+  fields, removed response fields, narrowed enums, tightened limits...), with the version bump
+  it needs. `--ci` fails on a breaking change. `calm_diff` takes `api: true`.
+- Budgets in `calm.config.js`: `budgets: { 'GET /api/feed': { queries: 4, p95: '150ms',
+  response: '200kb' }, '*': { queries: 12 } }`. The dev server measures MongoDB queries, time and
+  response size per route (devtools **Budgets** panel, an over-budget tag in Requests), and
+  `calm budgets --ci` runs your tests with the meter on and fails when a route goes over.
+  `calm_budgets` for agents. Production never measures.
+
+### Replay
+- The dev server records API requests to `.calm/traffic.jsonl` (the shape of each answer, never
+  its values; secrets redacted). `calm replay` sends them again as the same users against the
+  code as it is now and reports answers whose status or shape changed: fields newly returned (a
+  possible leak), fields gone, types changed. `--writes` replays writes too, between a
+  checkpoint and a restore. Devtools Requests has **Replay all**; `calm_replay` for agents.
+- **Save as test** on a request in devtools writes `test/recorded/<name>.test.js`, a plain
+  `node --test` file that replays the request as the same user and checks status and shape.
+
+### Agent database
+- `calm dev --agent-db` runs the app on `<db>_agent`, a copy of the development database
+  (indexes included) on the same server, and drops it when `calm dev` stops. An agent can
+  create, change and delete data freely; yours stays as it was. Devtools marks the database as
+  a copy.
+
+### Fixes
+- `calm make resource`: field modifiers no longer need `!`, which zsh (the macOS default
+  shell) treats as history expansion (`zsh: event not found`). Write
+  `name:string+required+searchable`, or keep `!` in quotes. `+array` is the unquoted form of a trailing `[]`. Modifiers may follow a default (`price:number=0+sortable`), and clearer errors for empty
+  or invalid parts. The old forms still work.
+- Activity no longer lists a row for every agent hook call (the file change it announces is
+  the row), and edits outside the project, in `node_modules` or in `.git` are not logged.
+- `calm dev` records changes to `test/`, `README.md`, `AGENTS.md`, `package.json` and the other
+  project files in Activity, not only `app/` and `calm/`.
+- MCP: 28 tools.
+
 ## 2.0.0-alpha.2
 
 Agents write more and more of the code; the person who ships it still answers for it. This

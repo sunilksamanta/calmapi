@@ -237,8 +237,8 @@ export function testFromRecord(app, record) {
   if (!route) throw new Error(`No route for ${record.method} ${record.route ?? record.path}: record the request again after a restart`);
   const resource = route.resource ? app.registry.get(route.resource) : null;
   const roles = record.user?.roles ?? null;
-  const url = new URL(record.path, 'http://x');
-  const query = url.search;
+  // The query string as recorded (no URL with a placeholder host: calm about lists URLs in calm/).
+  const query = /\?[^#]+/.exec(record.path)?.[0] ?? '';
   const needsDoc = /\/:id\b/.test(route.path) && resource;
   const body = record.method === 'GET' || record.requestBody == null ? null : record.requestBody;
   const redacted = hasRedacted(body);
