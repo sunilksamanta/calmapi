@@ -4,6 +4,8 @@ import { join, relative, sep } from 'node:path';
 import { requireProject } from '../lib/project.js';
 import { walk } from '../lib/files.js';
 import { appendActivity, readActivity, lineDiff } from '../lib/activity.js';
+import { protectionReason } from '../lib/protected.js';
+import { readAgentSession, DEFAULT_PROTECTED } from '../lib/agent-scope.js';
 import { c, out } from '../lib/ui.js';
 
 export const help = `
@@ -75,6 +77,15 @@ export async function run(argv) {
     const recent = readActivity(root, 30).reverse().find((e) => e.type === 'agent');
     return recent && Date.now() - Date.parse(recent.time) < AGENT_WINDOW_MS ? recent.client : null;
   };
+  // Devtools applied a proposal: it wrote the file and recorded the change itself.
+  const appliedFromDevtools = (rel) => readActivity(root, 10).some((e) => e.type === 'file' && e.path === rel && e.actor?.name === 'devtools' && Date.now() - Date.parse(e.time) < 3000);
+  // Agent edits to protected paths and access rules get a flag the human can see.
+  const guard = (event) => {
+    if (event.actor.kind !== 'agent') return event;
+    const session = readAgentSession(root) ?? {};
+    const reason = protectionReason(event.path, event.diff, { protected: session.protected ?? DEFAULT_PROTECTED, allow: session.allow ?? [] });
+    return { ...event, ...(reason ? { protected: true, reason } : {}), ...(session.scope ? { scope: session.scope } : {}) };
+  };
 
   const timers = new Map();
   const onChange = (rel) => {
@@ -84,15 +95,16 @@ export async function run(argv) {
   const record = (rel) => {
     const agent = lastAgent();
     const actor = agent ? { kind: 'agent', name: agent } : { kind: 'human', name: process.env.USER || 'you' };
-    if (rel === '.env') return appendActivity(root, { type: 'file', path: rel, change: 'modified', actor, diff: null, note: 'contents not recorded (secrets)' });
+    if (rel === '.env') return appendActivity(root, guard({ type: 'file', path: rel, change: 'modified', actor, diff: null, note: 'contents not recorded (secrets)' }));
     const before = snapshots.get(rel);
     const after = readText(rel);
     if (before === after) return;
     const change = after === undefined ? 'deleted' : before === undefined ? 'added' : 'modified';
     if (after === undefined) snapshots.delete(rel);
     else snapshots.set(rel, after);
+    if (appliedFromDevtools(rel)) return;
     const diff = typeof before === 'string' || typeof after === 'string' ? lineDiff(before ?? '', after ?? '') : null;
-    appendActivity(root, { type: 'file', path: rel, change, actor, diff });
+    appendActivity(root, guard({ type: 'file', path: rel, change, actor, diff }));
   };
 
   const watchers = [];

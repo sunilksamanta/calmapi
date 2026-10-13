@@ -1201,6 +1201,16 @@ a.file:hover { color: var(--accent); }
   border-radius: 5px;
 }
 
+.act-session { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-2); color: var(--agent); white-space: nowrap; }
+.act-session:empty { display: none; }
+.act-session-text { cursor: help; }
+.act-desc > .badge { align-self: center; }
+.prop { display: grid; gap: 8px; }
+.prop-head { display: flex; align-items: center; gap: 10px; }
+.prop-title { font-weight: 500; color: var(--text); }
+.prop-reason { margin: 0; max-width: 72ch; font-size: var(--fs-2); color: var(--text-2); white-space: pre-wrap; }
+.prop-note { margin: 0; font-size: var(--fs-3); }
+
 .diff { font: var(--fs-2)/1.5 var(--mono); background: var(--bg); border: 1px solid var(--line); border-radius: 5px; overflow: auto; max-height: 420px; }
 .df-hunk { padding: 2px 10px; color: var(--text-3); background: var(--bg-subtle); border-bottom: 1px solid var(--line); }
 .df-line + .df-hunk { border-top: 1px solid var(--line); }

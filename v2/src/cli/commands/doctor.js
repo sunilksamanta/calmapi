@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util';
 import { findProjectRoot, findV1Root, readLock, capture } from '../lib/project.js';
 import { introspect } from '../lib/introspect.js';
-import { scanAdvisories, staticChecks, gitChecks, auditChecks } from '../lib/static-checks.js';
+import { scanAdvisories, staticChecks, gitChecks, agentChecks, auditChecks } from '../lib/static-checks.js';
 import { PKG } from '../lib/files.js';
 import { c, out } from '../lib/ui.js';
 
@@ -59,7 +59,7 @@ export async function run(argv) {
     } else {
       findings.push(...info.doctor);
     }
-    findings.push(...staticChecks(root, lock), ...scanAdvisories(root, 'v2'), ...(await gitChecks(root, capture)));
+    findings.push(...staticChecks(root, lock), ...scanAdvisories(root, 'v2'), ...(await gitChecks(root, capture)), ...(await agentChecks(root, capture)));
     if (values.audit) findings.push(...(await auditChecks(root, capture)));
     if (lock?.calmapi && lock.calmapi !== PKG.version) {
       findings.push({ level: 'info', id: 'upgrade', title: `calm/ is from calmapi ${lock.calmapi}, this CLI is ${PKG.version}`, detail: 'Run `npx calm upgrade` to merge framework updates into calm/.' });

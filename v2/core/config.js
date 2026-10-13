@@ -63,6 +63,7 @@ export async function loadConfig(root, overrides = {}) {
     openapi: { enabled: true, path: '/openapi.json' },
     devtools: { enabled: mode === 'development' },
     blocks: {}, // per-block settings: blocks: { jobs: { pollMs: 500 } } (see each block's options)
+    agents: { scope: 'full', protected: ['calm/security/**', 'calm/auth/**', 'calm.config.js'] }, // AI agents over calm mcp: default scope (read | scaffold | full) and paths they must not edit without you
     log: { level: env.LOG_LEVEL || (mode === 'test' ? 'silent' : 'info'), format: mode === 'production' ? 'json' : 'pretty' },
     shutdownTimeoutMs: 10_000,
   };
