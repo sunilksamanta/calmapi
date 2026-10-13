@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util';
 import { requireProject, capture } from '../lib/project.js';
 import { c, out, ok } from '../lib/ui.js';
+import { pluralize } from '../../../core/utils/strings.js';
 
 export const help = `
 ${c.bold('calm seed [resource...]')} [--count 10] [--users 3] [--seed 42]
@@ -53,7 +54,7 @@ export async function run(argv) {
   if (marker === -1) throw new Error(`Could not run in the project:\n${res.stderr || res.stdout}`);
   const result = JSON.parse(res.stdout.slice(marker + 8));
   if (result.error) throw new Error(result.details ? `${result.error}: ${JSON.stringify(result.details)}` : result.error);
-  ok(`Seeded ${Object.entries(result.created).map(([n, k]) => `${c.bold(k)} ${n}`).join(', ') || 'nothing'}`);
+  ok(`Seeded ${Object.entries(result.created).map(([n, k]) => `${c.bold(k)} ${k === 1 ? n : pluralize(n)}`).join(', ') || 'nothing'}`);
   if (result.users.length) {
     out('', `  ${c.dim('Demo users (sign in with these)')}`);
     for (const u of result.users) out(`  ${u.email}  ${c.dim(u.password)}`);

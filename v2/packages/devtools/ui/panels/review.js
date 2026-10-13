@@ -86,7 +86,7 @@ function mountReview(root) {
             'ul',
             { class: 'rv-list' },
             r.unreviewed.map((f) =>
-              h('li', { class: 'rv-file' }, actorMark('agent', `${f.agent}${f.via ? ` (via ${f.via})` : ''}`), link(f.path), h('span', { class: 'rv-agent' }, f.agent), h('span', { class: 'muted', title: fullDate(f.at) }, relTime(f.at)), f.protected ? h('span', { class: 'rv-tag warn' }, f.reason ?? 'protected') : null),
+              h('li', { class: 'rv-file' }, actorMark('agent', `${f.agent}${f.via ? ` (via ${f.via})` : ''}`), link(f.path), h('span', { class: 'rv-agent' }, f.agent), h('span', { class: 'muted', title: fullDate(f.at) }, relTime(f.at)), f.editedAfter ? h('span', { class: 'muted', title: 'Someone edited the file after the agent; the agent change is still unsigned' }, 'then edited by you') : null, f.protected ? h('span', { class: 'rv-tag warn' }, f.reason ?? 'protected') : null),
             ),
           ),
         ),

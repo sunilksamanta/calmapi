@@ -41,6 +41,12 @@ function actorName(e) {
 // change; the change itself is the row, so the notes are not shown on their own.
 export const isSignal = (e) => e.type === 'agent' && String(e.tool ?? '').startsWith('hook:');
 const shown = () => store.activity.filter((e) => !isSignal(e));
+// A checkpoint deleted since (calm checkpoint delete, the Data panel) has nothing left to restore.
+let deleted = { list: null, ids: new Set() };
+const deletedCheckpoints = () => {
+  if (deleted.list !== store.activity || deleted.length !== store.activity.length) deleted = { list: store.activity, length: store.activity.length, ids: new Set(store.activity.filter((e) => e.type === 'checkpoint' && e.action === 'deleted').map((e) => e.id)) };
+  return deleted.ids;
+};
 
 const FILTERS = {
   all: () => true,
@@ -137,7 +143,7 @@ function describe(e, readyIn) {
     case 'crash':
       return [h('span', { class: 't-red act-strong' }, 'Crashed'), h('span', { class: 'mono act-err' }, firstErrorLine(e.text))];
     case 'review':
-      return [h('span', { class: 'act-strong' }, `Signed by ${e.signer ?? 'someone'}`), h('span', { class: 'muted' }, `${plural(e.changes ?? 0, 'change')}${e.widen ? `, ${e.widen} widening access` : ''}${e.agentFiles ? `, ${plural(e.agentFiles, 'agent file')}` : ''}${e.via === 'devtools' ? ' · in devtools' : ''}`)];
+      return [h('span', { class: 'act-strong' }, `Signed by ${e.signer ?? 'someone'}`), h('span', { class: 'muted' }, `${e.changes || e.agentFiles ? plural(e.changes ?? 0, 'change') : 'the current behavior'}${e.widen ? `, ${e.widen} widening access` : ''}${e.agentFiles ? `, ${plural(e.agentFiles, 'agent file')}` : ''}${e.via === 'devtools' ? ' · in devtools' : ''}`)];
     case 'declaration':
       return [h('span', null, 'Declared: ', h('b', null, e.intent ?? '')), h('span', { class: 'muted' }, plural(e.changes ?? 0, 'change'))];
     case 'checkpoint':
@@ -145,7 +151,7 @@ function describe(e, readyIn) {
         h('span', { class: 'cp-icon', 'aria-hidden': 'true' }, icon(e.action === 'restored' ? 'undo' : 'bookmark', 12)),
         h('span', null, `Checkpoint ${e.action}: `, h('b', null, e.name ?? e.id)),
         e.docs != null ? h('span', { class: 'muted' }, `${plural(e.collections ?? 0, 'collection')}, ${plural(e.docs, 'document')}`) : null,
-        e.action === 'created'
+        e.action === 'created' && !deletedCheckpoints().has(e.id)
           ? h('button', { class: 'btn ghost cp-restore', type: 'button', title: 'Put the database back as it was at this checkpoint', onclick: (ev) => (ev.stopPropagation(), restoreCheckpoint(e.id, e.name ?? e.id)) }, 'Restore')
           : null,
       ];

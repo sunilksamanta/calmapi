@@ -38,6 +38,9 @@ test('accept writes security.snapshot.json, by a person only', () => {
   assert.equal(budget.accepted[0].reason, 'first snapshot');
   assert.equal(budget.matrix.resources.find((x) => x.name === 'user').fields.email.read.anonymous, 'no');
   assert.equal(run(app, ['doctor', '--ci']).code, 0);
+  // Accepting again with nothing changed is a no-op: the log only holds real decisions.
+  assert.match(run(app, ['audit', '--accept', '--as', 'Ada', '--reason', 'again']).out, /already matches who may do what: nothing to accept/);
+  assert.equal(JSON.parse(readFileSync(join(app, 'security.snapshot.json'), 'utf8')).accepted.length, 1);
 });
 
 test('wider access fails doctor --ci until accepted with a reason', () => {

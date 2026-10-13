@@ -83,6 +83,8 @@ export function acceptBudget(root, current, { by, reason = null, now = new Date(
   if (previous && !previous.error && wider.length && !(typeof reason === 'string' && reason.trim())) {
     throw new Error(`Access widens in ${wider.length} place${wider.length === 1 ? '' : 's'}: say why with --reason "..." (it is recorded next to your name)`);
   }
+  // The same matrix as the snapshot: nothing to accept, and the log stays a record of real decisions.
+  if (previous && !previous.error && JSON.stringify(previous.matrix) === JSON.stringify(compactMatrix(current))) return { budget: previous, wider: [], unchanged: true };
   const accepted = [...(previous?.accepted ?? [])];
   accepted.push({
     by: { name: by.name, email: by.email ?? null },

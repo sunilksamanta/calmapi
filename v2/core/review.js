@@ -67,14 +67,18 @@ function readActivity(root) {
  * signed yet. A later edit by a person, or a signature, clears a file.
  */
 export function unreviewedFiles(root, since = null) {
+  // An agent's edit stays unsigned until a person signs, even if they edited the file after it:
+  // touching a file is not reviewing it.
+  const agentEdit = new Map();
   const last = new Map();
   for (const e of readActivity(root)) {
     if (e.type !== 'file' || (since && e.time <= since)) continue;
     last.set(e.path, e);
+    if (e.actor?.kind === 'agent') agentEdit.set(e.path, e);
   }
-  return [...last.values()]
-    .filter((e) => e.actor?.kind === 'agent' && e.change !== 'deleted')
-    .map((e) => ({ path: e.path, agent: e.actor.name, at: e.time, via: e.via ?? null, protected: Boolean(e.protected), reason: e.reason ?? null }))
+  return [...agentEdit.values()]
+    .filter((e) => last.get(e.path).change !== 'deleted')
+    .map((e) => ({ path: e.path, agent: e.actor.name, at: e.time, via: e.via ?? null, protected: Boolean(e.protected), reason: e.reason ?? null, editedAfter: last.get(e.path) !== e }))
     .sort((a, b) => b.at.localeCompare(a.at));
 }
 
@@ -155,7 +159,17 @@ export function compareDeclared(declarations, changes) {
   const keyOf = (c) => `${c.kind} ${c.kind === 'route' ? routeKey(c.key) : c.key}`;
   const made = new Map(changes.map((c) => [keyOf(c), c]));
   const said = new Map(declared.map((c) => [keyOf(c), c]));
-  const undeclared = changes.filter((c) => !said.has(keyOf(c)));
+  // A field whose visibility changed only because a declared route of its resource changed policy
+  // (list: 'public' shows every field to everyone) is part of that declared change, not a new one.
+  const declaredResources = new Set(
+    declared
+      .filter((d) => d.kind === 'route')
+      .map((d) => made.get(keyOf(d)))
+      .map((c) => c?.after?.resource ?? c?.before?.resource)
+      .filter(Boolean),
+  );
+  const follows = (c) => c.kind === 'field' && c.change === 'changed' && declaredResources.has(c.key.split('.')[0]);
+  const undeclared = changes.filter((c) => !said.has(keyOf(c)) && !follows(c));
   const unmade = declared.filter((c) => !made.has(keyOf(c)));
   const different = [];
   for (const d of declared) {

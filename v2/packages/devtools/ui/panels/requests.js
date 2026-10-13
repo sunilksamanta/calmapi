@@ -196,7 +196,7 @@ function mountRequests(root, params) {
       r.agent ? actorMark('agent', `Sent by an AI agent: ${r.agent}`) : null,
       statusTag(r.status),
       methodTag(r.method),
-      h('span', { class: 'rq-path', title: routeOf(r) ? `${r.path}\nRoute ${routeOf(r)}` : r.path }, pathView(r.path, routeOf(r)), r.error ? h('span', { class: ['rq-err', statusClass(r.status)] }, r.error) : null, r.overBudget?.length ? h('a', { class: 'rq-over', href: '#/budgets', title: `Over budget: ${r.overBudget.join('; ')}` }, 'over budget') : null),
+      h('span', { class: 'rq-path', title: routeOf(r) ? `${r.path}\nRoute ${routeOf(r)}` : r.path }, pathView(r.path, routeOf(r)), r.error ? h('span', { class: ['rq-err', statusClass(r.status)] }, r.error) : null, r.overBudget?.length ? h('a', { class: 'rq-over', href: '#/budgets', title: `Over budget: ${r.overBudget.join('; ')}` }, 'over budget') : null, r.replay ? h('span', { class: 'rq-replay', title: 'Sent by calm replay (or Replay all) to compare with a recorded request. Not recorded as traffic and not measured for budgets.' }, 'replay') : null),
       h('span', { class: ['c-user', !r.user && 'faint'] }, r.user ? r.user.name : 'anonymous'),
       h('span', { class: ['mono num', r.durationMs >= SLOW_MS && 't-amber'] }, fmtMs(r.durationMs)),
       h('span', { class: ['mono num c-q', heavy ? 't-amber' : !r.queries && 'faint'], title: heavy ? `${r.queries} queries (${fmtMs(r.queryMs)}): likely N+1` : `${plural(r.queries, 'query', 'queries')}, ${fmtMs(r.queryMs)} in MongoDB` }, r.queries),

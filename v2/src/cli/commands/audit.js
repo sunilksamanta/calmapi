@@ -112,8 +112,9 @@ async function accept(root, values) {
   if (!by?.name) throw new Error('Who accepts it? Set git config user.name, or pass --as "Your Name <you@example.com>".');
   const info = await introspect(root);
   if (info.error) throw new Error(info.error.message);
-  const { budget, wider } = acceptBudget(root, info.exposure, { by, reason: values.reason });
-  if (values.json) return out(JSON.stringify({ file: BUDGET_FILE, wider, accepted: budget.accepted.at(-1) }, null, 2));
+  const { budget, wider, unchanged } = acceptBudget(root, info.exposure, { by, reason: values.reason });
+  if (values.json) return out(JSON.stringify({ file: BUDGET_FILE, unchanged: Boolean(unchanged), wider, accepted: budget.accepted.at(-1) }, null, 2));
+  if (unchanged) return ok(`${BUDGET_FILE} already matches who may do what: nothing to accept.`);
   if (wider.length) {
     warn(`Accepted ${wider.length} wider cell${wider.length === 1 ? '' : 's'}:`);
     for (const w of wider.slice(0, 30)) out(`    ${w.text}`);

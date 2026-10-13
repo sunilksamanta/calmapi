@@ -147,7 +147,8 @@ export async function replay(app, { limit = 200, writes = false, onProgress } = 
 
   let checkpoint = null;
   if (writes) {
-    checkpoint = await app.checkpoints.create({ name: 'before replay', actor: { kind: 'human', name: 'replay' }, auto: true });
+    // The replay's own checkpoint, restored and deleted when it ends: no Activity rows for it.
+    checkpoint = await app.checkpoints.create({ name: 'before replay', actor: { kind: 'human', name: 'replay' }, auto: true, silent: true });
     report.checkpoint = checkpoint.id;
   }
   const server = http.createServer(app.express);
@@ -214,8 +215,8 @@ export async function replay(app, { limit = 200, writes = false, onProgress } = 
     await new Promise((resolve) => server.close(resolve));
     if (sessionIds.length && app.auth) await app.auth.service.Session.deleteMany({ _id: { $in: sessionIds } }).catch(() => {});
     if (checkpoint) {
-      await app.checkpoints.restore(checkpoint.id, { actor: { kind: 'human', name: 'replay' } });
-      await app.checkpoints.delete(checkpoint.id, { actor: { kind: 'human', name: 'replay' } }).catch(() => {});
+      await app.checkpoints.restore(checkpoint.id, { actor: { kind: 'human', name: 'replay' }, silent: true });
+      await app.checkpoints.delete(checkpoint.id, { actor: { kind: 'human', name: 'replay' }, silent: true }).catch(() => {});
     }
   }
   report.durationMs = Math.round(performance.now() - started);

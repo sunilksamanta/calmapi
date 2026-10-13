@@ -860,6 +860,7 @@ const summary = (r) => ({
   error: r.error ? r.error.code : null,
   agent: r.agent ?? null,
   overBudget: r.budget?.over ?? null,
+  replay: r.replay === true,
 });
 
 function redactHeaders(headers) {

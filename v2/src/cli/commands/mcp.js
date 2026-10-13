@@ -336,6 +336,23 @@ function devServerUrl(root) {
   return `http://localhost:${port}`;
 }
 
+// The review for an agent: what changed and what is unsigned, without the full snapshots (the
+// CLI's --json keeps them), so a long review does not fill the agent's context.
+function compactReview(r) {
+  const slim = (x) => (x && typeof x === 'object' && 'key' in x ? { kind: x.kind, change: x.change, key: x.key, detail: x.detail, direction: x.direction, file: x.file, ...(x.personal ? { personal: true } : {}) } : x);
+  const declared = r.declared && Object.fromEntries(Object.entries(r.declared).map(([k, v]) => [k, Array.isArray(v) ? v.map(slim) : v]));
+  return {
+    baseline: r.baseline ? { signedAt: r.baseline.signedAt, signer: r.baseline.signer?.name ?? null, commit: r.baseline.commit ?? null } : null,
+    summary: r.summary,
+    needsSignature: r.needsSignature,
+    changes: (r.changes ?? []).map(slim),
+    unreviewed: r.unreviewed,
+    declared,
+    tests: r.tests,
+    note: 'A person signs the review (calm review --sign in their terminal, or devtools: Review). Tell them what changed and why; you cannot sign it.',
+  };
+}
+
 const clip = (s, n) => (typeof s === 'string' && s.length > n ? `${s.slice(0, n)}…` : s);
 
 async function devtoolsPost(root, path, body) {
@@ -552,7 +569,7 @@ async function callTool(root, name, args) {
       return info.about;
     }
     case 'calm_review':
-      return json(root, ['review', '--json']);
+      return compactReview(await json(root, ['review', '--json']));
     case 'calm_declare': {
       const d = writeDeclaration(root, { intent: args.intent, changes: args.changes, client: clientName });
       return `Declared ${d.changes.length} change${d.changes.length === 1 ? '' : 's'} (${d.id}). The developer's review will compare them with what you actually change: call calm_review when you are done.`;

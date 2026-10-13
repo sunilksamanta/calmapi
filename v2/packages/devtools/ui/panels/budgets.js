@@ -3,14 +3,18 @@
 // numbers from your tests come from `npx calm budgets --ci`.
 
 import { h, mount, api, bar, loading, errorBox, empty, plural, toast } from '../lib.js';
-import { on } from '../store.js';
+import { on, store } from '../store.js';
 
 let last = null;
 
 export default {
   id: 'budgets',
   label: 'Budgets',
-  badge: () => (last?.over ? { text: last.over, tone: 'red', title: `${plural(last.over, 'route')} over budget` } : null),
+  badge: () => {
+    // Before the panel is opened, the requests seen so far tell which routes went over.
+    const over = last ? last.over : new Set(store.requests.filter((r) => r.overBudget?.length).map((r) => `${r.method} ${r.route ?? r.path}`)).size;
+    return over ? { text: over, tone: 'red', title: `${plural(over, 'route')} over budget` } : null;
+  },
   mount: mountBudgets,
 };
 

@@ -64,14 +64,28 @@ function print(r) {
   if (r.changed.length) out(`    ${c.yellow(String(r.changed.length).padStart(4))} changed`);
   if (r.skipped.length) out(`    ${c.dim(String(r.skipped.length).padStart(4))} skipped`);
   if (r.failed.length) out(`    ${c.red(String(r.failed.length).padStart(4))} failed`);
-  for (const ch of r.changed.slice(0, 30)) {
-    out('', `  ${ch.newFields ? c.red('✖') : c.yellow('~')} ${c.bold(ch.request)} ${c.dim(ch.user ? `as user ${ch.user.id} [${ch.user.roles.join(', ')}]` : 'anonymous')}`);
+  // The same request as the same user with the same differences prints once, with a count.
+  const groups = new Map();
+  for (const ch of r.changed) {
+    const who = ch.user ? `as user ${ch.user.id} [${ch.user.roles.join(', ')}]` : 'anonymous';
+    const key = `${ch.request} ${who} ${ch.differences.map((d) => d.text).join('|')}`;
+    if (groups.has(key)) groups.get(key).count++;
+    else groups.set(key, { ch, who, count: 1 });
+  }
+  const shown = [...groups.values()];
+  for (const { ch, who, count } of shown.slice(0, 30)) {
+    out('', `  ${ch.newFields ? c.red('✖') : c.yellow('~')} ${c.bold(ch.request)} ${c.dim(who)}${count > 1 ? c.dim(` (${count} times)`) : ''}`);
     for (const d of ch.differences.slice(0, 8)) out(`      ${d.kind === 'added' ? c.red(d.text) : d.text}`);
   }
-  if (r.changed.length > 30) out(c.dim(`  ...and ${r.changed.length - 30} more (--json for all)`));
+  if (shown.length > 30) out(c.dim(`  ...and ${shown.length - 30} more (--json for all)`));
   for (const f of r.failed.slice(0, 10)) out(`  ${c.red('✖')} ${f.request}: ${f.error}`);
-  const reasons = [...new Set(r.skipped.map((s) => s.reason))];
-  if (reasons.length) out('', c.dim(`  Skipped: ${reasons.join('; ')}`));
+  const reasons = new Map();
+  for (const sk of r.skipped) reasons.set(sk.reason, [...(reasons.get(sk.reason) ?? []), sk.request]);
+  if (reasons.size) out('');
+  for (const [reason, requests] of reasons) {
+    const names = [...new Set(requests)];
+    out(c.dim(`  Skipped ${requests.length}: ${reason} (${names.slice(0, 3).join(', ')}${names.length > 3 ? ', ...' : ''})`));
+  }
   out('');
   if (!r.changed.length && !r.failed.length) ok('Every answer has the same status and shape as when it was recorded.');
 }

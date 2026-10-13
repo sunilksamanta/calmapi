@@ -89,7 +89,10 @@ export async function run(argv) {
   if (values.ci) {
     if (!state.baseline) {
       if (!values.json) info('No signed baseline yet: --ci passes. Sign one with calm review --sign and commit .calm/reviews/.');
-    } else if (state.summary.widen > 0) process.exitCode = 1;
+    } else if (state.summary.widen > 0) {
+      process.exitCode = 1;
+      if (!values.json) out(`  ${c.red(`✖ Access widened in ${state.summary.widen} place${state.summary.widen === 1 ? '' : 's'} since the last signature.`)} A person signs it (calm review --sign) and commits .calm/reviews/.`, '');
+    }
   }
 }
 
@@ -159,7 +162,7 @@ function print(state) {
 }
 
 function printUnreviewedRows(files) {
-  out(table(files.map((f) => [f.path, c.magenta(f.agent), c.dim(f.at.slice(0, 16).replace('T', ' ')), f.protected ? c.yellow(f.reason ?? 'protected') : '']), { indent: 4 }));
+  out(table(files.map((f) => [f.path, c.magenta(f.agent), c.dim(`${f.at.slice(0, 16).replace('T', ' ')}${f.editedAfter ? ', then edited by you' : ''}`), f.protected ? c.yellow(f.reason ?? 'protected') : '']), { indent: 4 }));
 }
 
 function printUnreviewed(state) {

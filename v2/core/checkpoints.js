@@ -95,9 +95,9 @@ async function collectionNames(db) {
  * Dump every collection of the app's database. Returns the meta that is also written to
  * .calm/checkpoints/<id>/meta.json.
  *
- * @param {{ name?: string, note?: string, actor?: { kind: 'human' | 'agent', name: string }, auto?: boolean }} [options]
+ * @param {{ name?: string, note?: string, actor?: { kind: 'human' | 'agent', name: string }, auto?: boolean, silent?: boolean }} [options] silent: no Activity row (a replay's own checkpoint)
  */
-export async function createCheckpoint(app, { name = 'manual', note = null, actor, auto = false } = {}) {
+export async function createCheckpoint(app, { name = 'manual', note = null, actor, auto = false, silent = false } = {}) {
   const db = guard(app);
   const label = typeof name === 'string' && name.trim() ? name.trim().slice(0, 80) : 'manual';
   const base = `${stamp()}-${slug(label)}`;
@@ -129,7 +129,7 @@ export async function createCheckpoint(app, { name = 'manual', note = null, acto
     collections,
   };
   await writeFile(join(dir, 'meta.json'), `${JSON.stringify(meta, null, 2)}\n`);
-  await appendActivity(app.root, { type: 'checkpoint', action: 'created', id, name: label, actor: meta.actor, ...totals(collections) });
+  if (!silent) await appendActivity(app.root, { type: 'checkpoint', action: 'created', id, name: label, actor: meta.actor, ...totals(collections) });
   return meta;
 }
 
@@ -201,7 +201,7 @@ export async function readCheckpoint(root, id) {
  *
  * @returns {Promise<{ id: string, name: string, collections: { name: string, docs: number }[], dropped: string[] }>}
  */
-export async function restoreCheckpoint(app, id, { actor } = {}) {
+export async function restoreCheckpoint(app, id, { actor, silent = false } = {}) {
   const db = guard(app);
   const meta = await readCheckpoint(app.root, id);
   const dir = dirFor(app.root, id);
@@ -243,13 +243,13 @@ export async function restoreCheckpoint(app, id, { actor } = {}) {
   }
 
   const result = { id, name: meta.name, collections, dropped };
-  await appendActivity(app.root, { type: 'checkpoint', action: 'restored', id, name: meta.name, actor: cleanActor(actor), ...totals(collections) });
+  if (!silent) await appendActivity(app.root, { type: 'checkpoint', action: 'restored', id, name: meta.name, actor: cleanActor(actor), ...totals(collections) });
   return result;
 }
 
-export async function deleteCheckpoint(root, id, { actor } = {}) {
+export async function deleteCheckpoint(root, id, { actor, silent = false } = {}) {
   const meta = await readCheckpoint(root, id);
   await rm(dirFor(root, id), { recursive: true, force: true });
-  await appendActivity(root, { type: 'checkpoint', action: 'deleted', id, name: meta.name, actor: cleanActor(actor), ...totals(meta.collections) });
+  if (!silent) await appendActivity(root, { type: 'checkpoint', action: 'deleted', id, name: meta.name, actor: cleanActor(actor), ...totals(meta.collections) });
   return meta;
 }

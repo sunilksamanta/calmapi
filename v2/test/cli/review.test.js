@@ -106,9 +106,20 @@ test('declarations: normalized, and compared with what changed', () => {
   assert.deepEqual(c.unmade.map((x) => x.key), ['STRIPE_KEY']);
   assert.deepEqual(c.different, [{ kind: 'route', key: 'POST /api/refunds', declared: 'policy admin', shipped: 'policy authenticated', by: 'claude-code' }]);
   assert.equal(compareDeclared([{ id: 'd', client: 'x', changes: changes.map((x) => normalizeDeclared({ kind: x.kind, key: x.key })) }], changes).ok, true);
+
+  // Making a declared route public shows the resource's fields to everyone: part of the same change.
+  // A field removed, or a field of another resource, is still undeclared.
+  const wider = [
+    { kind: 'route', change: 'changed', key: 'GET /api/products', after: { policy: 'public', resource: 'product' } },
+    { kind: 'field', change: 'changed', key: 'product.name', detail: 'visible to: signed-in users -> everyone' },
+    { kind: 'field', change: 'removed', key: 'product.tags' },
+    { kind: 'field', change: 'changed', key: 'user.email', detail: 'visible to: owner -> everyone' },
+  ];
+  const d2 = compareDeclared([{ id: 'd2', client: 'x', changes: [normalizeDeclared({ kind: 'route', key: 'GET /api/products', policy: 'public' })] }], wider);
+  assert.deepEqual(d2.undeclared.map((x) => x.key), ['product.tags', 'user.email']);
 });
 
-test('authorship: the last change wins, a person editing after an agent clears the file', () => {
+test('authorship: an agent edit stays unsigned until a person signs, even after they edit the file', () => {
   const dir = mkdtempSync(join(tmpdir(), 'calm-auth-'));
   try {
     const log = (e) => appendFileSync(join(dir, '.calm', 'activity.jsonl'), `${JSON.stringify(e)}\n`);
@@ -117,8 +128,9 @@ test('authorship: the last change wins, a person editing after an agent clears t
     log({ time: '2026-10-13T10:01:00.000Z', type: 'file', path: 'b.js', change: 'modified', actor: { kind: 'agent', name: 'x' } });
     log({ time: '2026-10-13T10:02:00.000Z', type: 'file', path: 'b.js', change: 'modified', actor: { kind: 'human', name: 'me' } });
     log({ time: '2026-10-13T10:03:00.000Z', type: 'file', path: 'c.js', change: 'deleted', actor: { kind: 'agent', name: 'x' } });
-    assert.deepEqual(unreviewedFiles(dir).map((f) => f.path), ['a.js']);
-    assert.deepEqual(unreviewedFiles(dir, '2026-10-13T10:00:30.000Z'), []);
+    assert.deepEqual(unreviewedFiles(dir).map((f) => [f.path, f.editedAfter]), [['b.js', true], ['a.js', false]]);
+    assert.deepEqual(unreviewedFiles(dir, '2026-10-13T10:00:30.000Z').map((f) => f.path), ['b.js']);
+    assert.deepEqual(unreviewedFiles(dir, '2026-10-13T10:01:30.000Z'), []);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -107,7 +107,7 @@ function printContract(root, before, after, label, values) {
     out(table(rows, { indent: 4 }));
     const s = result.summary;
     out('', `  ${s.breaking ? c.red(`${s.breaking} breaking`) : c.green('nothing breaking')} · ${s.minor} added · ${s.patch} other`);
-    if (next) out(`  ${c.bold('Suggested version')} ${version} -> ${c.bold(next)} ${c.dim(`(${result.bump}${version?.startsWith('0.') && result.bump !== 'patch' ? ', 0.x rules' : ''})`)}`);
+    if (next) out(`  ${c.bold('Suggested version')} ${version} -> ${c.bold(next)} ${c.dim(`(${version?.startsWith('0.') && result.bump !== 'patch' ? (result.bump === 'major' ? 'breaking: before 1.0 that is a minor bump' : 'additions: before 1.0 that is a patch bump') : `${result.bump} release`})`)}`);
     out('');
   }
   if (values.ci && result.summary.breaking) process.exitCode = 1;

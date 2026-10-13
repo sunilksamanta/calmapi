@@ -1148,7 +1148,7 @@ a.file:hover { color: var(--accent); }
 .issue:hover { background: var(--bg-hover); }
 .issue .dot { transform: translateY(-2px); }
 .issue-title { color: var(--text); }
-.issue-detail { margin-top: 1px; font-size: var(--fs-2); color: var(--text-3); }
+.issue-detail { margin-top: 1px; font-size: var(--fs-2); color: var(--text-3); white-space: pre-line; }
 .issue-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; min-width: 0; max-width: 360px; font-size: var(--fs-2); }
 .issue-meta a.file { max-width: 100%; }
 .issue-meta .mono { font-size: var(--fs-3); }
@@ -1620,6 +1620,7 @@ textarea.input.mono { font-family: var(--mono); }
 
 /* ---- budgets ------------------------------------------------------------------------- */
 
+.rq-replay { margin-left: 8px; font-size: var(--fs-3); color: var(--text-3); border: 1px solid currentColor; border-radius: 4px; padding: 0 5px; white-space: nowrap; }
 .rq-over { margin-left: 8px; font-size: var(--fs-3); color: var(--amber); border: 1px solid currentColor; border-radius: 4px; padding: 0 5px; text-decoration: none; white-space: nowrap; }
 .bg { padding: 16px; display: grid; gap: 12px; align-content: start; }
 .bg-intro { margin: 0; }

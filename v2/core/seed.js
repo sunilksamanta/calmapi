@@ -5,6 +5,7 @@
 //
 //   await seed(app, { resource: 'post', count: 20 })     -> { created: { post: 20, user: 3 }, users: [...] }
 
+import { pluralize } from './utils/strings.js';
 import { validateInput } from './resource/resource.js';
 
 const FIRST = ['Ada', 'Grace', 'Alan', 'Linus', 'Margaret', 'Katherine', 'Dennis', 'Barbara', 'Ken', 'Radia', 'Tim', 'Hedy', 'Edsger', 'Frances', 'John', 'Sophie', 'Yukihiro', 'Anita', 'Guido', 'Mary', 'Donald', 'Shafi', 'Bjarne', 'Lynn'];
@@ -198,6 +199,6 @@ export async function seed(app, { resource, resources, count = 10, users = 3, se
       created[name] = (created[name] ?? 0) + 1;
     }
   }
-  app.log.info(`Seeded ${Object.entries(created).map(([n, c]) => `${c} ${n}`).join(', ') || 'nothing'}`);
+  app.log.info(`Seeded ${Object.entries(created).map(([n, c]) => `${c} ${c === 1 ? n : pluralize(n)}`).join(', ') || 'nothing'}`);
   return { created, users: credentials };
 }
