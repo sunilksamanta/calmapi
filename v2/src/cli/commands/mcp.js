@@ -149,6 +149,12 @@ const TOOLS = [
       'Push notifications the dev server sent or captured (app.push.send), newest first: title, body, data, target devices and platforms, warnings (payload too large, text cut off on iOS or Android, sensitive data in the payload) and the delivery log. Use it to check notifications your code sends.',
     inputSchema: { type: 'object', properties: { limit: { type: 'integer' } } },
   },
+  {
+    name: 'calm_about',
+    description:
+      'The transparency report: what the framework does on every request (the middleware pipeline in order), the headers it sets, what it stores and for how long, what it logs, which hosts the code can reach, and the files the CLI writes. Read it before changing middleware, auth or storage.',
+    inputSchema: { type: 'object', properties: {} },
+  },
 ];
 
 export async function run(argv) {
@@ -421,6 +427,11 @@ async function callTool(root, name, args) {
           ? { ...e, diff: { added: e.diff.added, removed: e.diff.removed, text: e.diff.hunks.map((h) => h.lines.join('\n')).join('\n...\n').slice(0, 3000) } }
           : e,
       );
+    case 'calm_about': {
+      const info = await introspect(root);
+      if (info.error) throw new Error(info.error.message);
+      return info.about;
+    }
     default:
       throw new Error(`Unknown tool ${name}`);
   }

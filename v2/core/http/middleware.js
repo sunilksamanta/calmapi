@@ -15,26 +15,33 @@ export function requestContext() {
 /**
  * Security headers for a JSON API (the parts of helmet an API needs, in 20 lines).
  * Routes serving HTML (docs, devtools) set their own Content-Security-Policy.
+ * One list drives both the middleware and the transparency report (calm explain).
  */
+export const SECURITY_HEADERS = [
+  { name: 'X-Content-Type-Options', value: 'nosniff' },
+  { name: 'X-Frame-Options', value: 'DENY' },
+  { name: 'Referrer-Policy', value: 'no-referrer' },
+  { name: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  { name: 'Cross-Origin-Resource-Policy', value: 'same-site' },
+  { name: 'X-DNS-Prefetch-Control', value: 'off' },
+  { name: 'Content-Security-Policy', value: "default-src 'none'; frame-ancestors 'none'" },
+  { name: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains', production: true },
+];
+
 export function securityHeaders({ production }) {
+  const headers = SECURITY_HEADERS.filter((h) => !h.production || production);
   return (_req, res, next) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Referrer-Policy', 'no-referrer');
-    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-    res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
-    res.setHeader('X-DNS-Prefetch-Control', 'off');
-    res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
-    if (production) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    for (const { name, value } of headers) res.setHeader(name, value);
     next();
   };
 }
 
 /** CORS. config.cors.origins: '*' or a list of allowed origins (CORS_ORIGINS env). */
-const EXPOSED = ['X-Request-Id', 'RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset', 'Retry-After', 'Idempotent-Replayed'];
+export const EXPOSED_HEADERS = ['X-Request-Id', 'RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset', 'Retry-After', 'Idempotent-Replayed'];
+export const CORS_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
 
 export function cors({ origins = [], credentials = false, maxAge = 600, exposeHeaders = [] } = {}) {
-  const exposed = [...new Set([...EXPOSED, ...exposeHeaders])].join(', ');
+  const exposed = [...new Set([...EXPOSED_HEADERS, ...exposeHeaders])].join(', ');
   const allowAll = origins === '*';
   const allowed = new Set(Array.isArray(origins) ? origins : []);
   return (req, res, next) => {
@@ -45,7 +52,7 @@ export function cors({ origins = [], credentials = false, maxAge = 600, exposeHe
       if (credentials) res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Access-Control-Expose-Headers', exposed);
       if (req.method === 'OPTIONS' && req.get('access-control-request-method')) {
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Methods', CORS_METHODS);
         res.setHeader('Access-Control-Allow-Headers', req.get('access-control-request-headers') || 'Content-Type, Authorization');
         res.setHeader('Access-Control-Max-Age', String(maxAge));
         return void res.status(204).end();
@@ -67,6 +74,7 @@ export function createMemoryStore() {
   }, 60_000);
   timer.unref();
   return {
+    kind: 'memory', // the transparency report says where counters live
     async hit(key, windowMs) {
       const now = Date.now();
       let v = hits.get(key);

@@ -20,6 +20,7 @@ import { exposureMatrix, exposureFindings } from './security/exposure.js';
 import { canRead, inScope } from './resource/visibility.js';
 import { toHttpError, notFound } from './errors.js';
 import { parseKeys, createCipher } from './security/encryption.js';
+import { aboutReport } from './about.js';
 
 /**
  * Build a CalmAPI application from a project folder.
@@ -68,6 +69,8 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
     registry,
     services,
     routes: [],
+    /** Everything buildExpress wires, in the order it runs: see wire() below. */
+    pipeline: [],
     plugins: [],
     ext: {},
     hooks,
@@ -85,6 +88,8 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
     openapi: () => buildOpenAPI(app),
     doctor: async () => [...runtimeChecks(app), ...(await hookFindings(app)), ...exposureFindings(await exposureMatrix(app))],
     exposure: () => exposureMatrix(app),
+    /** The transparency report: what the framework does that you did not write (calm explain). */
+    about: () => aboutReport(app),
     /**
      * May `user` read `doc`, by the rules of GET /api/<resource>/:id (read policy, owner,
      * service scope())? For work outside a request: webhooks, streams, notifications.
@@ -165,7 +170,9 @@ export async function createApp({ root = process.cwd(), config: overrides = {} }
     // `uses` lists the extension points the block calls, for devtools (filled during setup and after).
     const record = { name: plugin.name, file: plugin.file ?? null, env: describeEnv(plugin, config.mode), options, uses: [] };
     const api = pluginApi(app, plugin, options, record.uses);
+    const known = new Set(db.modelNames());
     await plugin.setup(api, options);
+    record.models = db.modelNames().filter((name) => !known.has(name)); // registered in setup(): the block owns them
     app.plugins.push(record);
   }
   hooks.doctor.push(() => envFindings(app));
@@ -257,6 +264,13 @@ const noting = (target, onUse) =>
     },
   });
 
+/** Remember which block registered a hook, so the pipeline report can name it. */
+function fromBlock(fn, plugin) {
+  Object.defineProperty(fn, 'calmBlock', { value: plugin.name, configurable: true });
+  Object.defineProperty(fn, 'calmFile', { value: plugin.file ?? null, configurable: true });
+  return fn;
+}
+
 function pluginApi(app, plugin, options = {}, uses = []) {
   const note = (kind, name = null) => {
     if (!uses.some((u) => u.kind === kind && u.name === name)) uses.push({ kind, name });
@@ -305,7 +319,7 @@ function pluginApi(app, plugin, options = {}, uses = []) {
      */
     authenticate: (fn) => {
       note('authenticator');
-      app.hooks.authenticators.push(fn);
+      app.hooks.authenticators.push(fromBlock(fn, plugin));
     },
     /**
      * Run before every route's policy check: fn(ctx, route). Stop the request by throwing
@@ -315,7 +329,7 @@ function pluginApi(app, plugin, options = {}, uses = []) {
     guard: (fn, { order = 0 } = {}) => {
       note('guard', order ? `order ${order}` : null);
       Object.defineProperty(fn, 'calmOrder', { value: order, configurable: true });
-      app.hooks.guards.push(fn);
+      app.hooks.guards.push(fromBlock(fn, plugin));
       app.hooks.guards.sort((a, b) => (a.calmOrder ?? 0) - (b.calmOrder ?? 0));
     },
     /** A named policy usable in resources and routes: calm.policy('member', (ctx) => ...). */
@@ -326,7 +340,7 @@ function pluginApi(app, plugin, options = {}, uses = []) {
     routes: (fn, options = {}) => app.hooks.routes.push({ fn, options: { source: `block:${plugin.name}`, file: plugin.file, ...options } }),
     use: (fn) => {
       note('middleware');
-      app.hooks.middleware.push(fn);
+      app.hooks.middleware.push(fromBlock(fn, plugin));
     },
     onStart: (fn) => app.hooks.start.push(fn),
     onShutdown: (fn) => app.hooks.shutdown.push(fn),
@@ -354,53 +368,124 @@ async function buildExpress(app) {
   ex.set('trust proxy', config.trustProxy);
   ex.set('query parser', 'simple');
 
-  ex.use(requestContext());
+  // Everything mounted here goes through wire() (or note() when it mounts itself), which also
+  // lists it on app.pipeline in the order it runs. The report is the wiring, not a copy of it.
+  app.pipeline = [];
+  const note = (name, purpose, { file = 'calm/http/middleware.js', from = 'calm', when = null, scope = 'request' } = {}) =>
+    app.pipeline.push({ name, file, purpose, from, when, scope });
+  const wire = (target, name, fn, purpose, meta) => {
+    note(name, purpose, meta);
+    target.use(fn);
+  };
+  const span = (ms) => (ms % 60_000 === 0 ? `${ms / 60_000} min` : `${Math.round(ms / 1000)} s`);
+  const blockOf = (fn) => ({ file: fn.calmFile ?? 'calm.config.js', from: fn.calmBlock ? `block:${fn.calmBlock}` : 'calm.config.js' });
+
+  wire(ex, 'requestContext', requestContext(), 'X-Request-Id on the response (a UUID, or a sane incoming one) and the per-request context');
   if (config.devtools.enabled) {
     const { setupDevtools } = await import('./devtools/index.js');
+    note('devtools', 'records requests, queries, logs, mail, push and security events for /_calm, in memory', { file: 'calm/devtools/index.js', when: 'development only' });
     setupDevtools(app, ex);
   }
-  ex.use(securityHeaders({ production: config.mode === 'production' }));
-  ex.use(cors(config.cors));
-  if (config.mode !== 'test') ex.use(accessLog(log));
+  wire(ex, 'securityHeaders', securityHeaders({ production: config.mode === 'production' }), 'the security headers listed under Headers, on every response');
+  wire(ex, 'cors', cors(config.cors), config.cors.origins === '*' ? 'answers browsers from any origin (CORS_ORIGINS narrows it)' : `answers browsers from ${[].concat(config.cors.origins ?? []).length} allowed origin(s) only`);
+  if (config.mode !== 'test') wire(ex, 'accessLog', accessLog(log), 'one log line per request: method, url, status, duration, request id, user id');
 
+  note('health', 'GET /health/live and GET /health/ready (pings MongoDB), no authentication', { file: 'calm/app.js' });
   ex.get('/health/live', (_req, res) => res.json({ status: 'ok' }));
   ex.get('/health/ready', async (_req, res) => {
     const up = app.mongoose.connection.readyState === 1 && (await app.mongoose.connection.db.admin().ping().then(() => true, () => false));
     res.status(up ? 200 : 503).json({ status: up ? 'ok' : 'unavailable', database: up ? 'up' : 'down' });
   });
-  for (const fn of app.hooks.middleware) ex.use(fn);
+  for (const fn of app.hooks.middleware) wire(ex, fn.name || 'middleware', fn, 'sees every request (calm.use() in the block)', blockOf(fn));
 
   const onLimit = (req, name) => app.events.emit('security.rate_limited', { ip: req.ip, path: req.originalUrl, limiter: name });
   const api = express.Router();
-  api.use(express.json({ limit: config.bodyLimit }));
-  api.use(jsonGuard(config.jsonLimits));
-  if (config.rateLimit.enabled) api.use(rateLimit({ store: app.rateStore, ...config.rateLimit.global, name: 'global', onLimit }));
-  if (app.auth) api.use(app.auth.service.authenticate);
+  wire(api, 'json body', express.json({ limit: config.bodyLimit }), `parses JSON bodies up to ${config.bodyLimit} (express.json)`, { file: 'express', scope: 'api' });
+  wire(api, 'jsonGuard', jsonGuard(config.jsonLimits), `refuses bodies nested deeper than ${config.jsonLimits.maxDepth} levels or with more than ${config.jsonLimits.maxKeys} values`, { scope: 'api' });
+  if (config.rateLimit.enabled) {
+    const { windowMs, max } = config.rateLimit.global;
+    wire(api, 'rateLimit global', rateLimit({ store: app.rateStore, ...config.rateLimit.global, name: 'global', onLimit }), `${max} requests per ${span(windowMs)} per IP, with RateLimit-* headers`, { scope: 'api' });
+  }
+  if (app.auth) {
+    wire(api, 'authenticate', app.auth.service.authenticate, 'Authorization: Bearer <token> to req.user: custom authenticators from blocks first, then a session from calm_sessions', { file: 'calm/auth/index.js', scope: 'api' });
+    for (const fn of app.hooks.authenticators) note('authenticator', 'accepts its own credentials in Authorization: Bearer (calm.authenticate())', { ...blockOf(fn), scope: 'api' });
+  }
 
   const authLimiter = config.rateLimit.enabled
     ? rateLimit({ store: app.rateStore, ...config.rateLimit.auth, name: 'auth', key: (req) => `${req.ip}:${req.path}`, onLimit })
     : null;
 
+  // The chain every route runs, in this order. One table builds the chain and the report.
+  const guardLabel = (fn) => `calm.guard() in the ${fn.calmBlock ?? 'config'} block${fn.calmOrder ? ` (order ${fn.calmOrder})` : ''}`;
+  const routeSteps = [
+    {
+      name: 'rateLimit auth',
+      file: 'calm/http/middleware.js',
+      purpose: `${config.rateLimit.auth.max} requests per ${span(config.rateLimit.auth.windowMs)} per IP and path`,
+      when: 'routes with rateLimit: "auth" (sign in, register, password)',
+      build: (route) => (route.rateLimit === 'auth' && authLimiter ? authLimiter : null),
+    },
+    {
+      name: 'rateLimit route',
+      file: 'calm/http/middleware.js',
+      purpose: 'the limit the route declares',
+      when: 'routes with their own rateLimit: { windowMs, max }',
+      build: (route) => (route.rateLimit && typeof route.rateLimit === 'object' && config.rateLimit.enabled ? rateLimit({ store: app.rateStore, name: `${route.method}:${route.path}`, ...route.rateLimit, onLimit }) : null),
+    },
+    {
+      name: 'policyPreCheck',
+      file: 'calm/http/router.js',
+      purpose: 'refuses signed-out requests before route middleware (an upload parser) runs',
+      when: 'routes with middleware',
+      build: (route) => (route.middleware.length ? policyPreCheck(route) : null),
+    },
+    {
+      name: 'guards',
+      file: 'calm/http/router.js',
+      purpose: 'calm.guard() hooks from blocks, lowest order first; a guard can stop the request',
+      when: 'before route middleware when the route has any, otherwise at the start of the handler',
+      build: (route) => (route.middleware.length ? guardsFirst(app, route) : null),
+      entries: () => (app.hooks.guards.length ? app.hooks.guards.map((fn) => ({ name: 'guard', purpose: guardLabel(fn), ...blockOf(fn) })) : [{ name: 'guards', purpose: 'calm.guard() hooks from blocks: none installed' }]),
+    },
+    {
+      name: 'route middleware',
+      file: null,
+      from: 'app',
+      purpose: 'the middleware: [...] the route declares (an upload parser, for example)',
+      when: 'routes with middleware',
+      build: (route) => (route.middleware.length ? route.middleware : null),
+    },
+    {
+      name: 'handler',
+      file: 'calm/http/router.js',
+      purpose: 'guards (unless run above), the policy with the record in hand (404 for records you cannot see), input validation, your handler, serialization with the visibility rules',
+      build: (route) => toExpressHandler(app, route),
+    },
+  ];
+  for (const step of routeSteps) {
+    const entries = step.entries ? step.entries() : [step];
+    for (const e of entries) note(e.name, e.purpose, { file: e.file ?? step.file, from: e.from ?? step.from, when: step.when, scope: 'route' });
+  }
   for (const route of app.routes) {
-    const chain = [];
-    if (route.rateLimit === 'auth' && authLimiter) chain.push(authLimiter);
-    else if (route.rateLimit && typeof route.rateLimit === 'object' && config.rateLimit.enabled) {
-      chain.push(rateLimit({ store: app.rateStore, name: `${route.method}:${route.path}`, ...route.rateLimit, onLimit }));
-    }
-    if (route.middleware.length) chain.push(policyPreCheck(route), guardsFirst(app, route), ...route.middleware);
-    api[route.method.toLowerCase()](route.path, ...chain, toExpressHandler(app, route));
+    const chain = routeSteps.flatMap((step) => step.build(route) ?? []);
+    api[route.method.toLowerCase()](route.path, ...chain);
   }
 
-  if (config.openapi.enabled) api.get(config.openapi.path, (_req, res) => res.json(app.openapi()));
+  if (config.openapi.enabled) {
+    note('openapi', `GET ${config.apiPrefix}${config.openapi.path} serves the OpenAPI document generated from your resources and routes`, { file: 'calm/openapi.js', scope: 'api' });
+    api.get(config.openapi.path, (_req, res) => res.json(app.openapi()));
+  }
   api.get('/', (_req, res) =>
     res.json({ data: { name: config.app.name, version: config.app.version, openapi: config.openapi.enabled ? `${config.apiPrefix}${config.openapi.path}` : null } }),
   );
+  note('notFound', `unknown routes answer 404 { error: { code: 'NOT_FOUND' } }`, { file: 'calm/app.js', scope: 'api' });
   api.use((_req, _res, next) => next(notFound('Route not found')));
 
   ex.use(config.apiPrefix, api);
   ex.get('/', (_req, res) => res.json({ name: config.app.name, api: config.apiPrefix }));
   ex.use((_req, _res, next) => next(notFound('Route not found')));
 
+  note('errorHandler', 'every error becomes { error: { code, message, requestId } }; 5xx are logged with their stack; stacks reach the client in development only', { file: 'calm/app.js' });
   ex.use((err, req, res, _next) => {
     const httpErr = toHttpError(err);
     req.calmError = { original: err, http: httpErr };
