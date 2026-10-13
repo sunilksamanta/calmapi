@@ -161,7 +161,7 @@ const TOOLS = [
     name: 'calm_diff',
     description:
       'What changed in behavior (not lines) between a git ref (default HEAD) and the working tree: routes added or removed, policies loosened or tightened, fields visible to more people, env vars, hosts the code can reach, events, blocks and invariants, with a count of changes that widen access. Run it before you finish, and show the developer the result.',
-    inputSchema: { type: 'object', properties: { ref: str('Git ref to compare with, e.g. "main" (default HEAD)') } },
+    inputSchema: { type: 'object', properties: { ref: str('Git ref to compare with, e.g. "main" (default HEAD)'), api: { type: 'boolean', description: 'Compare the API contract instead (OpenAPI): breaking changes for clients and the version bump they need' } } },
   },
   {
     name: 'calm_checkpoint',
@@ -504,7 +504,7 @@ async function callTool(root, name, args) {
       return { exposure: info.exposure, findings: info.doctor.filter((f) => security.test(f.id)), recentEvents: events };
     }
     case 'calm_diff':
-      return json(root, ['diff', ...(args.ref ? [String(args.ref)] : []), '--json']);
+      return json(root, ['diff', ...(args.ref ? [String(args.ref)] : []), ...(args.api ? ['--api'] : []), '--json']);
     case 'calm_activity':
       return readActivity(root, (args.limit ?? 30) * 3).filter((e) => !(e.type === 'agent' && String(e.tool ?? '').startsWith('hook:'))).slice(-(args.limit ?? 30)).map((e) =>
         e.type === 'file' && e.diff

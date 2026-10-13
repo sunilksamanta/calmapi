@@ -6,10 +6,11 @@ import { requireProject, capture } from '../lib/project.js';
 import { introspect } from '../lib/introspect.js';
 import { buildSnapshot, diffSnapshots, diffRows } from '../lib/snapshot.js';
 import { readJson, writeJson } from '../lib/files.js';
+import { diffContracts, nextVersion } from '../lib/contract.js';
 import { c, out, table } from '../lib/ui.js';
 
 export const help = `
-${c.bold('calm diff')} [ref] [--json] [--ci] [--save <file>]
+${c.bold('calm diff')} [ref] [--api] [--json] [--ci] [--save <file>]
 
   What changed in behavior, not in lines: routes added or removed, policies loosened or
   tightened, fields visible to more people, environment variables, hosts the code can
@@ -19,13 +20,15 @@ ${c.bold('calm diff')} [ref] [--json] [--ci] [--save <file>]
   calm diff main                  since the main branch
   calm diff v1.2.0 --ci           fails (exit 1) when access got wider
   calm diff --save behavior.json  write the current snapshot (compare later: calm diff behavior.json)
+  calm diff main --api            the API contract for your clients: breaking changes and the
+                                  version bump they need (--ci fails on breaking changes)
 `;
 
 export async function run(argv) {
   const { values, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
-    options: { json: { type: 'boolean' }, ci: { type: 'boolean' }, save: { type: 'string' }, help: { type: 'boolean', short: 'h' } },
+    options: { json: { type: 'boolean' }, ci: { type: 'boolean' }, save: { type: 'string' }, api: { type: 'boolean' }, help: { type: 'boolean', short: 'h' } },
   });
   if (values.help) return out(help);
   const root = requireProject();
@@ -40,8 +43,9 @@ export async function run(argv) {
 
   const [before, after] = await Promise.all([snapshotOfRef(root, ref), snapshotOf(root)]);
   if (values.save) writeJson(resolve(root, values.save), after);
-  const result = diffSnapshots(before, after);
   const label = before.label ?? ref;
+  if (values.api) return printContract(root, before, after, label, values);
+  const result = diffSnapshots(before, after);
 
   if (values.json) out(JSON.stringify({ since: label, ...result }, null, 2));
   else print(result, label);
@@ -51,7 +55,7 @@ export async function run(argv) {
 async function snapshotOf(root) {
   const info = await introspect(root);
   if (info.error) throw new Error(`The working tree does not load: ${info.error.message}`);
-  return buildSnapshot(info, root);
+  return { ...buildSnapshot(info, root), openapi: info.openapi };
 }
 
 /** The snapshot of a git ref: the ref is checked out into a temporary worktree and loaded there. */
@@ -75,7 +79,7 @@ async function snapshotOfRef(root, ref) {
     if (!existsSync(join(projectRoot, 'node_modules')) && existsSync(join(root, 'node_modules'))) symlinkSync(join(root, 'node_modules'), join(projectRoot, 'node_modules'), 'dir');
     const info = await introspect(projectRoot);
     if (info.error) throw new Error(`${ref} does not load: ${info.error.message}`);
-    return { ...buildSnapshot(info, projectRoot), label: ref === sha ? sha.slice(0, 7) : `${ref} (${sha.slice(0, 7)})` };
+    return { ...buildSnapshot(info, projectRoot), openapi: info.openapi, label: ref === sha ? sha.slice(0, 7) : `${ref} (${sha.slice(0, 7)})` };
   } finally {
     await capture('git', ['worktree', 'remove', '--force', dir], { cwd: top }).catch(() => {});
     rmSync(dir, { recursive: true, force: true });
@@ -85,6 +89,28 @@ async function snapshotOfRef(root, ref) {
 async function git(cwd, args) {
   const res = await capture('git', args, { cwd }).catch(() => null);
   return res?.code === 0 ? res.stdout.trim() : null;
+}
+
+const LEVEL = { breaking: (t) => c.red(t), minor: (t) => c.green(t), patch: (t) => c.dim(t) };
+
+function printContract(root, before, after, label, values) {
+  if (!before.openapi) throw new Error(`${label} has no OpenAPI document to compare (a snapshot file from before calm diff --api: save a new one)`);
+  const result = diffContracts(before.openapi, after.openapi);
+  const version = readJson(join(root, 'package.json'))?.version ?? null;
+  const next = nextVersion(version, result.bump);
+  if (values.json) out(JSON.stringify({ since: label, ...result, version, next }, null, 2));
+  else if (!result.changes.length) out('', `  ${c.green('✔')} No API contract changes since ${label}.`, '');
+  else {
+    out('', `  ${c.bold(`API contract changes since ${label}`)} ${c.dim(`(${result.changes.length})`)}`);
+    const order = { breaking: 0, minor: 1, patch: 2 };
+    const rows = [...result.changes].sort((x, y) => order[x.level] - order[y.level]).map((x) => [LEVEL[x.level](x.level), x.where, x.what]);
+    out(table(rows, { indent: 4 }));
+    const s = result.summary;
+    out('', `  ${s.breaking ? c.red(`${s.breaking} breaking`) : c.green('nothing breaking')} · ${s.minor} added · ${s.patch} other`);
+    if (next) out(`  ${c.bold('Suggested version')} ${version} -> ${c.bold(next)} ${c.dim(`(${result.bump}${version?.startsWith('0.') && result.bump !== 'patch' ? ', 0.x rules' : ''})`)}`);
+    out('');
+  }
+  if (values.ci && result.summary.breaking) process.exitCode = 1;
 }
 
 const MARK_COLOR = { '+': c.green, '-': c.red, '~': c.yellow };
