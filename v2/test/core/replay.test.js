@@ -73,6 +73,10 @@ test('a recorded request becomes a test that passes', async () => {
   const { file } = await out.json();
   assert.match(file, /^test\/recorded\/get-posts-id-user-200\.test\.js$/);
   assert.ok(existsSync(join(project.dir, file)));
+  // Dates are recorded as the client sees them (strings), not walked into empty objects.
+  const detail = await (await api(`/requests/${rec.id}`)).json();
+  assert.equal(typeof detail.responseBody.data.createdAt, 'string');
+  assert.match(readFileSync(join(project.dir, file), 'utf8'), /"createdAt":"string"/);
   const { NODE_TEST_CONTEXT: _c, ...env } = process.env;
   const result = execFileSync(process.execPath, ['--test', '--test-reporter=tap', file], { cwd: project.dir, env: { ...env, MONGODB_TEST_URI: process.env.MONGODB_TEST_URI ?? 'mongodb://127.0.0.1:27017' }, encoding: 'utf8' });
   assert.match(result, /# pass 1/);

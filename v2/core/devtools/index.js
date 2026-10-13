@@ -888,6 +888,8 @@ function redactHeaders(headers) {
 
 /** Secret-looking keys become [redacted]; in responses the first characters stay, to tell them apart. */
 function redact(value, depth = 0, partial = false) {
+  // Dates, ObjectIds and anything with toJSON() as the client receives them (not walked into {}).
+  if (value && typeof value === 'object' && typeof value.toJSON === 'function') value = value.toJSON();
   if (depth > 6 || value === null || typeof value !== 'object') return value;
   if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1, partial));
   const out = {};

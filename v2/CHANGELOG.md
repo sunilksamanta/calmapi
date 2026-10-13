@@ -56,6 +56,8 @@ frontend a typed client, and adds 14 official blocks: 35 in all, each with its o
   matrix with `{ simulate }`.
 - Mail transports receive the message's `meta` as a second argument (it is never sent).
 - `app.idle()` waits for chains of events and background tasks.
+- Devtools records dates and ids in response bodies as the client receives them (strings), so
+  the Requests panel shows them and **Save as test** records their shape correctly.
 - `calm doctor` and the other commands that ask the app about itself no longer cut large
   reports short (projects with many blocks failed with "Unterminated string in JSON").
 - Every official block installs next to every other one and passes `calm doctor` (a test keeps
