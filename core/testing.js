@@ -8,11 +8,16 @@
 //   await t.close();
 
 import { randomBytes } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { createApp } from './app.js';
 import { deepMerge } from './config.js';
 import { generateKey } from './security/encryption.js';
 
 export async function createTestApp({ root = process.cwd(), config = {}, baseUri } = {}) {
+  // MONGODB_TEST_URI may live in .env (an Atlas user, say): read it before choosing the server.
+  const envFile = join(root, '.env');
+  if (!baseUri && !process.env.MONGODB_TEST_URI && existsSync(envFile) && process.env.CALM_SKIP_ENV_FILE !== '1') process.loadEnvFile(envFile);
   const base = baseUri ?? process.env.MONGODB_TEST_URI ?? 'mongodb://127.0.0.1:27017';
   const url = new URL(base);
   url.pathname = `/calm_test_${Date.now().toString(36)}_${randomBytes(3).toString('hex')}`;

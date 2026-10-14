@@ -98,6 +98,12 @@ export async function run(argv) {
   for (const f of written) out(`  ${c.dim('+')} ${f}`);
   out('');
   info(`Restart is automatic with ${c.bold('npm run dev')}. Try ${c.bold(`npx calm routes`)} to see the new endpoints.`);
+  const queryable = fields.filter((f) => !f.array && ['enum', 'boolean', 'ref', 'number', 'integer', 'date'].includes(f.type) && !f.modifiers.some((m) => m === 'sortable' || m === 'filterable'));
+  if (queryable.length) {
+    const [ex] = queryable;
+    out(c.dim(`  Clients can only filter and sort on fields you mark. To allow it: ${ex.name}:${ex.type}+filterable+sortable,`));
+    out(c.dim(`  or add .filterable() / .sortable() to ${queryable.map((f) => f.name).join(', ')} in the resource file.`));
+  }
   const missing = fields.filter((f) => f.type === 'ref' && !existsSync(join(root, 'app', 'resources', f.arg))).map((f) => f.arg);
   if (missing.length) out(c.yellow(`  Heads up: referenced resources do not exist yet: ${missing.join(', ')}`));
 }

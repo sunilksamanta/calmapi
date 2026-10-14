@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- `calm make resource` writes exactly the modifiers you type. It no longer makes numbers, dates,
+  enums, booleans and references sortable or filterable unasked; it tells you which fields could
+  use them (`price:number+filterable+sortable`).
+- A new project's `.env` gets its own header instead of the "Copy to .env" line from `.env.example`,
+  and `.env.example` explains port 5001 and `MONGODB_TEST_URI`.
+- `calm create` says which database it will use (`my-api` gives `my_api`) and that tests and the
+  audit use throwaway databases.
+- Block hints use the plain block name everywhere: `calm add rate-limit-mongo`, `calm add mail-resend`.
+- The rate limiter, the project README and the rate-limit-mongo block say plainly that the
+  built-in store counts per process, and that more than one instance needs rate-limit-mongo.
+
+### Fixed
+- `MONGODB_TEST_URI` set in `.env` is now used by `npm test` and `calm audit`. It was read before
+  `.env` was loaded, so only the environment variable worked.
+
+### Docs
+- MIGRATION.md: which command runs where (`npx calmapi@next doctor`, `npx calm`, the old
+  `calmapi generate`), how stored `_id` maps to `id` in the API, and the support window for 1.x.
+
 ## 2.0.0-beta.1
 
 The first beta. alpha.2 showed what changed; this release asks a person to accept it, holds

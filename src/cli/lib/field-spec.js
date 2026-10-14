@@ -80,13 +80,8 @@ export function fieldCode(field) {
   if (field.default !== undefined) chain.push(`default(${literal(field)})`);
   else if (field.array) chain.push('default([])');
 
-  // Sensible query defaults: small value sets are filterable, numbers and dates sortable.
+  // Only the modifiers in the spec: a field is never made sortable or filterable unasked.
   const mods = new Set(field.modifiers);
-  if (['enum', 'boolean', 'ref'].includes(field.type) && !field.array) mods.add('filterable');
-  if (['number', 'integer', 'date'].includes(field.type) && !field.array) {
-    mods.add('filterable');
-    mods.add('sortable');
-  }
   for (const mod of ['unique', 'index', 'searchable', 'sortable', 'filterable', 'hidden', 'writeOnly', 'readOnly', 'immutable', 'populate', 'owner']) {
     if (mods.has(mod)) chain.push(`${mod}()`);
   }

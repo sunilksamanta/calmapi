@@ -1,6 +1,6 @@
 // Outgoing email. The built-in transport only works in development: it prints a short
 // notice and hands the full message to devtools (open /_calm → Mail).
-// For real delivery add a transport block: `calm add @calmapi/mail-resend` (or SMTP),
+// For real delivery add a transport block: `calm add mail-resend` (or SMTP),
 // or register your own: app.mailer.use({ name: 'x', send: async (msg, { meta }) => {} }).
 //
 // `meta` is for observers (devtools, tests) and may hold secrets such as a reset token, so
@@ -27,7 +27,7 @@ export function createMailer({ log, mode, from }) {
       const { meta: _meta, ...outgoing } = msg;
       if (transport) return transport.send(outgoing, { meta: { ...(msg.meta ?? {}) } });
       if (mode === 'production') {
-        log.error('Email not sent: no mail transport configured. Add one with `calm add @calmapi/mail-resend`.', {
+        log.error('Email not sent: no mail transport configured. Add one with `calm add mail-resend`.', {
           subject: msg.subject,
         });
         return;

@@ -48,7 +48,9 @@ export function scaffold({ dir, name, template = 'api', mongoUri, calmVersion = 
       put(target, render(readText(join(base, rel)), vars));
     }
   }
-  put('.env', render(readText(join(PKG_ROOT, 'templates', 'shared', 'env.example')), vars));
+  // .env is this machine's copy: same settings, its own header (it is not something to copy again).
+  const example = render(readText(join(PKG_ROOT, 'templates', 'shared', 'env.example')), vars);
+  put('.env', example.replace(/^# Template for \.env[^\n]*\n/, '# Settings for this machine. Git ignores this file; .env.example is the template you commit.\n'));
 
   // Running from a git checkout (unpublished): point the dev dependencies at this copy.
   if (FROM_SOURCE) {

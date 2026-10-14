@@ -15,6 +15,13 @@ npx calmapi@next doctor
 It reports the published advisories for 1.x templates with the fix for each. Patch those in
 production before migrating.
 
+Three commands appear in this guide:
+
+- `npx calmapi@next doctor`: the 2.0 CLI fetched by npx for one run, inside your **1.x** project.
+- `npx calm doctor`, `npx calm make ...`: the same CLI installed in your **2.0** project (`calm` and
+  `calmapi` are two names for one binary).
+- `calmapi generate module x`: the **1.x** generator, gone. Use `npx calm make resource x field:type`.
+
 ## 1. Concept map
 
 | 1.x | 2.0 |
@@ -49,10 +56,15 @@ production before migrating.
 
 Existing sessions do not carry over: users sign in again after the switch.
 
+Stored data does not change. Documents keep their `_id` (ObjectId) and references stay ObjectIds, so
+2.0 reads what 1.x wrote. The API maps `_id` to `id` both ways: responses carry `"id": "6acb..."`,
+requests use `/posts/:id`, `?id[in]=a,b` and `sort=id`. The old `__v` field is ignored. Inside
+services you still have Mongoose documents (`doc._id`). On the frontend, `item._id` becomes `item.id`.
+
 ## 3. Step by step
 
 1. `npm create calmapi@latest my-api-v2` and point `.env` at a copy of your database.
-2. For each 1.x module, run `calm make resource <name> ...fields` and adjust fields: copy types from
+2. For each 1.x module, run `npx calm make resource <name> ...fields` and adjust fields: copy types from
    the model, then mark visibility (what was missing from your GetDTO is `.hidden()` or `.writeOnly()`;
    what was missing from InsertDTO/UpdateDTO is `.readOnly()`).
 3. Write policies: decide who may list, read, create, update and delete each resource.
@@ -62,7 +74,13 @@ Existing sessions do not carry over: users sign in again after the switch.
 5. Users: 1.x stored bcrypt hashes in `password`. v2 verifies scrypt hashes, so existing users must use
    "forgot password" once, or add bcrypt verification to `calm/auth/password.js` (it is your code) and
    let `needsRehash` upgrade them at login.
-6. Run `calm doctor` until it is clean, then `npm test`.
+6. Run `npx calm doctor` until it is clean, then `npm test`.
 7. Update your frontend for the response shape (section 2).
+
+## 4. Support for 1.x
+
+No new features: 1.x is no longer developed and its code stays on the `v1` branch. Security
+advisories for the 1.x templates (checked by `npx calmapi@next doctor`) continue until 2.0 has been
+stable for 12 months; after that, 1.x gets nothing more.
 
 Questions: https://github.com/sunilksamanta/calmapi/discussions

@@ -66,8 +66,9 @@ export function cors({ origins = [], credentials = false, maxAge = 600, exposeHe
 }
 
 /**
- * Fixed-window rate limiter. The default store is in memory (one process).
- * For several instances, `calm add @calmapi/rate-limit-mongo` swaps in a shared store.
+ * Fixed-window rate limiter. The default store is in memory: right for one process, but every
+ * instance counts on its own, so N instances allow N times the limit. Behind a load balancer
+ * or with several processes, `npx calm add rate-limit-mongo` swaps in a shared store.
  */
 export function createMemoryStore() {
   const hits = new Map();

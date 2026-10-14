@@ -15,7 +15,7 @@ export function runtimeChecks(app) {
   if (config.cors.origins === '*' && prod) add('warn', 'cors-wildcard', 'CORS allows every origin in production', 'Set CORS_ORIGINS to the domains of your frontends.');
   if (!config.rateLimit.enabled && config.mode !== 'test') add('warn', 'rate-limit-off', 'Rate limiting is disabled', 'Auth endpoints can be brute forced. Re-enable config.rateLimit.');
   if (prod && config.trustProxy === false) add('info', 'trust-proxy', 'TRUST_PROXY is not set', 'Behind a load balancer every client shares one IP for rate limiting. Set TRUST_PROXY (e.g. 1).');
-  if (app.auth && prod && !app.mailer.transport) add('warn', 'no-mail', 'No mail transport in production', 'Password reset emails cannot be delivered. Run `calm add @calmapi/mail-resend` or register a transport.');
+  if (app.auth && prod && !app.mailer.transport) add('warn', 'no-mail', 'No mail transport in production', 'Password reset emails cannot be delivered. Run `calm add mail-resend` or register a transport.');
 
   for (const { def, files } of registry.values()) {
     const file = files?.resource;

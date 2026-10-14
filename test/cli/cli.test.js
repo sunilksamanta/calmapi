@@ -67,8 +67,10 @@ describe('make, routes, openapi, doctor', () => {
     assert.match(out, /\/api\/invoices/);
     const src = readFileSync(join(app, 'app/resources/invoice/invoice.resource.js'), 'utf8');
     assert.match(src, /number: f\.string\(\)\.required\(\)\.unique\(\)/);
-    assert.match(src, /status: f\.enum\(\['draft', 'sent', 'paid'\]\)\.default\('draft'\)\.filterable\(\)/);
-    assert.match(src, /customer: f\.ref\('user'\)\.filterable\(\)/);
+    assert.match(src, /status: f\.enum\(\['draft', 'sent', 'paid'\]\)\.default\('draft'\),/, 'no modifier added unasked');
+    assert.match(src, /customer: f\.ref\('user'\),/);
+    assert.match(out, /Clients can only filter and sort on fields you mark/);
+    assert.match(out, /amount, status, customer/);
     assert.match(src, /owner: f\.ref\('user'\)\.owner\(\)/);
     assert.ok(existsSync(join(app, 'app/resources/invoice/invoice.service.js')));
     assert.match(calmStatus(app, 'make', 'resource', 'invoice').out, /already exists/);
@@ -79,7 +81,7 @@ describe('make, routes, openapi, doctor', () => {
     calm(app, 'make', 'resource', 'memo', 'title:string!', 'owner:ref:user');
     const src = readFileSync(join(app, 'app/resources/memo/memo.resource.js'), 'utf8');
     assert.equal(src.match(/^\s+owner:/gm).length, 1);
-    assert.match(src, /owner: f\.ref\('user'\)\.filterable\(\)\.owner\(\)/);
+    assert.match(src, /owner: f\.ref\('user'\)\.owner\(\)/);
     assert.match(src, /update: 'owner \| admin'/);
   });
 
