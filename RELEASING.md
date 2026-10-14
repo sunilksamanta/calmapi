@@ -35,7 +35,7 @@ MongoDB, creates a project from the packed tarballs and runs its tests and `calm
 three packages with provenance (devtools, then calmapi, then create-calmapi; versions already on npm
 are skipped, so a failed run can simply be re-run), and writes the release notes from the changelog.
 
-Any push to `master` (or a `claude/**` branch) that touches `v2/` runs the same pipeline as a dry run
+Any push to `master` (or a `claude/**` branch) runs the same pipeline as a dry run
 that ends with `npm publish --dry-run`, so a release never starts from a commit that has not passed it.
 
 ## npm authentication

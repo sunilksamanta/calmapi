@@ -253,7 +253,7 @@ do, and undoing it.
 
 ### A new logo
 - The Calm API lotus: in the devtools tab and top bar, and the README banner. The logo kit (SVG,
-  PNG, favicons, app icon, social card) and its usage guide are in `v2/brand`.
+  PNG, favicons, app icon, social card) and its usage guide are in `brand/`.
 
 ### Docs
 - The documentation moved to https://docs.calmapi.dev. The CLI, the registry (`calm add --remote`) and

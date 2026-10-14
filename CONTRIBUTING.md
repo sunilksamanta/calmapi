@@ -1,59 +1,45 @@
 # Contributing to CalmAPI
 
-We love your input! We want to make contributing to this project as easy and transparent as possible, whether it's:
+Thanks for helping. CalmAPI 2 lives at the root of this repository; the 1.x source is on the
+[`v1` branch](https://github.com/sunilksamanta/calmapi/tree/v1) and only gets security fixes.
 
-* Reporting a bug
-* Documentation
-* Discussing the current state of the code
-* Submitting a fix
-* Proposing new features
+## Set up
 
----
-## We Use [Github Flow](https://guides.github.com/introduction/flow/index.html), So All Code Changes Happen Through Pull Requests
+You need Node.js 22.12 or newer and a MongoDB you can write to (a local `mongod` is enough).
 
-Pull requests are the best way to propose changes to the codebase (we use Github Flow). We actively welcome your pull requests:
+```bash
+npm install
+npm run lint
+MONGODB_TEST_URI=mongodb://127.0.0.1:27017 npm test
+```
 
-1. Fork the repo and create your branch from master.
-2. If you've added code that should be tested, add tests.
-3. If you've changed APIs, update the documentation.
-4. Ensure the test suite passes.
-5. Make sure your code lints.
-6. Issue that pull request!
+The suite boots real apps on real MongoDB databases (each test makes its own and drops it).
+Try a change in a real project with the CLI from your checkout:
 
----
-## Any contributions you make will be under the MIT Software License
+```bash
+node bin/calm.js create ../scratch-api --yes
+cd ../scratch-api && node ../calmapi/bin/calm.js dev
+```
 
-When you submit code changes, your submissions are understood to be under the same [MIT License](https://choosealicense.com/licenses/mit/) that covers the project.
-Feel free to contact the maintainers if that's a concern.
+## Layout
 
----
-## Report bugs using Github's
+| Path | What it is |
+|---|---|
+| `core/` | The framework. Projects get a copy as `calm/`, so keep it dependency-light and readable. |
+| `src/cli/` | The `calm` command. |
+| `templates/` | What `calm create` writes (`api`, `minimal`, and the shared files). |
+| `registry/blocks/<name>/` | Official blocks: `block.json` (with `links` and `agents`), `docs.md`, `files/`. |
+| `packages/devtools/` | `@calmapi/devtools`, the browser UI at `/_calm`. |
+| `packages/create-calmapi/` | `npm create calmapi`. |
+| `test/` | `core/`, `cli/` and `blocks/` tests (node:test). |
 
-We use GitHub issues to track public bugs. Report a bug by opening a new issue; it's that easy!
+## Rules of the house
 
----
+- Every change comes with a test. Security behavior (policies, field visibility, tokens) needs a test
+  that proves the refusal, not only the success.
+- No new runtime dependencies in `core/` or in blocks unless there is no reasonable alternative.
+- Blocks keep their `links` (official documentation) and `agents` (instructions for AI agents) current.
+- Add a line to `CHANGELOG.md` under the next version.
+- `npm run lint` and `npm test` pass before a pull request is ready.
 
-## Write bug reports with detail, background, and sample code
-
-Great Bug Reports tend to have:
-
-* A quick summary and/or background
-* Steps to reproduce: 
-* Be specific! & Give sample code if you can.
-* What you expected would happen
-* What actually happens
-* Notes (possibly including why you think this might be happening, or stuff you tried that didn't work)
-
----
-
-## Use a Consistent Coding Style
-
-We have included `eslint` styling rules in the project.
-
-Run `npm run lint` for style unification.
-
----
-
-## License
-
-By contributing, you agree that your contributions will be licensed under its MIT License.
+Releases are described in [RELEASING.md](RELEASING.md).

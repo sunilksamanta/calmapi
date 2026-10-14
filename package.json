@@ -1,58 +1,71 @@
 {
   "name": "calmapi",
-  "version": "0.2.5",
-  "description": "Production ready REST API framework using NodeJS & MongoDB With CLI",
-  "main": "index.js",
-  "scripts": {
-    "test": "mocha tests",
-    "lint": "./node_modules/.bin/eslint .",
-    "start": "node index.js",
-    "dev": "node resource/project/index.js"
+  "version": "2.0.0-beta.1",
+  "description": "The backend framework you own. Resources, policies, auth, devtools and an upgrade path for Node.js + MongoDB, with every line of framework code in your repo.",
+  "type": "module",
+  "bin": {
+    "calm": "bin/calm.js",
+    "calmapi": "bin/calm.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "git@github.com:sunilksamanta/calmapi.git"
+  "files": [
+    "bin",
+    "src",
+    "core",
+    "templates",
+    "registry/r",
+    "advisories.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "workspaces": [
+    "packages/devtools"
+  ],
+  "scripts": {
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
+    "lint": "eslint .",
+    "build:registry": "node scripts/build-registry.js",
+    "prepack": "node scripts/build-registry.js"
   },
   "keywords": [
     "calmapi",
-    "restapi",
-    "nodejs",
+    "rest",
+    "api",
+    "framework",
     "mongodb",
     "mongoose",
-    "boilerplate",
-    "starter",
-    "restapi",
-    "rest"
+    "express",
+    "devtools",
+    "mcp",
+    "owned-code"
   ],
   "author": "Sunil Kumar Samanta",
   "license": "MIT",
+  "homepage": "https://calmapi.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sunilksamanta/calmapi.git"
+  },
   "bugs": {
     "url": "https://github.com/sunilksamanta/calmapi/issues"
   },
-  "homepage": "https://calmapi.dev",
   "devDependencies": {
-    "babel-eslint": "^10.1.0",
-    "chai": "^4.3.4",
-    "chai-http": "^4.3.0",
-    "eslint": "^7.23.0",
-    "eslint-plugin-import": "^2.22.1",
-    "husky": "^6.0.0",
-    "mocha": "^10.1.0"
+    "@aws-sdk/client-s3": "^3.1149.0",
+    "@aws-sdk/s3-request-presigner": "^3.1149.0",
+    "@eslint/js": "^10.0.0",
+    "eslint": "^10.0.0",
+    "express": "^5.1.0",
+    "mongoose": "^9.0.0",
+    "multer": "^2.4.0",
+    "nodemailer": "^10.1.0"
   },
-  "dependencies": {
-    "axios": "^0.21.1",
-    "case": "^1.6.3",
-    "chalk": "^4.1.1",
-    "change-case": "^4.1.2",
-    "inquirer": "^8.0.0",
-    "ora": "^5.4.0",
-    "pluralize": "^8.0.0"
+  "exports": {
+    "./cli": "./src/cli/index.js",
+    "./package.json": "./package.json"
   },
-  "bin": {
-    "calmapi": "./index.js"
-  },
-  "engines": {
-    "node": ">=12.0.0"
-  },
-  "engineStrict": true
+  "publishConfig": {
+    "tag": "next"
+  }
 }

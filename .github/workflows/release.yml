@@ -4,19 +4,16 @@ name: Release CalmAPI 2
 # that tag. Either way the tag push starts this workflow. The run tests everything, then publishes calmapi, @calmapi/devtools and create-calmapi
 # to npm and fills in the release notes from CHANGELOG.md.
 #
-# Pushes to master or claude/** that touch v2/ run the same pipeline as a dry run
+# Pushes to master or claude/** run the same pipeline as a dry run
 # (`npm publish --dry-run`, nothing is published).
 #
 # Authentication: npm trusted publishing (OIDC) when it is configured for the packages on
-# npmjs.com, otherwise the NPM_TOKEN repository secret. See v2/RELEASING.md.
+# npmjs.com, otherwise the NPM_TOKEN repository secret. See RELEASING.md.
 
 on:
   push:
     tags: ['v2.*']
     branches: ['master', 'claude/**']
-    paths:
-      - '.github/workflows/release.yml'
-      - 'v2/**'
 
 permissions:
   contents: read
@@ -36,16 +33,13 @@ jobs:
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
           --health-interval 5s --health-timeout 5s --health-retries 20
-    defaults:
-      run:
-        working-directory: v2
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: v2/package-lock.json
+          cache-dependency-path: package-lock.json
       - name: Check versions, tag and changelog
         run: |
           if [[ "$GITHUB_REF_NAME" == v2.* ]]; then node scripts/check-release.js "$GITHUB_REF_NAME"; else node scripts/check-release.js; fi
@@ -79,9 +73,6 @@ jobs:
     permissions:
       contents: write # GitHub release
       id-token: write # npm provenance and trusted publishing
-    defaults:
-      run:
-        working-directory: v2
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -89,7 +80,7 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
           cache: npm
-          cache-dependency-path: v2/package-lock.json
+          cache-dependency-path: package-lock.json
       - name: Use npm 11 (trusted publishing needs 11.5.1 or newer)
         run: npm install -g npm@^11.15.0 && npm --version
       - run: npm ci

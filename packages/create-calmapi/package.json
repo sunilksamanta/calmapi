@@ -33,7 +33,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sunilksamanta/calmapi.git",
-    "directory": "v2/packages/create-calmapi"
+    "url": "git+https://github.com/sunilksamanta/calmapi.git"
   }
 }
