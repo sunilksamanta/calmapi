@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 2.0.0-beta.2
+
+Polish from the first beta reviews: `calm make resource` does only what you ask, new projects
+explain their own files, `MONGODB_TEST_URI` works from `.env`, and the README and docs answer the
+questions new users ask first. From this release on, `npm install calmapi` gives CalmAPI 2 (still a
+beta, as the version says); 1.x projects are unaffected because their `^0.2` ranges never match 2.x.
 
 ### Changed
 - `calm make resource` writes exactly the modifiers you type. It no longer makes numbers, dates,
@@ -19,6 +24,8 @@
   `.env` was loaded, so only the environment variable worked.
 
 ### Docs
+- README: a 30 second start (marked beta), a recording of `calm make resource`, and "Why not NestJS or
+  plain Express?". New ROADMAP.md; CONTRIBUTING.md points to `good first issue` issues.
 - MIGRATION.md: which command runs where (`npx calmapi@next doctor`, `npx calm`, the old
   `calmapi generate`), how stored `_id` maps to `id` in the API, and the support window for 1.x.
 

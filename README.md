@@ -7,28 +7,56 @@
 
 # CalmAPI 2
 
-**The backend framework you own.** Resources, policies, auth, devtools and an upgrade path for
-Node.js + MongoDB, with every line of framework code living in your repo.
+**Declare a resource in one file. Get a secure REST API you own, down to the last line of framework code.**
+
+For Node.js and MongoDB: resources, access policies, auth, devtools and a security audit, with the
+framework copied into your repo instead of hidden in `node_modules`.
+
+[![npm](https://img.shields.io/npm/v/calmapi?label=npm&color=2f7d5b)](https://www.npmjs.com/package/calmapi)
+[![CI](https://github.com/sunilksamanta/calmapi/actions/workflows/ci.yml/badge.svg)](https://github.com/sunilksamanta/calmapi/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2f7d5b)](LICENSE)
+
+## Start in 30 seconds
+
+> **Beta.** CalmAPI 2 is in beta (`2.0.0-beta`): ready to build on, but APIs may still change before 2.0.
+
+You need Node.js 22.12+ and MongoDB ([Docker, Atlas or a local install](https://docs.calmapi.dev/getting-started#requirements)).
 
 ```bash
-npm create calmapi@latest my-api
+npm create calmapi@latest my-api     # CalmAPI 2 beta
 cd my-api
-npm run dev
+npm run dev                          # API on :5001, devtools at /_calm
+npx calm make resource product name:string+required price:number+sortable
 ```
 
-```
-  CalmAPI my-api v0.1.0 (development)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/sunilksamanta/calmapi/master/.github/assets/calm-make-resource.gif" alt="Terminal: calm make resource creates app/resources/product/product.resource.js, and calm routes lists the five product routes with their policies" width="800">
+</p>
 
-  ➜  API       http://localhost:5001/api
-  ➜  OpenAPI   http://localhost:5001/api/openapi.json
-  ➜  Devtools  http://localhost:5001/_calm
-```
+That one command wrote the resource and its test. The API now has five product routes with access
+rules, validation, filtering and OpenAPI. Documentation: **https://docs.calmapi.dev**
 
-> **Status: 2.0.0-beta.** APIs may still change before 2.0. CalmAPI 1.x users: run
-> `npx calmapi@next doctor` inside your project (see [Security](#security)). The 1.x source lives on the
-> [`v1` branch](https://github.com/sunilksamanta/calmapi/tree/v1), and `npm install calmapi` still gives 1.x until 2.0 is final.
+> Coming from CalmAPI 1.x? Run `npx calmapi@next doctor` inside your 1.x project, then read the
+> [migration guide](https://docs.calmapi.dev/migrate-v1). The 1.x source lives on the
+> [`v1` branch](https://github.com/sunilksamanta/calmapi/tree/v1).
 
-Documentation: **https://docs.calmapi.dev**
+## Why not NestJS or plain Express?
+
+Both are good tools. Here is what you would be choosing between:
+
+| | Plain Express | NestJS | CalmAPI |
+|---|---|---|---|
+| A CRUD resource | Routes, validation, query parsing and output filtering, written by hand for each model | A module, controller, service, DTOs and entity, wired with decorators | One `*.resource.js` file; CRUD, validation, filters and OpenAPI follow from it |
+| Who may do what | Middleware you write and remember to apply | Guards you write and attach | A policy on every route and field visibility per role, checked by `calm doctor` and tested by `calm audit` |
+| Where the framework lives | `node_modules` (Express is small) | `node_modules` (large) | `calm/` in your repo: readable, editable, and still upgradeable with `calm upgrade` |
+| Proving access rules hold | Your own tests | Your own tests | `calm audit` calls every route as every role on a throwaway database |
+| Coding agents | Generic | Generic | `AGENTS.md`, an MCP server with 29 project tools, and every agent action visible in devtools |
+| Stack | Anything | TypeScript, SQL or MongoDB, microservices | JavaScript (ESM), Express 5 underneath, MongoDB only |
+
+Pick **plain Express** for a tiny service with a handful of routes. Pick **NestJS** for a large TypeScript
+codebase that wants dependency injection, SQL databases or message transports. Pick **CalmAPI** when you
+want a MongoDB REST API whose access rules are declared once, enforced everywhere and checked on every
+build, with framework code you can read.
 
 ## Why CalmAPI
 
@@ -271,9 +299,15 @@ npm run lint
 MONGODB_TEST_URI=mongodb://127.0.0.1:27017 npm test
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [roadmap](ROADMAP.md). New here? Start with an issue labelled
+[`good first issue`](https://github.com/sunilksamanta/calmapi/labels/good%20first%20issue).
 
 Layout: `core/` (the framework copied into projects as `calm/`), `templates/`, `registry/blocks/`,
 `src/cli/`, `packages/devtools` (`@calmapi/devtools`), `packages/create-calmapi`.
 
 MIT License.
+
+---
+
+Built and maintained by the [Broadifi](https://www.broadifitech.com) team. Need help shipping with CalmAPI?
+[Talk to the maintainers](https://www.broadifitech.com/contact).

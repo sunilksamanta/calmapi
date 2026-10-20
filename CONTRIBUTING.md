@@ -3,6 +3,12 @@
 Thanks for helping. CalmAPI 2 lives at the root of this repository; the 1.x source is on the
 [`v1` branch](https://github.com/sunilksamanta/calmapi/tree/v1) and only gets security fixes.
 
+## Where to start
+
+- Issues labelled [`good first issue`](https://github.com/sunilksamanta/calmapi/labels/good%20first%20issue)
+  are small, well described and touch one area. Comment on one to claim it.
+- The [roadmap](ROADMAP.md) says what is planned; open a discussion before starting something larger.
+
 ## Set up
 
 You need Node.js 22.12 or newer and a MongoDB you can write to (a local `mongod` is enough).
