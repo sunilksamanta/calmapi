@@ -41,6 +41,12 @@ describe('mongoHint', () => {
     assert.doesNotMatch(hint, /hunter2|admin/);
   });
 
+  test('a remote host gets its own wording, without docker or the password', async () => {
+    // Names under .invalid never resolve (RFC 2606).
+    const hint = await mongoHint('mongodb://admin:hunter2@db.invalid:27017/app');
+    assert.deepEqual(hint, ['  ! Could not reach db.invalid:27017. Check the host, the port and your network.']);
+  });
+
   test('says nothing when the server accepts a connection', async () => {
     const server = createServer((socket) => socket.destroy());
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));

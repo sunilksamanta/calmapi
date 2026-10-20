@@ -4,8 +4,9 @@
 
 ### Added
 - `calm create` checks that the MongoDB server in the URI accepts a connection and, when nothing
-  is listening, says how to start one instead of leaving it to `npm run dev`. `mongodb+srv://`
-  URIs are not checked, and the check never fails or slows down `create` by more than 1.5 s.
+  is listening, says how to start one instead of leaving it to `npm run dev`. A remote host it
+  cannot reach gets a line to check the host, the port and the network. `mongodb+srv://` URIs are
+  not checked, and the check never fails or slows down `create` by more than 1.5 s.
 
 ## 2.0.0-beta.2
 

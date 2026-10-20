@@ -79,6 +79,9 @@ export async function run(argv) {
     }
   }
 
+  // The most common first-run problem: say it now, not at `npm run dev`. Never fails or hangs create.
+  const hint = await mongoHint(mongoUri).catch(() => []);
+
   const cd = rawDir === '.' ? null : rawDir;
   out(
     '',
@@ -92,15 +95,12 @@ export async function run(argv) {
     `  Devtools   ${c.cyan('http://localhost:5001/_calm')}`,
     '',
     c.dim(`  MongoDB must be running at ${redact(mongoUri)} (edit .env to change it).`),
+    ...hint.map((line) => (line.trimStart().startsWith('!') ? c.yellow(line) : c.dim(line))),
     ...(mongoUri !== defaultDb ? [] : [c.dim(`  Database ${name.replace(/-/g, '_')}${name.includes('-') ? ' (the folder name, with _ for -)' : ''}. npm test and calm audit use throwaway databases instead.`)]),
     c.dim(`  Agents: AGENTS.md is ready, and \`npx calm mcp\` gives them project tools.`),
     '',
   );
   if (!existsSync(join(dir, 'node_modules')) && install) warn('node_modules is missing, the install probably failed.');
-
-  // The most common first-run problem: say it now, not at `npm run dev`. Never fails or hangs create.
-  const hint = await mongoHint(mongoUri).catch(() => []);
-  if (hint.length) out(...hint.map((line) => (line.trimStart().startsWith('!') ? c.yellow(line) : c.dim(line))), '');
 }
 
 const redact = (uri) => uri.replace(/\/\/([^@/]+)@/, '//***@');

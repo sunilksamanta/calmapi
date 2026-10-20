@@ -39,7 +39,8 @@ const LOCAL = new Set(['127.0.0.1', 'localhost', '::1', '0.0.0.0']);
 
 /**
  * Lines to print after `calm create` when the MongoDB server is not reachable: empty when it is up
- * or the URI cannot be checked. A mongodb+srv:// URI gets a one-line note instead.
+ * or the URI cannot be checked. A local host gets how to start MongoDB, a remote one a line to
+ * check the host, port and network. A mongodb+srv:// URI gets a one-line note instead.
  */
 export async function mongoHint(uri, { timeout } = {}) {
   const target = mongoTarget(uri);
@@ -47,9 +48,12 @@ export async function mongoHint(uri, { timeout } = {}) {
   if (target.srv) return ['  Skipped the MongoDB check: mongodb+srv:// (Atlas) URIs need a DNS lookup.'];
   if (await canConnect(target.host, target.port, timeout)) return [];
   const where = target.host.includes(':') ? `[${target.host}]:${target.port}` : `${target.host}:${target.port}`;
+  // A remote host can fail for reasons other than a stopped server (a name that does not resolve,
+  // a firewall), and starting MongoDB with docker here would not help, so it gets its own wording.
+  if (!LOCAL.has(target.host)) return [`  ! Could not reach ${where}. Check the host, the port and your network.`];
   return [
     `  ! Nothing is listening on ${where} yet. Start MongoDB first:`,
-    ...(LOCAL.has(target.host) ? [`      docker run -d --name mongo -p ${target.port}:27017 mongo:8`] : []),
+    `      docker run -d --name mongo -p ${target.port}:27017 mongo:8`,
     '    or use MongoDB Atlas: https://docs.calmapi.dev/getting-started#requirements',
   ];
 }
