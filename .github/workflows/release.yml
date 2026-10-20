@@ -28,7 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mongodb:
-        image: mongo:8.0
+        # 7.0, not 8.x: MongoDB 8.x refuses to start on the Linux 6.19+ kernels of newer runners
+        # (SERVER-121912). Same image as ci.yml.
+        image: mongo:7.0
         ports: ['27017:27017']
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"

@@ -16,7 +16,9 @@ jobs:
       fail-fast: false
       matrix:
         node: ['22', '24']
-        mongo: ['8.0']
+        # Not 8.x for now: GitHub's newer runners have Linux 6.19+, where MongoDB 8.x refuses to
+        # start (SERVER-121912, no fixed 8.x release yet). 7.0 uses the older allocator and runs.
+        mongo: ['7.0']
     services:
       mongodb:
         image: mongo:${{ matrix.mongo }}
