@@ -109,6 +109,32 @@ describe('make, routes, openapi, doctor', () => {
     assert.ok(routes.findIndex((r) => r.path === '/api/invoices/stats') < routes.findIndex((r) => r.path === '/api/invoices/:id'), 'custom before CRUD');
   });
 
+  test('routes filters by path and by resource', () => {
+    const all = JSON.parse(calm(app, 'routes', '--json'));
+
+    const byPath = calm(app, 'routes', 'INVOICES');
+    assert.match(byPath, /\/api\/invoices\/stats/);
+    assert.doesNotMatch(byPath, /\/api\/auth\/login/);
+    assert.match(byPath, new RegExp(`of ${all.length} routes match path "INVOICES"`));
+
+    const byResource = JSON.parse(calm(app, 'routes', '--resource', 'Invoice', '--json'));
+    assert.ok(byResource.length > 0);
+    assert.ok(byResource.every((r) => r.resource === 'invoice'));
+    assert.deepEqual(byResource, all.filter((r) => r.resource === 'invoice'));
+
+    const both = JSON.parse(calm(app, 'routes', 'stats', '--resource', 'invoice', '--json'));
+    assert.deepEqual(both.map((r) => `${r.method} ${r.path}`), ['GET /api/invoices/stats']);
+  });
+
+  test('routes says so when nothing matches, and exits 0', () => {
+    const none = calmStatus(app, 'routes', 'no-such-path', '--resource', 'invoice');
+    assert.equal(none.code, 0);
+    assert.match(none.out, /No routes match path "no-such-path" and resource "invoice"\./);
+    assert.doesNotMatch(none.out, /METHOD/);
+    assert.deepEqual(JSON.parse(calm(app, 'routes', '--resource', 'nope', '--json')), []);
+    assert.match(calm(app, 'routes', '--help'), /--resource <name>/);
+  });
+
   test('openapi writes a document', () => {
     calm(app, 'openapi', '--out', 'docs/openapi.json');
     const doc = JSON.parse(readFileSync(join(app, 'docs/openapi.json'), 'utf8'));
