@@ -7,6 +7,9 @@
   is listening, says how to start one instead of leaving it to `npm run dev`. A remote host it
   cannot reach gets a line to check the host, the port and the network. `mongodb+srv://` URIs are
   not checked, and the check never fails or slows down `create` by more than 1.5 s.
+- `calm routes` takes filters: `calm routes products` lists the routes whose path contains
+  `products` (any case), and `--resource product` the routes of one resource. They work together
+  and with `--json`. When nothing matches, it says so and exits 0 (`--json` prints `[]`).
 
 ## 2.0.0-beta.2
 
