@@ -48,6 +48,21 @@ describe('create', () => {
     assert.match(calmStatus(work, 'create', 'x', '--template', 'nope', '--yes', '--no-install', '--no-git').out, /Unknown template/);
   });
 
+  test('warns when nothing listens on the MongoDB port, without the password', () => {
+    // A port that was free a moment ago: nothing is listening there.
+    const port = Number(execFileSync(process.execPath, ['-e', "const s=require('net').createServer().listen(0,'127.0.0.1',()=>{console.log(s.address().port);s.close()})"], { encoding: 'utf8' }));
+    const out = calm(work, 'create', 'no-mongo', '--db', `mongodb://admin:hunter2@127.0.0.1:${port}/x`, '--yes', '--no-install', '--no-git');
+    assert.match(out, new RegExp(`Nothing is listening on 127\\.0\\.0\\.1:${port} yet`));
+    assert.match(out, /docker run -d --name mongo/);
+    assert.doesNotMatch(out, /hunter2/);
+  });
+
+  test('skips the MongoDB check for +srv URIs', () => {
+    const out = calm(work, 'create', 'atlas', '--db', 'mongodb+srv://admin:hunter2@cluster0.example.net/x', '--yes', '--no-install', '--no-git');
+    assert.match(out, /Skipped the MongoDB check/);
+    assert.doesNotMatch(out, /Nothing is listening|hunter2/);
+  });
+
   test('minimal template has no auth', () => {
     calm(work, 'create', 'tiny', '--template', 'minimal', '--yes', '--no-install', '--no-git');
     assert.ok(!existsSync(join(work, 'tiny', 'app/resources/user')));

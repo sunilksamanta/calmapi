@@ -5,6 +5,7 @@ import { scaffold, TEMPLATES } from '../lib/scaffold.js';
 import { detectPackageManager, run as runCommand, capture } from '../lib/project.js';
 import { PKG } from '../lib/files.js';
 import { kebab } from '../lib/strings.js';
+import { mongoHint } from '../lib/mongo-check.js';
 import { c, out, ok, warn, ask, choose, confirm, banner } from '../lib/ui.js';
 
 export const help = `
@@ -96,6 +97,10 @@ export async function run(argv) {
     '',
   );
   if (!existsSync(join(dir, 'node_modules')) && install) warn('node_modules is missing, the install probably failed.');
+
+  // The most common first-run problem: say it now, not at `npm run dev`. Never fails or hangs create.
+  const hint = await mongoHint(mongoUri).catch(() => []);
+  if (hint.length) out(...hint.map((line) => (line.trimStart().startsWith('!') ? c.yellow(line) : c.dim(line))), '');
 }
 
 const redact = (uri) => uri.replace(/\/\/([^@/]+)@/, '//***@');
